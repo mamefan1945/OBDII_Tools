@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- speedometer / dashboard -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20.38,8.57l-1.23,1.85A8,8 0 0,1 15.58,6.85L17.43,5A10,10 0 0,1 20.38,8.57M3.62,8.57A10,10 0 0,1 6.57,5L8.42,6.85A8,8 0 0,0 4.85,10.42M2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12H20A8,8 0 0,1 12,20A8,8 0 0,1 4,12M10.59,15.41A2,2 0 0,0 13.41,15.41L18,8L10.59,15.41Z" />
+</vector>

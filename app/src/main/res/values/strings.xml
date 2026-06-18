@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">OBDII Tools</string>
+    <string name="connecting">Connecting…</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="scan_codes">Scan Codes</string>
+    <string name="reset_codes">Reset Codes</string>
+    <string name="no_codes">No fault codes detected</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="fault_codes">Fault Codes</string>
+    <string name="bluetooth">Bluetooth</string>
+    <string name="car_app_name">OBDII Tools</string>
+</resources>

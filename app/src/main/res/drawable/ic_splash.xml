@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+
+    <!-- Outer decorative ring 1 -->
+    <path
+        android:pathData="M8,80 A72,72 0 1,0 152,80 A72,72 0 1,0 8,80"
+        android:fillColor="#00000000"
+        android:strokeColor="#3300F5FF"
+        android:strokeWidth="0.8"/>
+
+    <!-- Outer decorative ring 2 (inner, slightly more visible) -->
+    <path
+        android:pathData="M14,80 A66,66 0 1,0 146,80 A66,66 0 1,0 14,80"
+        android:fillColor="#00000000"
+        android:strokeColor="#1A00F5FF"
+        android:strokeWidth="0.4"/>
+
+    <!-- Major tick marks at each gauge graduation (r=58 inner → r=65 outer) -->
+    <!-- 135° lower-left -->
+    <path android:pathData="M38.99,121.01 L34.04,125.96"
+        android:strokeColor="#6600F5FF" android:strokeWidth="1.5"
+        android:fillColor="#00000000" android:strokeLineCap="round"/>
+    <!-- 189° left -->
+    <path android:pathData="M22.71,70.93 L15.80,69.83"
+        android:strokeColor="#6600F5FF" android:strokeWidth="1.5"
+        android:fillColor="#00000000" android:strokeLineCap="round"/>
+    <!-- 243° upper-left -->
+    <path android:pathData="M53.67,28.32 L50.49,22.08"
+        android:strokeColor="#6600F5FF" android:strokeWidth="1.5"
+        android:fillColor="#00000000" android:strokeLineCap="round"/>
+    <!-- 297° upper-right -->
+    <path android:pathData="M106.33,28.32 L109.51,22.08"
+        android:strokeColor="#6600F5FF" android:strokeWidth="1.5"
+        android:fillColor="#00000000" android:strokeLineCap="round"/>
+    <!-- 351° right -->
+    <path android:pathData="M137.29,70.93 L144.20,69.83"
+        android:strokeColor="#6600F5FF" android:strokeWidth="1.5"
+        android:fillColor="#00000000" android:strokeLineCap="round"/>
+    <!-- 45° lower-right -->
+    <path android:pathData="M121.01,121.01 L125.96,125.96"
+        android:strokeColor="#6600F5FF" android:strokeWidth="1.5"
+        android:fillColor="#00000000" android:strokeLineCap="round"/>
+
+    <!-- Gauge track: 270° clockwise (135° → top → 45°), r=56, dim cyan -->
+    <path
+        android:pathData="M40.40,119.60 A56,56 0 1,1 119.60,119.60"
+        android:fillColor="#00000000"
+        android:strokeColor="#4400F5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"/>
+
+    <!-- Speed arc glow outer (70% of gauge = 189° clockwise, ending at 324°) -->
+    <path
+        android:pathData="M40.40,119.60 A56,56 0 1,1 125.30,47.08"
+        android:fillColor="#00000000"
+        android:strokeColor="#1EFF6B00"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"/>
+
+    <!-- Speed arc glow mid -->
+    <path
+        android:pathData="M40.40,119.60 A56,56 0 1,1 125.30,47.08"
+        android:fillColor="#00000000"
+        android:strokeColor="#55FF6B00"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"/>
+
+    <!-- Speed arc main -->
+    <path
+        android:pathData="M40.40,119.60 A56,56 0 1,1 125.30,47.08"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFF6B00"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"/>
+
+    <!-- Needle glow -->
+    <path
+        android:pathData="M70.29,87.05 L120.45,50.61"
+        android:fillColor="#00000000"
+        android:strokeColor="#44FF6B00"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"/>
+
+    <!-- Needle -->
+    <path
+        android:pathData="M70.29,87.05 L120.45,50.61"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFF6B00"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"/>
+
+    <!-- Center hub: NeonCyan ring -->
+    <path
+        android:pathData="M72,80 A8,8 0 1,0 88,80 A8,8 0 1,0 72,80"
+        android:fillColor="#FF00F5FF"/>
+
+    <!-- Center hub: dark fill -->
+    <path
+        android:pathData="M75,80 A5,5 0 1,0 85,80 A5,5 0 1,0 75,80"
+        android:fillColor="#0C0C1E"/>
+
+    <!-- Center hub: NeonGreen inner dot -->
+    <path
+        android:pathData="M77.5,80 A2.5,2.5 0 1,0 82.5,80 A2.5,2.5 0 1,0 77.5,80"
+        android:fillColor="#FF00FF88"/>
+
+</vector>

@@ -1,0 +1,23 @@
+# Gradle / Android
+.gradle/
+build/
+app/build/
+
+# Local config
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# Miscellaneous
+*.log
+captures/
+*.hprof
+*.apk
+*.aab
+*.dex
+*.class
