@@ -21,3 +21,8 @@ captures/
 *.aab
 *.dex
 *.class
+# Local AI assistant cache
+.claude/
+
+# Kotlin cache
+.kotlin/
