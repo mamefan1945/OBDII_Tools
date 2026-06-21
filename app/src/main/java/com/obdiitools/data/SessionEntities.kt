@@ -15,6 +15,8 @@ data class SessionEntity(
     val maxCoolantTempC: Int? = null,
     val distanceKm: Float? = null,
     val deviceName: String = "",
+    val make: String = "",
+    val model: String = "",
 )
 
 @Entity(
