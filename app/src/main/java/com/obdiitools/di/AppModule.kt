@@ -29,7 +29,7 @@ object AppModule {
     @Singleton
     fun provideOBDDatabase(@ApplicationContext context: Context): OBDDatabase =
         Room.databaseBuilder(context, OBDDatabase::class.java, "obd_sessions.db")
-            .addMigrations(OBDDatabase.MIGRATION_1_2)
+            .addMigrations(OBDDatabase.MIGRATION_1_2, OBDDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
 
