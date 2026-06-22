@@ -35,6 +35,9 @@ class ELM327BleConnection(
     private var txChar: BluetoothGattCharacteristic? = null
 
     @Volatile private var connected = false
+    @Volatile private var _lastByteReceivedMs: Long = System.currentTimeMillis()
+    override val lastByteReceivedMs: Long get() = _lastByteReceivedMs
+    override fun resetActivityTimer() { _lastByteReceivedMs = System.currentTimeMillis() }
 
     companion object {
         // Known UART-over-BLE service/characteristic pairs (tried in order)
@@ -283,6 +286,7 @@ class ELM327BleConnection(
                 Thread.sleep(5)
                 null
             } ?: continue
+            _lastByteReceivedMs = System.currentTimeMillis()
             for (b in bytes) {
                 val c = b.toInt().toChar()
                 when {

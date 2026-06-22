@@ -244,7 +244,7 @@ fun CanMonitorScreen(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    items(filteredFrames, key = { it.rawLine + it.hashCode() }) { frame ->
+                    items(filteredFrames, key = { it.receivedAt }) { frame ->
                         CanFrameRow(frame)
                     }
                 }

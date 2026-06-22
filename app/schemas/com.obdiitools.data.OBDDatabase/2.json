@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 2,
-    "identityHash": "8171f5047ef0883737e241582f516392",
+    "identityHash": "742f555751401d79203d734684dbae88",
     "entities": [
       {
         "tableName": "sessions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startTimeMs` INTEGER NOT NULL, `endTimeMs` INTEGER, `maxRpm` INTEGER, `maxSpeedKph` INTEGER, `maxCoolantTempC` INTEGER, `distanceKm` REAL, `deviceName` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startTimeMs` INTEGER NOT NULL, `endTimeMs` INTEGER, `maxRpm` INTEGER, `maxSpeedKph` INTEGER, `maxCoolantTempC` INTEGER, `distanceKm` REAL, `deviceName` TEXT NOT NULL, `make` TEXT NOT NULL, `model` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -53,6 +53,18 @@
           {
             "fieldPath": "deviceName",
             "columnName": "deviceName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "make",
+            "columnName": "make",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -166,7 +178,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8171f5047ef0883737e241582f516392')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '742f555751401d79203d734684dbae88')"
     ]
   }
 }

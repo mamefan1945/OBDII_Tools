@@ -66,6 +66,7 @@ import com.obdiitools.data.TemperatureUnit
 import com.obdiitools.data.UserPreferences
 import com.obdiitools.ui.theme.BackgroundDeep
 import com.obdiitools.util.SessionExporter
+import com.obdiitools.util.getSessionTitle
 import com.obdiitools.util.UnitConverter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -231,7 +232,7 @@ private fun SessionRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                session.deviceName.ifBlank { "Unknown Device" },
+                getSessionTitle(session.make, session.model, session.deviceName),
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,

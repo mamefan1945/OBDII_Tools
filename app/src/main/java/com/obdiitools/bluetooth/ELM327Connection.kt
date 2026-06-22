@@ -18,6 +18,10 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
     private val outputStream: OutputStream = socket.outputStream
     private val inputStream: InputStream   = socket.inputStream
 
+    @Volatile private var _lastByteReceivedMs: Long = System.currentTimeMillis()
+    override val lastByteReceivedMs: Long get() = _lastByteReceivedMs
+    override fun resetActivityTimer() { _lastByteReceivedMs = System.currentTimeMillis() }
+
     override suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
             for (cmd in ELM327Protocol.INIT_COMMANDS) {
@@ -36,6 +40,8 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
         try {
             sendRaw(command)
             readResponseLines(timeoutMs).firstOrNull() ?: ""
+        } catch (e: java.io.IOException) {
+            throw e  // let polling loop detect disconnection
         } catch (e: Exception) {
             ""
         }
@@ -45,6 +51,8 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
         try {
             sendRaw(command)
             readResponseLines(timeoutMs)
+        } catch (e: java.io.IOException) {
+            throw e  // let polling loop detect disconnection
         } catch (e: Exception) {
             emptyList()
         }
@@ -195,6 +203,7 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
                 if (inputStream.available() > 0) {
                     val b = inputStream.read()
                     if (b == -1) break
+                    _lastByteReceivedMs = System.currentTimeMillis()
                     val c = b.toChar()
                     when {
                         c == '>' -> {
@@ -214,8 +223,10 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
                     Thread.sleep(5)
                 }
             }
+        } catch (e: java.io.IOException) {
+            throw e  // propagate so polling loop can detect disconnection
         } catch (e: Exception) {
-            // stream closed or reset
+            // InterruptedException or other non-I/O errors
         }
         return lines
     }

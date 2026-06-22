@@ -103,6 +103,8 @@ class SessionRepository @Inject constructor(
         val duration = endTime - session.startTimeMs
         return if (duration < 30_000L) null else TripSummary(
             deviceName = session.deviceName,
+            make = session.make,
+            model = session.model,
             durationMs = duration,
             distanceKm = snap.distKm,
             maxRpm = snap.maxRpm,
@@ -113,6 +115,11 @@ class SessionRepository @Inject constructor(
                 if (hours > 0f) dist / hours else null
             } ?: if (snap.speedCount > 0) snap.speedSum.toFloat() / snap.speedCount else null,
         )
+    }
+
+    suspend fun updateCurrentSessionMakeModel(make: String, model: String) {
+        val id = currentSessionId ?: return
+        dao.updateMakeModel(id, make, model)
     }
 
     suspend fun getDataPoints(sessionId: Long): List<SessionDataPoint> =

@@ -20,6 +20,7 @@ import com.obdiitools.data.SpeedUnit
 import com.obdiitools.data.TemperatureUnit
 import com.obdiitools.data.TorqueUnit
 import com.obdiitools.data.UserPreferences
+import com.obdiitools.data.SessionRepository
 import com.obdiitools.data.VinDiagnostic
 import com.obdiitools.data.VinInfo
 import com.obdiitools.data.VinRepository
@@ -45,6 +46,7 @@ class MainViewModel @Inject constructor(
     private val scanner: BluetoothDeviceScanner,
     private val prefsRepository: PreferencesRepository,
     private val vinRepository: VinRepository,
+    private val sessionRepository: SessionRepository,
     private val customPidRepository: CustomPidRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -102,7 +104,11 @@ class MainViewModel @Inject constructor(
                         vinFetchJob = viewModelScope.launch {
                             _vinLoading.value = true
                             try {
-                                _vinInfo.value = vinRepository.fetchAndDecodeVin()
+                                val info = vinRepository.fetchAndDecodeVin()
+                                _vinInfo.value = info
+                                if (info != null && (info.make.isNotBlank() || info.model.isNotBlank())) {
+                                    sessionRepository.updateCurrentSessionMakeModel(info.make, info.model)
+                                }
                             } finally {
                                 _vinLoading.value = false
                             }

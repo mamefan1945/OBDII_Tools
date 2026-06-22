@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.Flow
 
 interface OBDConnection {
     val isConnected: Boolean
+    val lastByteReceivedMs: Long
+    fun resetActivityTimer()
     suspend fun initialize(): Boolean
     suspend fun query(command: String, timeoutMs: Long = 500): String
     suspend fun queryLines(command: String, timeoutMs: Long = 1000): List<String>

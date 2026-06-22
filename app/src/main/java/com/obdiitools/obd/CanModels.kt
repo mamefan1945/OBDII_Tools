@@ -4,6 +4,7 @@ data class CanFrame(
     val id: String,
     val data: List<Int>,
     val rawLine: String,
+    val receivedAt: Long = System.nanoTime(),
 ) {
     val dataHex: String
         get() = data.joinToString(" ") { "%02X".format(it) }

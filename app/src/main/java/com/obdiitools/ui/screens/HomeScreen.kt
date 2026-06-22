@@ -51,6 +51,7 @@ import com.obdiitools.data.VinDiagnostic
 import com.obdiitools.data.VinInfo
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.util.UnitConverter
+import com.obdiitools.util.getSessionTitle
 import com.obdiitools.obd.OBDData
 import com.obdiitools.ui.components.ConnectionStatusBar
 import com.obdiitools.ui.components.GlassCard
@@ -411,7 +412,7 @@ private fun TripSummaryCard(trip: TripSummary, onDismiss: () -> Unit) {
             ) {
                 Column {
                     Text("LAST TRIP", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonGreen, letterSpacing = 2.sp)
-                    Text(trip.deviceName, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextSecondary)
+                    Text(getSessionTitle(trip.make, trip.model, trip.deviceName), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextSecondary)
                 }
                 TextButton(onClick = onDismiss) {
                     Text("DISMISS", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonGreen, fontWeight = FontWeight.Bold)

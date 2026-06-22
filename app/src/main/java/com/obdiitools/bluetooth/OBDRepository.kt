@@ -111,10 +111,10 @@ class OBDRepository @Inject constructor(
     fun resumePolling() { pollingPaused = false }
 
     suspend fun queryRaw(command: String): String =
-        connection?.query(command) ?: ""
+        try { connection?.query(command) ?: "" } catch (_: java.io.IOException) { "" }
 
     suspend fun queryRawLines(command: String): List<String> =
-        connection?.queryLines(command) ?: emptyList()
+        try { connection?.queryLines(command) ?: emptyList() } catch (_: java.io.IOException) { emptyList() }
 
     suspend fun queryRawUds(ecuAddress: String, did: String): String =
         connection?.queryUds(ecuAddress, did) ?: ""
@@ -222,6 +222,9 @@ class OBDRepository @Inject constructor(
             var wasResumedFromPause = false
             while (isActive && connection?.isConnected == true) {
                 if (pollingPaused) {
+                    // Reset the no-response watchdog so pauses (VIN fetch, DTC scan, etc.)
+                    // don't count against the adapter silence threshold.
+                    connection?.resetActivityTimer()
                     wasResumedFromPause = true
                     delay(100)
                     continue
@@ -246,6 +249,15 @@ class OBDRepository @Inject constructor(
                         _connectionState.value = ConnectionState.Error("Connection lost: ${e.message}")
                         disconnect()
                     }
+                    return@launch
+                }
+                // Watchdog: handles the BT supervision timeout window (typically 5–20 s) where
+                // writes still succeed but the adapter sends nothing back. IOException hasn't
+                // fired yet, but the silence is a reliable signal that the link is gone.
+                val conn = connection
+                if (conn != null && System.currentTimeMillis() - conn.lastByteReceivedMs > NO_RESPONSE_TIMEOUT_MS) {
+                    _connectionState.value = ConnectionState.Error("Adapter not responding")
+                    disconnect()
                     return@launch
                 }
                 delay(50)
@@ -447,6 +459,8 @@ class OBDRepository @Inject constructor(
             if (storedDtcs.isNotEmpty()) {
                 fetchFreezeFrames(conn, storedDtcs)
             }
+        } catch (_: java.io.IOException) {
+            // adapter went offline mid-scan; polling loop will handle disconnect
         } finally {
             resumePolling()
         }
@@ -495,6 +509,8 @@ class OBDRepository @Inject constructor(
             delay(120)
             val raw = conn.query(ELM327Protocol.PID.READINESS, 1000)
             _readinessStatus.value = parseReadinessStatus(raw)
+        } catch (_: java.io.IOException) {
+            // adapter went offline; polling loop will handle disconnect
         } finally {
             resumePolling()
         }
@@ -561,5 +577,6 @@ class OBDRepository @Inject constructor(
 
     companion object {
         private const val ALERT_CHANNEL_ID = "obd_alerts"
+        private const val NO_RESPONSE_TIMEOUT_MS = 10_000L
     }
 }
