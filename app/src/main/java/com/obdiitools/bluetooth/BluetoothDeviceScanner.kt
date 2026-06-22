@@ -11,6 +11,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.LocationManager
+import android.os.Build
+import androidx.core.location.LocationManagerCompat
 import com.obdiitools.obd.BluetoothDeviceInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
@@ -30,6 +33,14 @@ class BluetoothDeviceScanner @Inject constructor(
     val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
 
     val isBluetoothEnabled: Boolean get() = adapter?.isEnabled == true
+
+    // On Android 12+ neverForLocation exempts us from the Location Services requirement.
+    // On Android 11 and below the OS still gates BLE scanning behind the location toggle.
+    val isLocationEnabled: Boolean get() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return true
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return LocationManagerCompat.isLocationEnabled(lm)
+    }
 
     @SuppressLint("MissingPermission")
     fun getPairedDevices(): List<BluetoothDeviceInfo> {
@@ -81,6 +92,10 @@ class BluetoothDeviceScanner @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun startBleScan(): Flow<BluetoothDeviceInfo> = callbackFlow {
+        if (!isLocationEnabled) {
+            close(Exception("Location Services must be enabled to scan for BLE devices on Android 11 and below. Enable it in Settings → Location."))
+            return@callbackFlow
+        }
         val seen = mutableSetOf<String>()
         val leScanner = adapter?.bluetoothLeScanner ?: run { close(); return@callbackFlow }
         val settings = ScanSettings.Builder()

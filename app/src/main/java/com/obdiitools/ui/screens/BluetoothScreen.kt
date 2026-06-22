@@ -74,6 +74,7 @@ fun BluetoothScreen(viewModel: MainViewModel) {
     val connectionState by viewModel.connectionState.collectAsState()
     val bleDevices by viewModel.bleDevices.collectAsState()
     val bleScanning by viewModel.isBleScanRunning.collectAsState()
+    val bleScanError by viewModel.bleScanError.collectAsState()
     val vinInfo by viewModel.vinInfo.collectAsState()
     val vinLoading by viewModel.vinLoading.collectAsState()
     var pairedDevices by remember { mutableStateOf<List<BluetoothDeviceInfo>>(emptyList()) }
@@ -197,6 +198,15 @@ fun BluetoothScreen(viewModel: MainViewModel) {
                             Text("STOP", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonRed, fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+
+                if (bleScanError != null) {
+                    Text(
+                        text = bleScanError!!,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = NeonRed,
+                    )
                 }
             }
 

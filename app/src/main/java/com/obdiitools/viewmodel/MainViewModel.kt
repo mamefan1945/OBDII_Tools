@@ -139,10 +139,14 @@ class MainViewModel @Inject constructor(
     private val _isBleScanRunning = MutableStateFlow(false)
     val isBleScanRunning: StateFlow<Boolean> = _isBleScanRunning
 
+    private val _bleScanError = MutableStateFlow<String?>(null)
+    val bleScanError: StateFlow<String?> = _bleScanError
+
     private var bleScanJob: Job? = null
 
     fun startBleScan() {
         bleScanJob?.cancel()
+        _bleScanError.value = null
         bleScanJob = viewModelScope.launch {
             _bleDevices.value = emptyList()
             _isBleScanRunning.value = true
@@ -150,6 +154,8 @@ class MainViewModel @Inject constructor(
                 scanner.startBleScan().collect { device ->
                     _bleDevices.value = (_bleDevices.value + device).distinctBy { it.address }
                 }
+            } catch (e: Exception) {
+                _bleScanError.value = e.message
             } finally {
                 _isBleScanRunning.value = false
             }
