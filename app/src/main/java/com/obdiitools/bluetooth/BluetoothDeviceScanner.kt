@@ -107,7 +107,7 @@ class BluetoothDeviceScanner @Inject constructor(
             }
 
             override fun onScanFailed(errorCode: Int) {
-                close()
+                close(Exception("BLE scan failed: error $errorCode"))
             }
         }
 
