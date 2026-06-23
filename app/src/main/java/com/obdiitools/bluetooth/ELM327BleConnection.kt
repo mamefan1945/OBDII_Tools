@@ -34,7 +34,7 @@ class ELM327BleConnection(
     // Released when CCCD write completes (or immediately if no CCCD needed)
     private val notifyReady = Semaphore(0)
     private var gatt: BluetoothGatt? = null
-    private var txChar: BluetoothGattCharacteristic? = null
+    @Volatile private var txChar: BluetoothGattCharacteristic? = null
 
     @Volatile private var connected = false
     @Volatile private var _lastByteReceivedMs: Long = System.currentTimeMillis()
@@ -54,7 +54,7 @@ class ELM327BleConnection(
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
     }
 
-    private var writeNoResponse = false
+    @Volatile private var writeNoResponse = false
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -79,16 +79,12 @@ class ELM327BleConnection(
                               char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
             txChar = char
             gatt.setCharacteristicNotification(char, true)
-            // Request a larger MTU first; CCCD write follows in onMtuChanged.
-            // GATT operations are serialized — issuing both at once drops one silently.
-            gatt.requestMtu(512)
-        }
 
-        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-            val char = txChar ?: return
+            // Write CCCD immediately — don't request MTU first.
+            // Many HM-10/CC2541 adapters (e.g. Veepeak OBDCheck BLE) never call
+            // onMtuChanged, so chaining CCCD on it leaves notifications dead.
             val descriptor = char.getDescriptor(CCCD_UUID)
             if (descriptor != null) {
-                // Tell the peripheral to start sending notifications
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 } else {
@@ -99,7 +95,7 @@ class ELM327BleConnection(
                 }
                 // notifyReady released in onDescriptorWrite
             } else {
-                // Some peripherals auto-notify without an explicit CCCD write
+                // Peripheral auto-notifies without an explicit CCCD write
                 notifyReady.release()
             }
         }
