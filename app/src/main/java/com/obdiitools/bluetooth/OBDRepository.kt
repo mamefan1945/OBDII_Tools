@@ -113,8 +113,8 @@ class OBDRepository @Inject constructor(
     suspend fun queryRaw(command: String): String =
         try { connection?.query(command) ?: "" } catch (_: java.io.IOException) { "" }
 
-    suspend fun queryRawLines(command: String): List<String> =
-        try { connection?.queryLines(command) ?: emptyList() } catch (_: java.io.IOException) { emptyList() }
+    suspend fun queryRawLines(command: String, timeoutMs: Long = 1000): List<String> =
+        try { connection?.queryLines(command, timeoutMs) ?: emptyList() } catch (_: java.io.IOException) { emptyList() }
 
     suspend fun queryRawUds(ecuAddress: String, did: String): String =
         connection?.queryUds(ecuAddress, did) ?: ""

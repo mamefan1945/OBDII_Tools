@@ -31,6 +31,8 @@ class ELM327BleConnection(
 
     private val rxChannel = Channel<ByteArray>(capacity = 256)
     private val writeAck = Semaphore(0)
+    // Released when CCCD write completes (or immediately if no CCCD needed)
+    private val notifyReady = Semaphore(0)
     private var gatt: BluetoothGatt? = null
     private var txChar: BluetoothGattCharacteristic? = null
 
@@ -42,8 +44,10 @@ class ELM327BleConnection(
     companion object {
         // Known UART-over-BLE service/characteristic pairs (tried in order)
         private val KNOWN_PROFILES = listOf(
+            // HM-10 / CC2541 — most common cheap ELM327 BLE adapters (e.g. Veepeak OBDCheck BLE)
             UUID.fromString("0000FFE0-0000-1000-8000-00805F9B34FB") to
                     UUID.fromString("0000FFE1-0000-1000-8000-00805F9B34FB"),
+            // Alternative UART profile used by some adapters
             UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB") to
                     UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB"),
         )
@@ -75,15 +79,37 @@ class ELM327BleConnection(
                               char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
             txChar = char
             gatt.setCharacteristicNotification(char, true)
-            val descriptor = char.getDescriptor(CCCD_UUID) ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+            // Request a larger MTU first; CCCD write follows in onMtuChanged.
+            // GATT operations are serialized — issuing both at once drops one silently.
+            gatt.requestMtu(512)
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            val char = txChar ?: return
+            val descriptor = char.getDescriptor(CCCD_UUID)
+            if (descriptor != null) {
+                // Tell the peripheral to start sending notifications
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    @Suppress("DEPRECATION")
+                    gatt.writeDescriptor(descriptor)
+                }
+                // notifyReady released in onDescriptorWrite
             } else {
-                @Suppress("DEPRECATION")
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                @Suppress("DEPRECATION")
-                gatt.writeDescriptor(descriptor)
+                // Some peripherals auto-notify without an explicit CCCD write
+                notifyReady.release()
             }
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int,
+        ) {
+            notifyReady.release()
         }
 
         override fun onCharacteristicWrite(
@@ -121,7 +147,10 @@ class ELM327BleConnection(
         }
         if (txChar == null) return false
 
-        Thread.sleep(300)
+        // Wait for CCCD write to complete so the peripheral is ready to send notifications
+        // before we send any commands.  Timeout 2s; proceed anyway if it takes longer.
+        notifyReady.tryAcquire(2000, TimeUnit.MILLISECONDS)
+
         for (cmd in ELM327Protocol.INIT_COMMANDS) {
             sendRaw(cmd)
             val waitMs = if (cmd == "ATZ") 1200L else 300L

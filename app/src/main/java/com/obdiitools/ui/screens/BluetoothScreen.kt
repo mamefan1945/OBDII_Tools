@@ -1,7 +1,9 @@
 package com.obdiitools.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -52,8 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Surface
+import androidx.compose.ui.platform.LocalContext
 import com.obdiitools.data.VinInfo
 import com.obdiitools.obd.BluetoothDeviceInfo
 import com.obdiitools.obd.ConnectionState
@@ -71,6 +75,7 @@ import com.obdiitools.viewmodel.MainViewModel
 
 @Composable
 fun BluetoothScreen(viewModel: MainViewModel) {
+    val context = LocalContext.current
     val connectionState by viewModel.connectionState.collectAsState()
     val bleDevices by viewModel.bleDevices.collectAsState()
     val bleScanning by viewModel.isBleScanRunning.collectAsState()
@@ -156,6 +161,27 @@ fun BluetoothScreen(viewModel: MainViewModel) {
                     Text(
                         "SCAN FOR DEVICES",
                         color = NeonCyan,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(Icons.Default.Settings, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(10.dp))
+                    Text(
+                        "PAIR CLASSIC DEVICE",
+                        color = TextSecondary,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp,

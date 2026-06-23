@@ -49,7 +49,9 @@ class VinRepository @Inject constructor(
     }
 
     private suspend fun fetchMode09Vin(): String? {
-        val lines = obdRepository.queryRawLines("0902")
+        // Mode 09 VIN is a multi-frame ISO-TP exchange; allow 5 s for the ELM327 to
+        // finish protocol detection, reassemble the frames, and return the full response.
+        val lines = obdRepository.queryRawLines("0902", timeoutMs = 5000)
         val result = parseMode09Lines(lines)
         return extractVinFromHexStream(result.allHex)
     }
@@ -104,7 +106,7 @@ class VinRepository @Inject constructor(
         try {
             delay(150)
             // ── Mode 09 PID 02 ───────────────────────────────────────────────
-            val rawLines = obdRepository.queryRawLines("0902")
+            val rawLines = obdRepository.queryRawLines("0902", timeoutMs = 5000)
             val mode09Result = parseMode09Lines(rawLines)
             diag = diag.copy(
                 mode09RawLines    = rawLines,
