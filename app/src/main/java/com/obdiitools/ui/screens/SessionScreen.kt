@@ -420,7 +420,7 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                         .height(220.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(SurfaceElevated.copy(alpha = 0.5f))
-                        .pointerInput(Unit) {
+                        .pointerInput(selected, session.id) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 val newZoom = (zoomScale * zoom).coerceIn(1f, 20f)
                                 val newMaxPan = (1f - 1f / newZoom).coerceAtLeast(0f)
