@@ -286,14 +286,22 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
     val hasVoltageData = remember(points) { points.any { it.batteryVoltage != null } }
 
     val avgFuelEconomy: String? = remember(points, prefs.fuelEconomyUnit) {
-        val econValues = points.mapNotNull { pt ->
-            val maf = pt.mafGramsPerSec ?: return@mapNotNull null
-            val spd = pt.speedKph ?: return@mapNotNull null
-            UnitConverter.fuelEconomyL100km(maf, spd)
+        // Correct trip average: sum(MAF) / sum(speed) * constant, not average(MAF/speed).
+        // Arithmetic mean of instantaneous L/100km over-weights low-speed high-consumption
+        // moments (acceleration) because each sample represents unequal distance traveled.
+        var totalMaf = 0.0
+        var totalSpeed = 0.0
+        points.forEach { pt ->
+            val maf = pt.mafGramsPerSec ?: return@forEach
+            val spd = pt.speedKph ?: return@forEach
+            if (spd >= 5 && maf >= 0f) {
+                totalMaf += maf
+                totalSpeed += spd
+            }
         }
-        if (econValues.isEmpty()) null
+        if (totalSpeed == 0.0) null
         else {
-            val avgL100km = econValues.average().toFloat()
+            val avgL100km = (totalMaf * 33.23 / totalSpeed).toFloat()
             when (prefs.fuelEconomyUnit) {
                 FuelEconomyUnit.L100KM -> "${"%.1f".format(avgL100km)} L/100km"
                 FuelEconomyUnit.MPG_US -> "${"%.1f".format(UnitConverter.l100kmToMpgUs(avgL100km))} mpg"

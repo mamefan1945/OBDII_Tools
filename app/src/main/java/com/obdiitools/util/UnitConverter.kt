@@ -51,11 +51,10 @@ object UnitConverter {
     // Constant = 3600 / (14.64 × 740) ≈ 0.3323 L/h per g/s.
     fun fuelFlowLph(mafGsec: Float): Float = mafGsec * 0.3323f
 
-    // Returns null below 5 km/h (idling) — L/100km is undefined.
-    // Clamped to 2.35 L/100km minimum (≈100 MPG) to suppress fuel-cut spikes.
+    // Returns null below 5 km/h — L/100km is undefined at idle/stopped.
     fun fuelEconomyL100km(mafGsec: Float, speedKph: Int): Float? {
         if (speedKph < 5) return null
-        return (mafGsec * 33.23f / speedKph).coerceAtLeast(2.35f)
+        return mafGsec * 33.23f / speedKph
     }
 
     fun l100kmToMpgUs(l100km: Float): Float = 235.215f / l100km
