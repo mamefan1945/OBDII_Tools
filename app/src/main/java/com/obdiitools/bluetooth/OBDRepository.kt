@@ -11,6 +11,8 @@ import com.obdiitools.data.AlertThresholds
 import com.obdiitools.data.AlertType
 import com.obdiitools.data.CustomPidDefinition
 import com.obdiitools.data.CustomPidRepository
+import com.obdiitools.data.EiaRepository
+import com.obdiitools.data.FuelPriceMode
 import com.obdiitools.data.PreferencesRepository
 import com.obdiitools.data.SessionRepository
 import com.obdiitools.data.TripSummary
@@ -54,6 +56,7 @@ class OBDRepository @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val customPidRepository: CustomPidRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val eiaRepository: EiaRepository,
 ) {
     private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
@@ -185,6 +188,13 @@ class OBDRepository @Inject constructor(
 
                 val supported = conn.querySupportedPids()
                 _supportedPids.value = supported
+
+                // Refresh EIA gas price at the start of every session
+                val prefs = preferencesRepository.userPreferences.first()
+                if (prefs.fuelPriceMode == FuelPriceMode.EIA_AVERAGE && prefs.eiaApiKey.isNotBlank()) {
+                    val price = eiaRepository.fetchRegularGasolinePriceUsdPerGallon(prefs.eiaApiKey)
+                    if (price != null) preferencesRepository.setEiaFuelPrice(price, System.currentTimeMillis())
+                }
 
                 connection = conn
                 _connectionState.value = ConnectionState.Connected(deviceInfo.name, deviceInfo.address)

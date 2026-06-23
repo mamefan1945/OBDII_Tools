@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -27,7 +28,12 @@ class PreferencesRepository @Inject constructor(
         val ALERT_FUEL      = intPreferencesKey("alert_fuel_min_pct")
         val ALERT_BATTERY   = floatPreferencesKey("alert_battery_min_v")
         val ALERT_RPM       = intPreferencesKey("alert_rpm_max")
-        val KEEP_SCREEN_ON  = booleanPreferencesKey("keep_screen_on")
+        val KEEP_SCREEN_ON       = booleanPreferencesKey("keep_screen_on")
+        val FUEL_PRICE_MODE      = stringPreferencesKey("fuel_price_mode")
+        val MANUAL_FUEL_PRICE    = floatPreferencesKey("manual_fuel_price")
+        val EIA_API_KEY          = stringPreferencesKey("eia_api_key")
+        val EIA_FUEL_PRICE_USD   = floatPreferencesKey("eia_fuel_price_usd")  // -1f = not yet fetched
+        val EIA_PRICE_UPDATED_MS = longPreferencesKey("eia_price_updated_ms")
     }
 
     val userPreferences: Flow<UserPreferences> = dataStore.data.map { prefs ->
@@ -44,7 +50,12 @@ class PreferencesRepository @Inject constructor(
                 batteryMinV = prefs[Keys.ALERT_BATTERY]  ?: 11.8f,
                 rpmMax      = prefs[Keys.ALERT_RPM]      ?: 6500,
             ),
-            keepScreenOn = prefs[Keys.KEEP_SCREEN_ON] ?: false,
+            keepScreenOn          = prefs[Keys.KEEP_SCREEN_ON] ?: false,
+            fuelPriceMode         = prefs[Keys.FUEL_PRICE_MODE]?.let { runCatching { FuelPriceMode.valueOf(it) }.getOrNull() } ?: FuelPriceMode.MANUAL,
+            manualFuelPrice       = prefs[Keys.MANUAL_FUEL_PRICE] ?: 1.50f,
+            eiaApiKey             = prefs[Keys.EIA_API_KEY] ?: "",
+            eiaFuelPriceUsd       = prefs[Keys.EIA_FUEL_PRICE_USD]?.takeIf { it >= 0f },
+            eiaFuelPriceUpdatedMs = prefs[Keys.EIA_PRICE_UPDATED_MS] ?: 0L,
         )
     }
 
@@ -83,5 +94,24 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setKeepScreenOn(enabled: Boolean) {
         dataStore.edit { it[Keys.KEEP_SCREEN_ON] = enabled }
+    }
+
+    suspend fun setFuelPriceMode(mode: FuelPriceMode) {
+        dataStore.edit { it[Keys.FUEL_PRICE_MODE] = mode.name }
+    }
+
+    suspend fun setManualFuelPrice(price: Float) {
+        dataStore.edit { it[Keys.MANUAL_FUEL_PRICE] = price }
+    }
+
+    suspend fun setEiaApiKey(key: String) {
+        dataStore.edit { it[Keys.EIA_API_KEY] = key }
+    }
+
+    suspend fun setEiaFuelPrice(usdPerGallon: Float, updatedMs: Long) {
+        dataStore.edit {
+            it[Keys.EIA_FUEL_PRICE_USD]   = usdPerGallon
+            it[Keys.EIA_PRICE_UPDATED_MS] = updatedMs
+        }
     }
 }

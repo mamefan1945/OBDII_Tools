@@ -1,10 +1,13 @@
 package com.obdiitools.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import com.obdiitools.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +18,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -28,14 +34,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.obdiitools.data.AirMassUnit
 import com.obdiitools.data.AlertThresholds
 import com.obdiitools.data.FuelEconomyUnit
+import com.obdiitools.data.FuelPriceMode
 import com.obdiitools.data.PressureUnit
 import com.obdiitools.data.SpeedUnit
 import com.obdiitools.data.TemperatureUnit
@@ -168,6 +181,95 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(prefs.fuelEconomyUnit.label, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextSecondary)
+            }
+
+            // Fuel Price
+            SettingsSection(label = "FUEL PRICE", accentColor = NeonGreen) {
+                UnitSelector(
+                    options = FuelPriceMode.entries,
+                    selected = prefs.fuelPriceMode,
+                    label = { it.label },
+                    onSelect = { viewModel.setFuelPriceMode(it) },
+                    accentColor = NeonGreen,
+                )
+                if (prefs.fuelPriceMode == FuelPriceMode.MANUAL) {
+                    var priceText by remember(prefs.manualFuelPrice) {
+                        mutableStateOf("%.2f".format(prefs.manualFuelPrice))
+                    }
+                    OutlinedTextField(
+                        value = priceText,
+                        onValueChange = { text ->
+                            priceText = text
+                            text.toFloatOrNull()?.let { viewModel.setManualFuelPrice(it) }
+                        },
+                        label = { Text("Price ${UnitConverter.fuelPriceUnitLabel(prefs)}", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = NeonGreen,
+                            focusedLabelColor    = NeonGreen,
+                            unfocusedBorderColor = SurfaceBorder,
+                            unfocusedLabelColor  = TextSecondary,
+                            focusedTextColor     = TextPrimary,
+                            unfocusedTextColor   = TextPrimary,
+                            cursorColor          = NeonGreen,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    val context = LocalContext.current
+                    var keyText by remember(prefs.eiaApiKey) { mutableStateOf(prefs.eiaApiKey) }
+                    OutlinedTextField(
+                        value = keyText,
+                        onValueChange = { keyText = it; viewModel.setEiaApiKey(it.trim()) },
+                        label = { Text("EIA API Key", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                        placeholder = { Text("Paste your free API key here", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextSecondary.copy(alpha = 0.5f)) },
+                        singleLine = true,
+                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = NeonGreen,
+                            focusedLabelColor    = NeonGreen,
+                            unfocusedBorderColor = SurfaceBorder,
+                            unfocusedLabelColor  = TextSecondary,
+                            focusedTextColor     = TextPrimary,
+                            unfocusedTextColor   = TextPrimary,
+                            cursorColor          = NeonGreen,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "Get a free key at eia.gov/opendata →",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = NeonCyan,
+                        modifier = Modifier.clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.eia.gov/opendata/register.php"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        },
+                    )
+                    val eiaPrice = UnitConverter.eiaDisplayPrice(prefs)
+                    when {
+                        eiaPrice != null -> {
+                            val updatedStr = if (prefs.eiaFuelPriceUpdatedMs > 0L)
+                                " (as of ${SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(prefs.eiaFuelPriceUpdatedMs))})"
+                            else ""
+                            PreviewRow("Current price", "$eiaPrice$updatedStr", NeonGreen)
+                        }
+                        prefs.eiaApiKey.isNotBlank() ->
+                            Text("Not yet fetched — updates at session start", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextSecondary)
+                        else ->
+                            Text("Enter your API key above to enable automatic pricing.", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextSecondary)
+                    }
+                    Text(
+                        "US regional average (USD). Updates at the start of each session.",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = TextSecondary.copy(alpha = 0.6f),
+                    )
+                }
             }
 
             // Display behaviour

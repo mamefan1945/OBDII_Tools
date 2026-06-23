@@ -11,6 +11,7 @@ import com.obdiitools.data.AlertThresholds
 import com.obdiitools.data.AlertType
 import com.obdiitools.data.AirMassUnit
 import com.obdiitools.data.FuelEconomyUnit
+import com.obdiitools.data.FuelPriceMode
 import com.obdiitools.data.CustomPidDefinition
 import com.obdiitools.data.CustomPidRepository
 import com.obdiitools.data.PreferencesRepository
@@ -80,6 +81,9 @@ class MainViewModel @Inject constructor(
 
     val lastTripSummary: StateFlow<TripSummary?> = repository.lastTripSummary
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val sessionFuelLitres: StateFlow<Float> = sessionRepository.sessionFuelLitres
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
 
     private val _vinInfo = MutableStateFlow<VinInfo?>(null)
     val vinInfo: StateFlow<VinInfo?> = _vinInfo
@@ -212,6 +216,18 @@ class MainViewModel @Inject constructor(
 
     fun setKeepScreenOn(enabled: Boolean) {
         viewModelScope.launch { prefsRepository.setKeepScreenOn(enabled) }
+    }
+
+    fun setFuelPriceMode(mode: FuelPriceMode) {
+        viewModelScope.launch { prefsRepository.setFuelPriceMode(mode) }
+    }
+
+    fun setManualFuelPrice(price: Float) {
+        viewModelScope.launch { prefsRepository.setManualFuelPrice(price) }
+    }
+
+    fun setEiaApiKey(key: String) {
+        viewModelScope.launch { prefsRepository.setEiaApiKey(key) }
     }
 
     fun fetchReadinessMonitors() {

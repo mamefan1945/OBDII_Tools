@@ -1,7 +1,11 @@
 package com.obdiitools.data
 
 import com.obdiitools.obd.OBDData
+import com.obdiitools.util.UnitConverter
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -21,6 +25,10 @@ class SessionRepository @Inject constructor(
     private var lastSpeedKph: Int? = null
     private var lastTimestampMs: Long? = null
     private var totalDistanceKm: Float = 0f
+    private var totalFuelLitres: Float = 0f
+
+    private val _sessionFuelLitres = MutableStateFlow(0f)
+    val sessionFuelLitres: StateFlow<Float> = _sessionFuelLitres.asStateFlow()
 
     val allSessions: Flow<List<SessionEntity>> = dao.getAllSessions()
 
@@ -39,6 +47,8 @@ class SessionRepository @Inject constructor(
         lastSpeedKph = null
         lastTimestampMs = null
         totalDistanceKm = 0f
+        totalFuelLitres = 0f
+        _sessionFuelLitres.value = 0f
         return id
     }
 
@@ -59,6 +69,18 @@ class SessionRepository @Inject constructor(
                 }
             }
         }
+
+        // Accumulate fuel consumed using MAF-based flow rate
+        data.mafGramsPerSec?.let { maf ->
+            if (maf > 0f) {
+                lastTimestampMs?.let { prevTime ->
+                    val elapsedHours = (now - prevTime) / 3_600_000f
+                    totalFuelLitres += UnitConverter.fuelFlowLph(maf) * elapsedHours
+                    _sessionFuelLitres.value = totalFuelLitres
+                }
+            }
+        }
+
         lastSpeedKph = data.speedKph
         lastTimestampMs = now
 
@@ -81,12 +103,13 @@ class SessionRepository @Inject constructor(
         // Atomically snapshot accumulated stats and mark session ended so no
         // further recordDataPoint() calls can modify them.
         data class Snap(val id: Long, val maxRpm: Int?, val maxSpeed: Int?, val maxCoolant: Int?,
-                        val distKm: Float?, val speedSum: Long, val speedCount: Int)
+                        val distKm: Float?, val speedSum: Long, val speedCount: Int, val fuelLitres: Float?)
 
         val snap = mutex.withLock {
             val id = currentSessionId ?: return@withLock null
             Snap(id, sessionMaxRpm, sessionMaxSpeed, sessionMaxCoolant,
-                 totalDistanceKm.takeIf { it > 0f }, sessionSpeedSum, sessionSpeedCount)
+                 totalDistanceKm.takeIf { it > 0f }, sessionSpeedSum, sessionSpeedCount,
+                 totalFuelLitres.takeIf { it > 0f })
                 .also { currentSessionId = null }
         } ?: return null
 
@@ -98,6 +121,7 @@ class SessionRepository @Inject constructor(
             maxSpeedKph = snap.maxSpeed,
             maxCoolantTempC = snap.maxCoolant,
             distanceKm = snap.distKm,
+            totalFuelLitres = snap.fuelLitres,
         ))
 
         val duration = endTime - session.startTimeMs
@@ -110,6 +134,7 @@ class SessionRepository @Inject constructor(
             maxRpm = snap.maxRpm,
             maxSpeedKph = snap.maxSpeed,
             maxCoolantTempC = snap.maxCoolant,
+            totalFuelLitres = snap.fuelLitres,
             avgSpeedKph = snap.distKm?.let { dist ->
                 val hours = (endTime - session.startTimeMs) / 3_600_000f
                 if (hours > 0f) dist / hours else null

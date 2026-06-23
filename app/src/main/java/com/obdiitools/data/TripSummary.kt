@@ -10,4 +10,5 @@ data class TripSummary(
     val maxSpeedKph: Int?,
     val maxCoolantTempC: Int?,
     val avgSpeedKph: Float?,
+    val totalFuelLitres: Float? = null,
 )

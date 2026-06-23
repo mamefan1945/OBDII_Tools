@@ -2,6 +2,7 @@ package com.obdiitools.util
 
 import com.obdiitools.data.AirMassUnit
 import com.obdiitools.data.FuelEconomyUnit
+import com.obdiitools.data.FuelPriceMode
 import com.obdiitools.data.PressureUnit
 import com.obdiitools.data.SpeedUnit
 import com.obdiitools.data.TemperatureUnit
@@ -103,6 +104,35 @@ object UnitConverter {
     fun formatAirMass(gPerSec: Float, unit: AirMassUnit): String = when (unit) {
         AirMassUnit.G_S    -> "%.2f".format(gPerSec)
         AirMassUnit.LB_MIN -> "%.3f".format(gPerSec * 0.132277f)
+    }
+
+    // Returns the effective fuel price per litre in the user's local currency.
+    // Manual mode: stored in user's natural unit (L or gal), converted to per-litre here.
+    // EIA mode: stored as USD/gal, converted to per-litre (user must account for currency).
+    fun effectivePricePerLitre(prefs: UserPreferences): Float? = when (prefs.fuelPriceMode) {
+        FuelPriceMode.MANUAL -> when (prefs.fuelEconomyUnit) {
+            FuelEconomyUnit.L100KM -> prefs.manualFuelPrice
+            FuelEconomyUnit.MPG_US -> prefs.manualFuelPrice / 3.78541f
+        }
+        FuelPriceMode.EIA_AVERAGE -> prefs.eiaFuelPriceUsd?.div(3.78541f)
+    }
+
+    fun fuelCost(fuelLitres: Float, prefs: UserPreferences): Float? =
+        effectivePricePerLitre(prefs)?.let { fuelLitres * it }
+
+    // EIA price formatted in the user's preferred unit for display in Settings.
+    fun eiaDisplayPrice(prefs: UserPreferences): String? {
+        val usdPerGal = prefs.eiaFuelPriceUsd ?: return null
+        return when (prefs.fuelEconomyUnit) {
+            FuelEconomyUnit.MPG_US -> "${"%.3f".format(usdPerGal)} USD/gal"
+            FuelEconomyUnit.L100KM -> "${"%.3f".format(usdPerGal / 3.78541f)} USD/L"
+        }
+    }
+
+    // Label for the manual fuel price input field.
+    fun fuelPriceUnitLabel(prefs: UserPreferences): String = when (prefs.fuelEconomyUnit) {
+        FuelEconomyUnit.L100KM -> "per litre"
+        FuelEconomyUnit.MPG_US -> "per gallon"
     }
 
     // Converts and formats a raw SI value for display in the All Parameters screen,

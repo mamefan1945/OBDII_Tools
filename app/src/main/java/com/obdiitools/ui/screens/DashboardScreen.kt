@@ -57,6 +57,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
     val connectionState by viewModel.connectionState.collectAsState()
     val data by viewModel.obdData.collectAsState()
     val prefs by viewModel.userPreferences.collectAsState()
+    val sessionFuelLitres by viewModel.sessionFuelLitres.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
 
     Box(
@@ -71,6 +72,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
                 data = data,
                 connectionState = connectionState,
                 prefs = prefs,
+                sessionFuelLitres = sessionFuelLitres,
                 onNavigateToLiveData = onNavigateToLiveData,
             )
         }
@@ -111,6 +113,7 @@ private fun DashboardContent(
     data: OBDData,
     connectionState: ConnectionState,
     prefs: UserPreferences,
+    sessionFuelLitres: Float,
     onNavigateToLiveData: () -> Unit,
 ) {
     Column(
@@ -331,6 +334,34 @@ private fun DashboardContent(
                     value = data.baroPressureKpa?.let { UnitConverter.formatPressure(it, prefs.pressureUnit) + " " + prefs.pressureUnit.symbol } ?: "--",
                     color = NeonPurple,
                 )
+            }
+        }
+
+        // Session fuel cost — only show when there's data and a price is configured
+        val sessionCost = UnitConverter.fuelCost(sessionFuelLitres, prefs)
+        if (sessionFuelLitres > 0f && sessionCost != null) {
+            Spacer(Modifier.height(16.dp))
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                accentColor = NeonGreen,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                ) {
+                    StatItem(
+                        label = "SESSION COST",
+                        value = "${"%.2f".format(sessionCost)}",
+                        color = NeonGreen,
+                    )
+                    StatItem(
+                        label = "FUEL USED",
+                        value = "${"%.2f".format(sessionFuelLitres)} L",
+                        color = NeonYellow,
+                    )
+                }
             }
         }
 

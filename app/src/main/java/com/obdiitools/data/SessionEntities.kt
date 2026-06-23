@@ -17,6 +17,7 @@ data class SessionEntity(
     val deviceName: String = "",
     val make: String = "",
     val model: String = "",
+    val totalFuelLitres: Float? = null,
 )
 
 @Entity(
