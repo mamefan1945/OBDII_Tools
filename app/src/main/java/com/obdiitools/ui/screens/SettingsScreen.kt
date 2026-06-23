@@ -33,6 +33,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -221,8 +223,14 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     )
                 } else {
                     val context = LocalContext.current
+                    val eiaRefreshing by viewModel.eiaRefreshing.collectAsState()
                     var keyText by remember(prefs.eiaApiKey) { mutableStateOf(prefs.eiaApiKey) }
                     val keyLooksValid = keyText.length >= 16 && keyText.all { it.isLetterOrDigit() || it == '-' }
+
+                    // Auto-fetch when this section first appears (screen open with EIA selected)
+                    LaunchedEffect(Unit) {
+                        if (prefs.eiaApiKey.isNotBlank()) viewModel.refreshEiaPrice(prefs.eiaApiKey)
+                    }
 
                     Text(
                         "Get a free API key from the EIA, then paste it below.",
@@ -260,6 +268,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         fontSize = 11.sp,
                         color = TextSecondary,
                     )
+                    var keyFieldFocused by remember { mutableStateOf(false) }
                     OutlinedTextField(
                         value = keyText,
                         onValueChange = { keyText = it; viewModel.setEiaApiKey(it.trim()) },
@@ -275,10 +284,19 @@ fun SettingsScreen(viewModel: MainViewModel) {
                             unfocusedTextColor   = TextPrimary,
                             cursorColor          = NeonCyan,
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { state ->
+                                if (!state.isFocused && keyFieldFocused && keyLooksValid) {
+                                    viewModel.refreshEiaPrice(keyText.trim())
+                                }
+                                keyFieldFocused = state.isFocused
+                            },
                     )
                     val eiaPrice = UnitConverter.eiaDisplayPrice(prefs)
                     when {
+                        eiaRefreshing ->
+                            Text("Fetching current price...", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = NeonCyan)
                         eiaPrice != null -> {
                             val updatedStr = if (prefs.eiaFuelPriceUpdatedMs > 0L)
                                 " (as of ${SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(prefs.eiaFuelPriceUpdatedMs))})"

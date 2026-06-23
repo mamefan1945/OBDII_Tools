@@ -14,6 +14,7 @@ import com.obdiitools.data.FuelEconomyUnit
 import com.obdiitools.data.FuelPriceMode
 import com.obdiitools.data.CustomPidDefinition
 import com.obdiitools.data.CustomPidRepository
+import com.obdiitools.data.EiaRepository
 import com.obdiitools.data.PreferencesRepository
 import com.obdiitools.data.TripSummary
 import com.obdiitools.data.PressureUnit
@@ -49,6 +50,7 @@ class MainViewModel @Inject constructor(
     private val vinRepository: VinRepository,
     private val sessionRepository: SessionRepository,
     private val customPidRepository: CustomPidRepository,
+    private val eiaRepository: EiaRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -228,6 +230,19 @@ class MainViewModel @Inject constructor(
 
     fun setEiaApiKey(key: String) {
         viewModelScope.launch { prefsRepository.setEiaApiKey(key) }
+    }
+
+    private val _eiaRefreshing = MutableStateFlow(false)
+    val eiaRefreshing: StateFlow<Boolean> = _eiaRefreshing
+
+    fun refreshEiaPrice(apiKey: String) {
+        if (apiKey.isBlank()) return
+        viewModelScope.launch {
+            _eiaRefreshing.value = true
+            val price = eiaRepository.fetchRegularGasolinePriceUsdPerGallon(apiKey)
+            if (price != null) prefsRepository.setEiaFuelPrice(price, System.currentTimeMillis())
+            _eiaRefreshing.value = false
+        }
     }
 
     fun fetchReadinessMonitors() {
