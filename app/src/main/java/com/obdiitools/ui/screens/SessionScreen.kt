@@ -299,12 +299,12 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                 totalSpeed += spd
             }
         }
-        if (totalSpeed == 0.0) null
+        if (totalSpeed == 0.0 || totalMaf == 0.0) null
         else {
             val avgL100km = (totalMaf * 33.23 / totalSpeed).toFloat()
             when (prefs.fuelEconomyUnit) {
                 FuelEconomyUnit.L100KM -> "${"%.1f".format(avgL100km)} L/100km"
-                FuelEconomyUnit.MPG_US -> "${"%.1f".format(UnitConverter.l100kmToMpgUs(avgL100km))} mpg"
+                FuelEconomyUnit.MPG_US -> "${"%.1f".format(UnitConverter.l100kmToMpgUs(avgL100km)!!)} mpg"
             }
         }
     }
@@ -376,7 +376,7 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                             val l100km = UnitConverter.fuelEconomyL100km(maf, spd) ?: return@mapNotNull null
                             when (prefs.fuelEconomyUnit) {
                                 FuelEconomyUnit.L100KM -> l100km
-                                FuelEconomyUnit.MPG_US -> UnitConverter.l100kmToMpgUs(l100km)
+                                FuelEconomyUnit.MPG_US -> UnitConverter.l100kmToMpgUs(l100km) ?: return@mapNotNull null
                             }
                         }
                         GraphSeries.BATTERY      -> point.batteryVoltage ?: return@mapNotNull null

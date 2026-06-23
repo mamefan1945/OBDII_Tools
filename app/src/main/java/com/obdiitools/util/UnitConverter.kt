@@ -51,18 +51,22 @@ object UnitConverter {
     // Constant = 3600 / (14.64 × 740) ≈ 0.3323 L/h per g/s.
     fun fuelFlowLph(mafGsec: Float): Float = mafGsec * 0.3323f
 
-    // Returns null below 5 km/h — L/100km is undefined at idle/stopped.
+    // Returns null below 5 km/h (undefined) or when engine is off (MAF = 0).
     fun fuelEconomyL100km(mafGsec: Float, speedKph: Int): Float? {
-        if (speedKph < 5) return null
+        if (speedKph < 5 || mafGsec <= 0f) return null
         return mafGsec * 33.23f / speedKph
     }
 
-    fun l100kmToMpgUs(l100km: Float): Float = 235.215f / l100km
+    // Returns null when l100km is zero or negative (engine off / EV-only).
+    fun l100kmToMpgUs(l100km: Float): Float? {
+        if (l100km <= 0f) return null
+        return 235.215f / l100km
+    }
 
-    // Formatted economy string. Shows L/h when idling (speed < 5).
+    // Formatted economy string. Shows L/h when idling, "EV" when engine off at speed.
     fun formatFuelEconomy(mafGsec: Float, speedKph: Int, unit: FuelEconomyUnit): String {
         if (speedKph < 5) return "${"%.1f".format(fuelFlowLph(mafGsec))} L/h"
-        val l100km = fuelEconomyL100km(mafGsec, speedKph)!!
+        val l100km = fuelEconomyL100km(mafGsec, speedKph) ?: return "EV"
         return when (unit) {
             FuelEconomyUnit.L100KM -> "${"%.1f".format(l100km)} L/100km"
             FuelEconomyUnit.MPG_US -> "${"%.1f".format(l100kmToMpgUs(l100km))} mpg"

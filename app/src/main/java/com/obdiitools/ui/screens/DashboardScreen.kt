@@ -280,7 +280,8 @@ private fun DashboardContent(
                                 econUnit  = "L/100km"
                             }
                             FuelEconomyUnit.MPG_US -> {
-                                econValue = UnitConverter.l100kmToMpgUs(UnitConverter.fuelEconomyL100km(maf, spd!!)!!)
+                                econValue = UnitConverter.fuelEconomyL100km(maf, spd!!)
+                                    ?.let { UnitConverter.l100kmToMpgUs(it) }
                                 econMax   = 60f
                                 econUnit  = "mpg"
                             }
