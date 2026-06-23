@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -38,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -220,35 +222,60 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 } else {
                     val context = LocalContext.current
                     var keyText by remember(prefs.eiaApiKey) { mutableStateOf(prefs.eiaApiKey) }
+                    val keyLooksValid = keyText.length >= 16 && keyText.all { it.isLetterOrDigit() || it == '-' }
+
+                    Text(
+                        "Get a free API key from the EIA, then paste it below.",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(NeonCyan.copy(alpha = 0.08f))
+                            .clickable {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.eia.gov/opendata/register.php"))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Step 1 — Register at eia.gov/opendata (free)",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = NeonCyan,
+                        )
+                        Text("→", fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NeonCyan)
+                    }
+                    Text(
+                        "Step 2 — Check your email for the API key.",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                    )
                     OutlinedTextField(
                         value = keyText,
                         onValueChange = { keyText = it; viewModel.setEiaApiKey(it.trim()) },
-                        label = { Text("EIA API Key", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                        placeholder = { Text("Paste your free API key here", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextSecondary.copy(alpha = 0.5f)) },
+                        label = { Text("Step 3 — Paste API Key", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                         singleLine = true,
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = NeonGreen,
-                            focusedLabelColor    = NeonGreen,
-                            unfocusedBorderColor = SurfaceBorder,
+                            focusedBorderColor   = if (keyLooksValid) NeonGreen else NeonCyan,
+                            focusedLabelColor    = if (keyLooksValid) NeonGreen else NeonCyan,
+                            unfocusedBorderColor = if (keyLooksValid) NeonGreen.copy(alpha = 0.6f) else SurfaceBorder,
                             unfocusedLabelColor  = TextSecondary,
                             focusedTextColor     = TextPrimary,
                             unfocusedTextColor   = TextPrimary,
-                            cursorColor          = NeonGreen,
+                            cursorColor          = NeonCyan,
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "Get a free key at eia.gov/opendata →",
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        color = NeonCyan,
-                        modifier = Modifier.clickable {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.eia.gov/opendata/register.php"))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        },
                     )
                     val eiaPrice = UnitConverter.eiaDisplayPrice(prefs)
                     when {
@@ -259,12 +286,10 @@ fun SettingsScreen(viewModel: MainViewModel) {
                             PreviewRow("Current price", "$eiaPrice$updatedStr", NeonGreen)
                         }
                         prefs.eiaApiKey.isNotBlank() ->
-                            Text("Not yet fetched — updates at session start", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextSecondary)
-                        else ->
-                            Text("Enter your API key above to enable automatic pricing.", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextSecondary)
+                            Text("Price will be fetched at the start of your next session.", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextSecondary)
                     }
                     Text(
-                        "US regional average (USD). Updates at the start of each session.",
+                        "US national average (USD). Updates at the start of each session.",
                         fontFamily = FontFamily.Monospace,
                         fontSize = 10.sp,
                         color = TextSecondary.copy(alpha = 0.6f),
