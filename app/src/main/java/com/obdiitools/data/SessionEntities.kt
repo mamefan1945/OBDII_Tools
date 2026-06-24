@@ -41,4 +41,7 @@ data class SessionDataPoint(
     val engineLoadPercent: Float? = null,
     val mafGramsPerSec: Float? = null,
     val batteryVoltage: Float? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val accuracy: Float? = null,
 )

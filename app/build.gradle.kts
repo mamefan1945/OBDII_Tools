@@ -1,9 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+}
+
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
 val gitHash: String = try {
@@ -29,6 +35,7 @@ android {
 
         buildConfigField("long",   "BUILD_TIME", "${System.currentTimeMillis()}L")
         buildConfigField("String", "GIT_HASH",   "\"$gitHash\"")
+        manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
     }
 
     buildTypes {
@@ -80,6 +87,9 @@ dependencies {
     implementation(libs.car.app.projected)
     implementation(libs.datastore.preferences)
     implementation(libs.splashscreen)
+    implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

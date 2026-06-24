@@ -34,4 +34,7 @@ interface SessionDao {
 
     @Query("DELETE FROM sessions WHERE id = :id")
     suspend fun deleteSession(id: Long)
+
+    @Query("SELECT * FROM session_data_points WHERE sessionId = :sessionId AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY timestampMs ASC")
+    suspend fun getGpsPointsForSession(sessionId: Long): List<SessionDataPoint>
 }

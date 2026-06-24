@@ -28,6 +28,9 @@ class SessionViewModel @Inject constructor(
     private val _selectedDataPoints = MutableStateFlow<List<SessionDataPoint>>(emptyList())
     val selectedDataPoints: StateFlow<List<SessionDataPoint>> = _selectedDataPoints
 
+    private val _gpsPoints = MutableStateFlow<List<SessionDataPoint>>(emptyList())
+    val gpsPoints: StateFlow<List<SessionDataPoint>> = _gpsPoints
+
     val userPreferences: StateFlow<UserPreferences> = preferencesRepository.userPreferences
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferences())
 
@@ -37,6 +40,12 @@ class SessionViewModel @Inject constructor(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _selectedDataPoints.value = sessionRepository.getDataPoints(sessionId)
+        }
+    }
+
+    fun loadGpsTrail(sessionId: Long) {
+        viewModelScope.launch {
+            _gpsPoints.value = sessionRepository.getGpsPoints(sessionId)
         }
     }
 

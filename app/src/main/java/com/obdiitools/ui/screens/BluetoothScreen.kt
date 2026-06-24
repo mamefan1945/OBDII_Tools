@@ -2,10 +2,12 @@ package com.obdiitools.ui.screens
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -85,6 +87,7 @@ fun BluetoothScreen(viewModel: MainViewModel) {
     var pairedDevices by remember { mutableStateOf<List<BluetoothDeviceInfo>>(emptyList()) }
     var permissionsGranted by remember { mutableStateOf(false) }
     val isConnected = connectionState is ConnectionState.Connected
+    var pendingDevice by remember { mutableStateOf<BluetoothDeviceInfo?>(null) }
 
     val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         arrayOf(
@@ -107,6 +110,14 @@ fun BluetoothScreen(viewModel: MainViewModel) {
             pairedDevices = viewModel.getPairedDevices()
             viewModel.startBleScan()
         }
+    }
+
+    val locationPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        // Connect regardless of grant — GPS omitted if denied, OBD still works.
+        pendingDevice?.let { viewModel.connect(it) }
+        pendingDevice = null
     }
 
     Box(
@@ -278,7 +289,16 @@ fun BluetoothScreen(viewModel: MainViewModel) {
                                             (connectionState as? ConnectionState.Connected)?.deviceAddress == device.address,
                                     isConnecting = connectionState is ConnectionState.Connecting &&
                                             (connectionState as? ConnectionState.Connecting)?.deviceAddress == device.address,
-                                    onClick = { viewModel.connect(device) },
+                                    onClick = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                                                != PackageManager.PERMISSION_GRANTED) {
+                                            pendingDevice = device
+                                            locationPermLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        } else {
+                                            viewModel.connect(device)
+                                        }
+                                    },
                                     showBleBadge = device.isBle,
                                 )
                             }

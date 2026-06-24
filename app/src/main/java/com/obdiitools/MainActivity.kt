@@ -52,10 +52,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.obdiitools.ui.screens.BluetoothScreen
 import com.obdiitools.ui.screens.CanMonitorScreen
 import com.obdiitools.ui.screens.DiagnosticsScreen
@@ -69,6 +71,7 @@ import com.obdiitools.ui.screens.GlossaryScreen
 import com.obdiitools.ui.screens.HomeScreen
 import com.obdiitools.ui.screens.LiveDataScreen
 import com.obdiitools.ui.screens.ReadinessScreen
+import com.obdiitools.ui.screens.SessionMapScreen
 import com.obdiitools.ui.screens.SessionScreen
 import com.obdiitools.ui.screens.SettingsScreen
 import com.obdiitools.ui.screens.UdsScreen
@@ -207,7 +210,19 @@ fun OBDIIApp(viewModel: MainViewModel) {
                 FreezeFrameScreen(onBack = { navController.navigateUp() })
             }
             composable("sessions") {
-                SessionScreen(onBack = { navController.navigateUp() })
+                SessionScreen(
+                    onBack          = { navController.navigateUp() },
+                    onNavigateToMap = { id -> navController.navigate("session_map/$id") },
+                )
+            }
+            composable(
+                route     = "session_map/{sessionId}",
+                arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                SessionMapScreen(
+                    sessionId = backStackEntry.arguments!!.getLong("sessionId"),
+                    onBack    = { navController.navigateUp() },
+                )
             }
             composable("custom_pids") {
                 CustomPidScreen(onBack = { navController.navigateUp() })

@@ -14,6 +14,7 @@ import javax.inject.Singleton
 @Singleton
 class SessionRepository @Inject constructor(
     private val dao: SessionDao,
+    private val gpsRepository: GpsRepository,
 ) {
     private val mutex = Mutex()
     private var currentSessionId: Long? = null
@@ -49,6 +50,7 @@ class SessionRepository @Inject constructor(
         totalDistanceKm = 0f
         totalFuelLitres = 0f
         _sessionFuelLitres.value = 0f
+        gpsRepository.startUpdates()
         return id
     }
 
@@ -84,6 +86,7 @@ class SessionRepository @Inject constructor(
         lastSpeedKph = data.speedKph
         lastTimestampMs = now
 
+        val loc = gpsRepository.location.value?.takeIf { it.accuracy <= 50f }
         dao.insertDataPoint(
             SessionDataPoint(
                 sessionId = sessionId,
@@ -95,6 +98,9 @@ class SessionRepository @Inject constructor(
                 engineLoadPercent = data.engineLoadPercent,
                 mafGramsPerSec = data.mafGramsPerSec,
                 batteryVoltage = data.batteryVoltage,
+                latitude = loc?.latitude,
+                longitude = loc?.longitude,
+                accuracy = loc?.accuracy,
             )
         )
     }
@@ -104,6 +110,8 @@ class SessionRepository @Inject constructor(
         // further recordDataPoint() calls can modify them.
         data class Snap(val id: Long, val maxRpm: Int?, val maxSpeed: Int?, val maxCoolant: Int?,
                         val distKm: Float?, val speedSum: Long, val speedCount: Int, val fuelLitres: Float?)
+
+        gpsRepository.stopUpdates()
 
         val snap = mutex.withLock {
             val id = currentSessionId ?: return@withLock null
@@ -149,6 +157,9 @@ class SessionRepository @Inject constructor(
 
     suspend fun getDataPoints(sessionId: Long): List<SessionDataPoint> =
         dao.getDataPointsForSession(sessionId)
+
+    suspend fun getGpsPoints(sessionId: Long): List<SessionDataPoint> =
+        dao.getGpsPointsForSession(sessionId)
 
     suspend fun deleteSession(sessionId: Long) = dao.deleteSession(sessionId)
 }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -91,6 +92,7 @@ private val dateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
 @Composable
 fun SessionScreen(
     onBack: () -> Unit,
+    onNavigateToMap: (Long) -> Unit = {},
     sessionId: Long? = null,
     viewModel: SessionViewModel = hiltViewModel(),
 ) {
@@ -104,6 +106,7 @@ fun SessionScreen(
     LaunchedEffect(sessionId, sessions) {
         if (sessionId != null && selectedSession == null) {
             viewModel.loadSession(sessionId)
+            viewModel.loadGpsTrail(sessionId)
             selectedSession = sessions.find { it.id == sessionId }
         }
     }
@@ -146,6 +149,9 @@ fun SessionScreen(
             },
             actions = {
                 if (selectedSession != null) {
+                    IconButton(onClick = { onNavigateToMap(selectedSession?.id ?: return@IconButton) }) {
+                        Icon(Icons.Default.Map, contentDescription = "View trail on map", tint = NeonCyan)
+                    }
                     IconButton(onClick = {
                         val session = selectedSession ?: return@IconButton
                         scope.launch(Dispatchers.IO) {
@@ -174,6 +180,7 @@ fun SessionScreen(
                 onSelect = { session ->
                     selectedSession = session
                     viewModel.loadSession(session.id)
+                    viewModel.loadGpsTrail(session.id)
                 },
                 onDelete = { viewModel.deleteSession(it.id) },
             )
