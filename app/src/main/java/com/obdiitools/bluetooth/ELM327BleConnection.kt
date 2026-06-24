@@ -36,6 +36,7 @@ class ELM327BleConnection(
     private val notifyReady = Semaphore(0)
     private var gatt: BluetoothGatt? = null
     @Volatile private var txChar: BluetoothGattCharacteristic? = null
+    @Volatile private var rxChar: BluetoothGattCharacteristic? = null
 
     @Volatile private var connected = false
     @Volatile private var _lastByteReceivedMs: Long = System.currentTimeMillis()
@@ -45,14 +46,23 @@ class ELM327BleConnection(
     companion object {
         private const val TAG = "ELM327BLE"
 
-        // Known UART-over-BLE service/characteristic pairs (tried in order)
+        private data class BleProfile(val serviceUuid: UUID, val txUuid: UUID, val rxUuid: UUID)
+
+        // Known UART-over-BLE profiles tried in order.
+        // txUuid = write to adapter; rxUuid = notifications from adapter (may be the same char).
         private val KNOWN_PROFILES = listOf(
-            // HM-10 / CC2541 — most common cheap ELM327 BLE adapters (e.g. Veepeak OBDCheck BLE)
-            UUID.fromString("0000FFE0-0000-1000-8000-00805F9B34FB") to
-                    UUID.fromString("0000FFE1-0000-1000-8000-00805F9B34FB"),
-            // Alternative UART profile used by some adapters
-            UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB") to
-                    UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB"),
+            // HM-10 / CC2541 — bidirectional single char (FFE1 has both WRITE and NOTIFY)
+            BleProfile(
+                serviceUuid = UUID.fromString("0000FFE0-0000-1000-8000-00805F9B34FB"),
+                txUuid      = UUID.fromString("0000FFE1-0000-1000-8000-00805F9B34FB"),
+                rxUuid      = UUID.fromString("0000FFE1-0000-1000-8000-00805F9B34FB"),
+            ),
+            // FFF0 profile — split: FFF2 write, FFF1 notify (e.g. Veepeak OBDCheck BLE+)
+            BleProfile(
+                serviceUuid = UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB"),
+                txUuid      = UUID.fromString("0000FFF2-0000-1000-8000-00805F9B34FB"),
+                rxUuid      = UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB"),
+            ),
         )
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
 
@@ -80,31 +90,39 @@ class ELM327BleConnection(
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             AppLogger.d(TAG, "onServicesDiscovered status=$status services=${gatt.services.map { it.uuid }}")
-            // Try known UART-over-BLE profiles first, then fall back to auto-detect
-            val char = KNOWN_PROFILES.firstNotNullOfOrNull { (svcUuid, charUuid) ->
-                gatt.getService(svcUuid)?.getCharacteristic(charUuid)
-            } ?: gatt.services.firstNotNullOfOrNull { svc ->
-                svc.characteristics.firstOrNull { c ->
-                    val p = c.properties
-                    (p and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
-                     p and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) &&
-                     p and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
-                }
+
+            // Try known profiles first (supports split TX/RX), then fall back to auto-detect.
+            val (txC, rxC) = KNOWN_PROFILES.firstNotNullOfOrNull { profile ->
+                val svc = gatt.getService(profile.serviceUuid) ?: return@firstNotNullOfOrNull null
+                val tx  = svc.getCharacteristic(profile.txUuid)  ?: return@firstNotNullOfOrNull null
+                val rx  = svc.getCharacteristic(profile.rxUuid)  ?: return@firstNotNullOfOrNull null
+                tx to rx
             } ?: run {
-                AppLogger.w(TAG, "No suitable characteristic found — services: ${gatt.services.map { svc -> svc.uuid to svc.characteristics.map { it.uuid } }}")
-                return
+                // Auto-detect: find a single characteristic with both write and notify.
+                val bidirectional = gatt.services.firstNotNullOfOrNull { svc ->
+                    svc.characteristics.firstOrNull { c ->
+                        val p = c.properties
+                        (p and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
+                         p and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) &&
+                         p and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
+                    }
+                } ?: run {
+                    AppLogger.w(TAG, "No suitable characteristic found — services: ${gatt.services.map { svc -> svc.uuid to svc.characteristics.map { it.uuid to it.properties } }}")
+                    return
+                }
+                bidirectional to bidirectional
             }
 
-            writeNoResponse = char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE == 0 &&
-                              char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
-            txChar = char
-            AppLogger.d(TAG, "Using char=${char.uuid} writeNoResponse=$writeNoResponse properties=${char.properties}")
-            gatt.setCharacteristicNotification(char, true)
+            writeNoResponse = txC.properties and BluetoothGattCharacteristic.PROPERTY_WRITE == 0 &&
+                              txC.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+            txChar = txC
+            rxChar = rxC
+            AppLogger.d(TAG, "Using tx=${txC.uuid} rx=${rxC.uuid} writeNoResponse=$writeNoResponse tx.properties=${txC.properties} rx.properties=${rxC.properties}")
 
-            // Write CCCD immediately — don't request MTU first.
-            // Many HM-10/CC2541 adapters (e.g. Veepeak OBDCheck BLE) never call
-            // onMtuChanged, so chaining CCCD on it leaves notifications dead.
-            val descriptor = char.getDescriptor(CCCD_UUID)
+            gatt.setCharacteristicNotification(rxC, true)
+
+            // Write CCCD on the RX characteristic immediately — don't wait for MTU.
+            val descriptor = rxC.getDescriptor(CCCD_UUID)
             if (descriptor != null) {
                 AppLogger.d(TAG, "Writing CCCD ENABLE_NOTIFICATION_VALUE")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -308,6 +326,8 @@ class ELM327BleConnection(
         runCatching { gatt?.disconnect() }
         runCatching { gatt?.close() }
         gatt = null
+        txChar = null
+        rxChar = null
         connected = false
     }
 
@@ -338,7 +358,9 @@ class ELM327BleConnection(
                 @Suppress("DEPRECATION")
                 gatt?.writeCharacteristic(char)
             }
-            writeAck.tryAcquire(500, TimeUnit.MILLISECONDS)
+            if (!writeAck.tryAcquire(500, TimeUnit.MILLISECONDS)) {
+                AppLogger.w(TAG, "Write ACK timeout — BLE congestion or adapter hang")
+            }
         }
     }
 
