@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
@@ -72,7 +73,7 @@ import com.obdiitools.ui.theme.TextSecondary
 import com.obdiitools.viewmodel.MainViewModel
 
 @Composable
-fun SettingsScreen(viewModel: MainViewModel) {
+fun SettingsScreen(viewModel: MainViewModel, onNavigateToDiagnostics: () -> Unit = {}) {
     val prefs by viewModel.userPreferences.collectAsState()
 
     Box(
@@ -434,6 +435,36 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         FuelEconomyUnit.MPG_US -> "8.0 L/100km → 29.4 mpg"
                     }, NeonGreen)
                 }
+            }
+
+            // Diagnostics link
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(NeonOrange.copy(alpha = 0.07f))
+                    .clickable(onClick = onNavigateToDiagnostics)
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "CONNECTION LOG",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = NeonOrange,
+                        letterSpacing = 2.sp,
+                    )
+                    Text(
+                        text = "BLE diagnostics & event trace",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                    )
+                }
+                Text("→", fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = NeonOrange)
             }
 
             // About card

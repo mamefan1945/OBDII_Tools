@@ -58,6 +58,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.obdiitools.ui.screens.BluetoothScreen
 import com.obdiitools.ui.screens.CanMonitorScreen
+import com.obdiitools.ui.screens.DiagnosticsScreen
 import com.obdiitools.ui.screens.CVTScreen
 import com.obdiitools.ui.screens.CustomPidScreen
 import com.obdiitools.ui.screens.DashboardScreen
@@ -184,7 +185,9 @@ fun OBDIIApp(viewModel: MainViewModel) {
                 )
             }
             composable(NavScreen.Bluetooth.route) { BluetoothScreen(viewModel) }
-            composable(NavScreen.Settings.route)  { SettingsScreen(viewModel) }
+            composable(NavScreen.Settings.route)  {
+                SettingsScreen(viewModel, onNavigateToDiagnostics = { navController.navigate("diagnostics") })
+            }
             composable("live_data") {
                 LiveDataScreen(onNavigateBack = { navController.navigateUp() })
             }
@@ -214,6 +217,9 @@ fun OBDIIApp(viewModel: MainViewModel) {
             }
             composable("glossary") {
                 GlossaryScreen(onNavigateBack = { navController.navigateUp() })
+            }
+            composable("diagnostics") {
+                DiagnosticsScreen(onBack = { navController.navigateUp() })
             }
         }
     }

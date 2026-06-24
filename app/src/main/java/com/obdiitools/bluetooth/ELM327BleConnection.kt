@@ -9,7 +9,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.Build
-import android.util.Log
+import com.obdiitools.util.AppLogger
 import com.obdiitools.obd.ELM327Protocol
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -73,13 +73,13 @@ class ELM327BleConnection(
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
+            AppLogger.d(TAG, "onConnectionStateChange status=$status newState=$newState")
             connected = newState == BluetoothProfile.STATE_CONNECTED
             if (connected) gatt.discoverServices()
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            Log.d(TAG, "onServicesDiscovered status=$status services=${gatt.services.map { it.uuid }}")
+            AppLogger.d(TAG, "onServicesDiscovered status=$status services=${gatt.services.map { it.uuid }}")
             // Try known UART-over-BLE profiles first, then fall back to auto-detect
             val char = KNOWN_PROFILES.firstNotNullOfOrNull { (svcUuid, charUuid) ->
                 gatt.getService(svcUuid)?.getCharacteristic(charUuid)
@@ -91,14 +91,14 @@ class ELM327BleConnection(
                      p and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
                 }
             } ?: run {
-                Log.w(TAG, "No suitable characteristic found — services: ${gatt.services.map { svc -> svc.uuid to svc.characteristics.map { it.uuid } }}")
+                AppLogger.w(TAG, "No suitable characteristic found — services: ${gatt.services.map { svc -> svc.uuid to svc.characteristics.map { it.uuid } }}")
                 return
             }
 
             writeNoResponse = char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE == 0 &&
                               char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
             txChar = char
-            Log.d(TAG, "Using char=${char.uuid} writeNoResponse=$writeNoResponse properties=${char.properties}")
+            AppLogger.d(TAG, "Using char=${char.uuid} writeNoResponse=$writeNoResponse properties=${char.properties}")
             gatt.setCharacteristicNotification(char, true)
 
             // Write CCCD immediately — don't request MTU first.
@@ -106,7 +106,7 @@ class ELM327BleConnection(
             // onMtuChanged, so chaining CCCD on it leaves notifications dead.
             val descriptor = char.getDescriptor(CCCD_UUID)
             if (descriptor != null) {
-                Log.d(TAG, "Writing CCCD ENABLE_NOTIFICATION_VALUE")
+                AppLogger.d(TAG, "Writing CCCD ENABLE_NOTIFICATION_VALUE")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 } else {
@@ -117,7 +117,7 @@ class ELM327BleConnection(
                 }
                 // notifyReady released in onDescriptorWrite
             } else {
-                Log.d(TAG, "No CCCD descriptor — peripheral auto-notifies")
+                AppLogger.d(TAG, "No CCCD descriptor — peripheral auto-notifies")
                 notifyReady.release()
             }
         }
@@ -127,7 +127,7 @@ class ELM327BleConnection(
             descriptor: BluetoothGattDescriptor,
             status: Int,
         ) {
-            Log.d(TAG, "onDescriptorWrite status=$status descriptor=${descriptor.uuid}")
+            AppLogger.d(TAG, "onDescriptorWrite status=$status descriptor=${descriptor.uuid}")
             notifyReady.release()
         }
 
@@ -142,7 +142,7 @@ class ELM327BleConnection(
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             @Suppress("DEPRECATION")
             val bytes = characteristic.value
-            Log.v(TAG, "onCharacteristicChanged (deprecated) ${bytes?.size ?: 0} bytes")
+            AppLogger.v(TAG, "onCharacteristicChanged (deprecated) ${bytes?.size ?: 0} bytes")
             if (bytes != null) rxChannel.trySend(bytes)
         }
 
@@ -151,7 +151,7 @@ class ELM327BleConnection(
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
-            Log.v(TAG, "onCharacteristicChanged ${value.size} bytes: ${value.take(20).map { it.toInt().toChar() }.joinToString("")}")
+            AppLogger.v(TAG, "onCharacteristicChanged ${value.size} bytes: ${value.take(20).map { it.toInt().toChar() }.joinToString("")}")
             rxChannel.trySend(value)
         }
     }
@@ -168,14 +168,14 @@ class ELM327BleConnection(
             waited += 100
         }
         if (txChar == null) {
-            Log.w(TAG, "Service discovery timed out after ${waited}ms")
+            AppLogger.w(TAG, "Service discovery timed out after ${waited}ms")
             return false
         }
-        Log.d(TAG, "txChar ready after ${waited}ms, waiting for CCCD…")
+        AppLogger.d(TAG, "txChar ready after ${waited}ms, waiting for CCCD…")
 
         // Wait for CCCD write to complete before sending any commands
         val cccReady = notifyReady.tryAcquire(3000, TimeUnit.MILLISECONDS)
-        Log.d(TAG, "CCCD ready=$cccReady, sending BLE init sequence")
+        AppLogger.d(TAG, "CCCD ready=$cccReady, sending BLE init sequence")
 
         // Configure the ELM327 — ATZ is intentionally skipped (see BLE_INIT_COMMANDS)
         for (cmd in BLE_INIT_COMMANDS) {
@@ -187,10 +187,10 @@ class ELM327BleConnection(
         // Force OBD protocol detection now (ATSP0 auto-selects on the first OBD request).
         // BLE latency + car wake-up can take 3–5 s; doing it here with a generous timeout
         // prevents querySupportedPids() from timing out on the first call.
-        Log.d(TAG, "Sending OBD wake-up probe (0100)…")
+        AppLogger.d(TAG, "Sending OBD wake-up probe (0100)…")
         sendRaw("0100")
         val probeLines = readResponseLines(5000)
-        Log.d(TAG, "OBD probe response: $probeLines")
+        AppLogger.d(TAG, "OBD probe response: $probeLines")
         drainRxChannel()
 
         return true
