@@ -70,6 +70,29 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
     val prefs by viewModel.userPreferences.collectAsState()
     var selectedPoint by remember { mutableStateOf<SessionDataPoint?>(null) }
 
+    val cumulativeFuel = remember(gpsPoints) {
+        val result = FloatArray(gpsPoints.size)
+        var total = 0f
+        for (i in 1 until gpsPoints.size) {
+            val prev = gpsPoints[i - 1]
+            val curr = gpsPoints[i]
+            val maf = prev.mafGramsPerSec
+            if (maf != null && maf > 0f) {
+                val elapsedHours = (curr.timestampMs - prev.timestampMs) / 3_600_000f
+                total += UnitConverter.fuelFlowLph(maf) * elapsedHours
+            }
+            result[i] = total
+        }
+        result.toList()
+    }
+    val costAtPoint = remember(selectedPoint, cumulativeFuel, prefs) {
+        selectedPoint?.let { pt ->
+            val idx = gpsPoints.indexOfFirst { it.id == pt.id }
+            if (idx >= 0) UnitConverter.fuelCost(cumulativeFuel.getOrElse(idx) { 0f }, prefs)
+            else null
+        }
+    }
+
     LaunchedEffect(sessionId) { viewModel.loadGpsTrail(sessionId) }
 
     val cameraPositionState = rememberCameraPositionState()
@@ -188,6 +211,7 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
                     point = pt,
                     prefs = prefs,
                     sessionStartMs = gpsPoints.firstOrNull()?.timestampMs ?: pt.timestampMs,
+                    costSoFar = costAtPoint,
                     onDismiss = { selectedPoint = null },
                 )
             }
@@ -200,6 +224,7 @@ private fun OBDPointCard(
     point: SessionDataPoint,
     prefs: UserPreferences,
     sessionStartMs: Long,
+    costSoFar: Float?,
     onDismiss: () -> Unit,
 ) {
     val totalSec = (point.timestampMs - sessionStartMs) / 1000
@@ -246,6 +271,9 @@ private fun OBDPointCard(
                 }
                 point.engineLoadPercent?.let {
                     OBDPointStat("Load", "${"%.0f".format(it)}%")
+                }
+                costSoFar?.let {
+                    OBDPointStat("Est. Cost", "$${"%.2f".format(it)}")
                 }
             }
         }

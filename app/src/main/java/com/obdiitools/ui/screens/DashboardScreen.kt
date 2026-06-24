@@ -353,7 +353,7 @@ private fun DashboardContent(
                 ) {
                     StatItem(
                         label = "SESSION COST",
-                        value = "${"%.2f".format(sessionCost)}",
+                        value = "$${"%.2f".format(sessionCost)}",
                         color = NeonGreen,
                     )
                     StatItem(

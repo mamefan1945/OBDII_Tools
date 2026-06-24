@@ -338,7 +338,7 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
             avgFuelEconomy?.let { item { StatChip("Avg Economy", it, NeonGreen) } }
             session.totalFuelLitres?.let { fuel ->
                 UnitConverter.fuelCost(fuel, prefs)?.let { cost ->
-                    item { StatChip("Est. Cost", "${"%.2f".format(cost)}", NeonGreen) }
+                    item { StatChip("Est. Cost", "$${"%.2f".format(cost)}", NeonGreen) }
                 }
             }
         }
