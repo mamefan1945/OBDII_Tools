@@ -12,9 +12,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +60,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.ui.platform.LocalContext
 import com.obdiitools.data.VinInfo
@@ -283,22 +287,28 @@ fun BluetoothScreen(viewModel: MainViewModel) {
                         Spacer(Modifier.height(12.dp))
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(allDevices, key = { it.address }) { device ->
+                                fun connectWith(isBle: Boolean) {
+                                    val d = device.copy(isBle = isBle)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                                            != PackageManager.PERMISSION_GRANTED) {
+                                        pendingDevice = d
+                                        locationPermLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    } else {
+                                        viewModel.connect(d)
+                                    }
+                                }
                                 DeviceRow(
                                     device = device,
                                     isConnected = connectionState is ConnectionState.Connected &&
                                             (connectionState as? ConnectionState.Connected)?.deviceAddress == device.address,
                                     isConnecting = connectionState is ConnectionState.Connecting &&
                                             (connectionState as? ConnectionState.Connecting)?.deviceAddress == device.address,
-                                    onClick = {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-                                                != PackageManager.PERMISSION_GRANTED) {
-                                            pendingDevice = device
-                                            locationPermLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                                        } else {
-                                            viewModel.connect(device)
-                                        }
-                                    },
+                                    onClick = { connectWith(device.isBle) },
+                                    onConnectAs = { isBle -> connectWith(isBle) },
+                                    onForget = if (!device.isPaired) {
+                                        { viewModel.forgetBleDevice(device.address) }
+                                    } else null,
                                     showBleBadge = device.isBle,
                                 )
                             }
@@ -458,12 +468,15 @@ private fun VinCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeviceRow(
     device: BluetoothDeviceInfo,
     isConnected: Boolean,
     isConnecting: Boolean,
     onClick: () -> Unit,
+    onConnectAs: (isBle: Boolean) -> Unit,
+    onForget: (() -> Unit)?,
     showBleBadge: Boolean = false,
 ) {
     val borderColor = when {
@@ -476,61 +489,91 @@ private fun DeviceRow(
         isConnecting -> NeonOrange
         else         -> NeonCyan
     }
+    var showMenu by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceElevated)
-            .border(1.dp, borderColor.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-            .clickable(enabled = !isConnected && !isConnecting, onClick = onClick)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = if (isConnected) Icons.Default.BluetoothConnected else Icons.Default.Bluetooth,
-            contentDescription = null,
-            tint = iconColor,
-            modifier = Modifier.size(24.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = device.name,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = TextPrimary,
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(SurfaceElevated)
+                .border(1.dp, borderColor.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .combinedClickable(
+                    enabled = !isConnected && !isConnecting,
+                    onClick = onClick,
+                    onLongClick = { showMenu = true },
                 )
-                if (showBleBadge) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = NeonGreen.copy(alpha = 0.15f),
-                        modifier = Modifier.padding(0.dp),
-                    ) {
-                        Text(
-                            "BLE",
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 8.sp,
-                            color = NeonGreen,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        )
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (isConnected) Icons.Default.BluetoothConnected else Icons.Default.Bluetooth,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(24.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = device.name,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = TextPrimary,
+                    )
+                    if (showBleBadge) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = NeonGreen.copy(alpha = 0.15f),
+                            modifier = Modifier.padding(0.dp),
+                        ) {
+                            Text(
+                                "BLE",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 8.sp,
+                                color = NeonGreen,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                 }
+                Text(
+                    text = device.address,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                )
             }
-            Text(
-                text = device.address,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                color = TextSecondary,
-            )
+            when {
+                isConnected  -> Text("●  LIVE",  color = NeonGreen,  fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                isConnecting -> Text("○  WAIT",  color = NeonOrange, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                else         -> Icon(Icons.Default.Link, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            }
         }
-        when {
-            isConnected  -> Text("●  LIVE",  color = NeonGreen,  fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            isConnecting -> Text("○  WAIT",  color = NeonOrange, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-            else         -> Icon(Icons.Default.Link, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Connect as BLE", fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Default.BluetoothSearching, null, tint = NeonGreen, modifier = Modifier.size(18.dp)) },
+                onClick = { showMenu = false; onConnectAs(true) },
+            )
+            DropdownMenuItem(
+                text = { Text("Connect as Classic BT", fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Default.Bluetooth, null, tint = NeonCyan, modifier = Modifier.size(18.dp)) },
+                onClick = { showMenu = false; onConnectAs(false) },
+            )
+            if (onForget != null) {
+                DropdownMenuItem(
+                    text = { Text("Forget", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = NeonRed) },
+                    leadingIcon = { Icon(Icons.Default.LinkOff, null, tint = NeonRed, modifier = Modifier.size(18.dp)) },
+                    onClick = { showMenu = false; onForget() },
+                )
+            }
         }
     }
 }

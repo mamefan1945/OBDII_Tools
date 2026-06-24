@@ -173,6 +173,10 @@ class MainViewModel @Inject constructor(
         bleScanJob = null
     }
 
+    fun forgetBleDevice(address: String) {
+        _bleDevices.value = _bleDevices.value.filter { it.address != address }
+    }
+
     fun connect(device: BluetoothDeviceInfo) {
         viewModelScope.launch {
             startForegroundService()
