@@ -267,6 +267,28 @@ private fun SessionRow(
                     color = NeonCyan,
                 )
             }
+            val avgEconomy: String? = run {
+                val dist = session.distanceKm?.takeIf { it > 0f } ?: return@run null
+                val fuel = session.totalFuelLitres?.takeIf { it > 0f } ?: return@run null
+                val l100km = fuel / dist * 100f
+                when (prefs.fuelEconomyUnit) {
+                    FuelEconomyUnit.L100KM -> "${"%.1f".format(l100km)} L/100km"
+                    FuelEconomyUnit.MPG_US -> UnitConverter.l100kmToMpgUs(l100km)?.let { "${"%.1f".format(it)} mpg" }
+                }
+            }
+            val sessionCost = session.totalFuelLitres?.let { UnitConverter.fuelCost(it, prefs) }
+            if (avgEconomy != null || sessionCost != null) {
+                Text(
+                    buildString {
+                        avgEconomy?.let { append(it) }
+                        if (avgEconomy != null && sessionCost != null) append(" · ")
+                        sessionCost?.let { append("$${"%.2f".format(it)}") }
+                    },
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = NeonGreen,
+                )
+            }
         }
         IconButton(onClick = { onDelete(session) }) {
             Icon(Icons.Default.Delete, null, tint = NeonRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
