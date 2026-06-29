@@ -69,6 +69,7 @@ import com.obdiitools.ui.screens.DTCScreen
 import com.obdiitools.ui.screens.FreezeFrameScreen
 import com.obdiitools.ui.screens.GlossaryScreen
 import com.obdiitools.ui.screens.HomeScreen
+import com.obdiitools.ui.screens.LogcatScreen
 import com.obdiitools.ui.screens.LiveDataScreen
 import com.obdiitools.ui.screens.ReadinessScreen
 import com.obdiitools.ui.screens.SessionMapScreen
@@ -189,7 +190,11 @@ fun OBDIIApp(viewModel: MainViewModel) {
             }
             composable(NavScreen.Bluetooth.route) { BluetoothScreen(viewModel) }
             composable(NavScreen.Settings.route)  {
-                SettingsScreen(viewModel, onNavigateToDiagnostics = { navController.navigate("diagnostics") })
+                SettingsScreen(
+                    viewModel,
+                    onNavigateToDiagnostics = { navController.navigate("diagnostics") },
+                    onNavigateToLogcat      = { navController.navigate("logcat") },
+                )
             }
             composable("live_data") {
                 LiveDataScreen(onNavigateBack = { navController.navigateUp() })
@@ -235,6 +240,9 @@ fun OBDIIApp(viewModel: MainViewModel) {
             }
             composable("diagnostics") {
                 DiagnosticsScreen(onBack = { navController.navigateUp() })
+            }
+            composable("logcat") {
+                LogcatScreen(onBack = { navController.navigateUp() })
             }
         }
     }

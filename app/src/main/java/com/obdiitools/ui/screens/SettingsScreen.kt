@@ -73,7 +73,7 @@ import com.obdiitools.ui.theme.TextSecondary
 import com.obdiitools.viewmodel.MainViewModel
 
 @Composable
-fun SettingsScreen(viewModel: MainViewModel, onNavigateToDiagnostics: () -> Unit = {}) {
+fun SettingsScreen(viewModel: MainViewModel, onNavigateToDiagnostics: () -> Unit = {}, onNavigateToLogcat: () -> Unit = {}) {
     val prefs by viewModel.userPreferences.collectAsState()
 
     Box(
@@ -465,6 +465,36 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateToDiagnostics: () -> Unit
                     )
                 }
                 Text("→", fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = NeonOrange)
+            }
+
+            // Logcat viewer link
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(NeonCyan.copy(alpha = 0.07f))
+                    .clickable(onClick = onNavigateToLogcat)
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "LOGCAT VIEWER",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = NeonCyan,
+                        letterSpacing = 2.sp,
+                    )
+                    Text(
+                        text = "Live in-app log stream",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                    )
+                }
+                Text("→", fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = NeonCyan)
             }
 
             // About card

@@ -323,33 +323,25 @@ private fun OBDPointCard(
                     Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = TextSecondary)
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                point.speedKph?.let { kph ->
-                    val speedStr = UnitConverter.formatSpeed(kph, prefs.speedUnit)
-                    val limitStr = when {
-                        speedLimitLoading -> "?"
-                        speedLimitKph != null -> UnitConverter.formatSpeed(speedLimitKph.toInt(), prefs.speedUnit)
-                        else -> "--"
-                    }
-                    OBDPointStat("Speed / Limit", "$speedStr / $limitStr ${prefs.speedUnit.symbol}")
-                }
-                point.rpm?.let {
-                    OBDPointStat("RPM", "$it")
-                }
-                point.coolantTempC?.let {
-                    OBDPointStat("Coolant", "${UnitConverter.formatTemp(it, prefs.temperatureUnit)} ${prefs.temperatureUnit.symbol}")
-                }
-                point.throttlePercent?.let {
-                    OBDPointStat("Throttle", "${"%.0f".format(it)}%")
-                }
-                point.engineLoadPercent?.let {
-                    OBDPointStat("Load", "${"%.0f".format(it)}%")
-                }
-                costSoFar?.let {
-                    OBDPointStat("Est. Cost", "$${"%.2f".format(it)}")
+            val limitStr = when {
+                speedLimitLoading -> "?"
+                speedLimitKph != null -> UnitConverter.formatSpeed(speedLimitKph.toInt(), prefs.speedUnit)
+                else -> "--"
+            }
+            val stats = buildList {
+                point.speedKph?.let { add("Speed / Limit" to "${UnitConverter.formatSpeed(it, prefs.speedUnit)} / $limitStr ${prefs.speedUnit.symbol}") }
+                point.rpm?.let { add("RPM" to "$it") }
+                point.coolantTempC?.let { add("Coolant" to "${UnitConverter.formatTemp(it, prefs.temperatureUnit)} ${prefs.temperatureUnit.symbol}") }
+                point.throttlePercent?.let { add("Throttle" to "${"%.0f".format(it)}%") }
+                point.engineLoadPercent?.let { add("Load" to "${"%.0f".format(it)}%") }
+                costSoFar?.let { add("Est. Cost" to "$${"%.2f".format(it)}") }
+            }
+            stats.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                ) {
+                    row.forEach { (label, value) -> OBDPointStat(label, value) }
                 }
             }
         }
@@ -377,24 +369,37 @@ private fun OBDPointStat(label: String, value: String) {
 
 private suspend fun fetchSpeedLimitKph(lat: Double, lon: Double): Float? = withContext(Dispatchers.IO) {
     try {
-        val query = "[out:json][timeout:10];way(around:30,$lat,$lon)[highway][maxspeed];out tags;"
+        // Query all highway ways within 50 m — don't pre-filter by [maxspeed] so we can
+        // log whether the road is found at all vs. the tag simply being absent.
+        val query = "[out:json][timeout:10];way(around:50,$lat,$lon)[highway];out tags;"
         val encoded = URLEncoder.encode(query, "UTF-8")
         val conn = URL("https://overpass-api.de/api/interpreter?data=$encoded")
             .openConnection() as HttpURLConnection
         conn.connectTimeout = 10_000
         conn.readTimeout    = 10_000
         conn.setRequestProperty("User-Agent", "OBDIITools/1.0")
+        val code = conn.responseCode
+        if (code != 200) {
+            android.util.Log.w("SpeedLimit", "HTTP $code for ($lat, $lon)")
+            conn.disconnect()
+            return@withContext null
+        }
         val json = conn.inputStream.bufferedReader().use { it.readText() }
         conn.disconnect()
         val elements = JSONObject(json).getJSONArray("elements")
+        android.util.Log.d("SpeedLimit", "($lat, $lon) → ${elements.length()} way(s)")
         for (i in 0 until elements.length()) {
             val tags = elements.getJSONObject(i).optJSONObject("tags") ?: continue
-            val maxspeed = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() } ?: continue
-            val kph = parseMaxspeedKph(maxspeed)
+            android.util.Log.d("SpeedLimit", "  way[$i] highway=${tags.optString("highway")} maxspeed=${tags.optString("maxspeed")}")
+            val raw = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() }
+                ?: tags.optString("maxspeed:advisory", "").takeIf { it.isNotEmpty() }
+                ?: continue
+            val kph = parseMaxspeedKph(raw)
             if (kph != null) return@withContext kph
         }
         null
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        android.util.Log.e("SpeedLimit", "Fetch failed: ${e.message}")
         null
     }
 }
