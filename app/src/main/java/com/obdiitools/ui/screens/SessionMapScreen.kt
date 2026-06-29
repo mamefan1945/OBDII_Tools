@@ -367,41 +367,48 @@ private fun OBDPointStat(label: String, value: String) {
     }
 }
 
+private val OVERPASS_ENDPOINTS = listOf(
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+)
+
 private suspend fun fetchSpeedLimitKph(lat: Double, lon: Double): Float? = withContext(Dispatchers.IO) {
-    try {
-        // Query all highway ways within 50 m — don't pre-filter by [maxspeed] so we can
-        // log whether the road is found at all vs. the tag simply being absent.
-        val query = "[out:json][timeout:10];way(around:50,$lat,$lon)[highway];out tags;"
-        val encoded = URLEncoder.encode(query, "UTF-8")
-        val conn = URL("https://overpass-api.de/api/interpreter?data=$encoded")
-            .openConnection() as HttpURLConnection
-        conn.connectTimeout = 10_000
-        conn.readTimeout    = 10_000
-        conn.setRequestProperty("User-Agent", "OBDIITools/1.0")
-        val code = conn.responseCode
-        if (code != 200) {
-            android.util.Log.w("SpeedLimit", "HTTP $code for ($lat, $lon)")
+    val query = "[out:json][timeout:10];way(around:50,$lat,$lon)[highway];out tags;"
+    val encoded = URLEncoder.encode(query, "UTF-8")
+
+    for (endpoint in OVERPASS_ENDPOINTS) {
+        try {
+            val conn = URL("$endpoint?data=$encoded").openConnection() as HttpURLConnection
+            conn.connectTimeout = 8_000
+            conn.readTimeout    = 10_000
+            conn.setRequestProperty("User-Agent", "OBDIITools/1.0")
+            val code = conn.responseCode
+            if (code != 200) {
+                android.util.Log.w("SpeedLimit", "$endpoint HTTP $code — trying next")
+                conn.disconnect()
+                continue
+            }
+            val json = conn.inputStream.bufferedReader().use { it.readText() }
             conn.disconnect()
-            return@withContext null
+            val elements = JSONObject(json).getJSONArray("elements")
+            android.util.Log.d("SpeedLimit", "$endpoint → ${elements.length()} way(s) at ($lat, $lon)")
+            for (i in 0 until elements.length()) {
+                val tags = elements.getJSONObject(i).optJSONObject("tags") ?: continue
+                android.util.Log.d("SpeedLimit", "  way[$i] highway=${tags.optString("highway")} maxspeed=${tags.optString("maxspeed")}")
+                val raw = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() }
+                    ?: tags.optString("maxspeed:advisory", "").takeIf { it.isNotEmpty() }
+                    ?: continue
+                val kph = parseMaxspeedKph(raw)
+                if (kph != null) return@withContext kph
+            }
+            return@withContext null  // API responded — road found but no maxspeed tag
+        } catch (e: Exception) {
+            android.util.Log.e("SpeedLimit", "Fetch failed ($endpoint): ${e.message} — trying next")
         }
-        val json = conn.inputStream.bufferedReader().use { it.readText() }
-        conn.disconnect()
-        val elements = JSONObject(json).getJSONArray("elements")
-        android.util.Log.d("SpeedLimit", "($lat, $lon) → ${elements.length()} way(s)")
-        for (i in 0 until elements.length()) {
-            val tags = elements.getJSONObject(i).optJSONObject("tags") ?: continue
-            android.util.Log.d("SpeedLimit", "  way[$i] highway=${tags.optString("highway")} maxspeed=${tags.optString("maxspeed")}")
-            val raw = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() }
-                ?: tags.optString("maxspeed:advisory", "").takeIf { it.isNotEmpty() }
-                ?: continue
-            val kph = parseMaxspeedKph(raw)
-            if (kph != null) return@withContext kph
-        }
-        null
-    } catch (e: Exception) {
-        android.util.Log.e("SpeedLimit", "Fetch failed: ${e.message}")
-        null
     }
+    android.util.Log.e("SpeedLimit", "All Overpass endpoints unreachable")
+    null
 }
 
 private fun parseMaxspeedKph(value: String): Float? {
