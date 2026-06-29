@@ -59,6 +59,9 @@ import com.obdiitools.ui.theme.TextSecondary
 import com.obdiitools.util.UnitConverter
 import com.obdiitools.viewmodel.SessionViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -374,41 +377,46 @@ private val OVERPASS_ENDPOINTS = listOf(
 )
 
 private suspend fun fetchSpeedLimitKph(lat: Double, lon: Double): Float? = withContext(Dispatchers.IO) {
-    val query = "[out:json][timeout:10];way(around:50,$lat,$lon)[highway];out tags;"
+    val query   = "[out:json][timeout:20];way(around:50,$lat,$lon)[highway];out tags;"
     val encoded = URLEncoder.encode(query, "UTF-8")
 
-    for (endpoint in OVERPASS_ENDPOINTS) {
-        try {
-            val conn = URL("$endpoint?data=$encoded").openConnection() as HttpURLConnection
-            conn.connectTimeout = 8_000
-            conn.readTimeout    = 10_000
-            conn.setRequestProperty("User-Agent", "OBDIITools/1.0")
-            val code = conn.responseCode
-            if (code != 200) {
-                android.util.Log.w("SpeedLimit", "$endpoint HTTP $code — trying next")
-                conn.disconnect()
-                continue
+    // Race all mirrors — first successful response wins; others are cancelled via disconnect.
+    coroutineScope {
+        val jobs = OVERPASS_ENDPOINTS.map { endpoint ->
+            async {
+                try {
+                    val conn = URL("$endpoint?data=$encoded").openConnection() as HttpURLConnection
+                    conn.connectTimeout = 20_000
+                    conn.readTimeout    = 25_000
+                    conn.setRequestProperty("User-Agent", "OBDIITools/1.0")
+                    val code = conn.responseCode
+                    if (code != 200) {
+                        android.util.Log.w("SpeedLimit", "$endpoint HTTP $code")
+                        conn.disconnect()
+                        return@async null
+                    }
+                    val json = conn.inputStream.bufferedReader().use { it.readText() }
+                    conn.disconnect()
+                    val elements = JSONObject(json).getJSONArray("elements")
+                    android.util.Log.d("SpeedLimit", "$endpoint → ${elements.length()} way(s)")
+                    for (i in 0 until elements.length()) {
+                        val tags = elements.getJSONObject(i).optJSONObject("tags") ?: continue
+                        android.util.Log.d("SpeedLimit", "  way[$i] highway=${tags.optString("highway")} maxspeed=${tags.optString("maxspeed")}")
+                        val raw = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() }
+                            ?: tags.optString("maxspeed:advisory", "").takeIf { it.isNotEmpty() }
+                            ?: continue
+                        return@async parseMaxspeedKph(raw)
+                    }
+                    null  // Responded but no maxspeed tag on any nearby way
+                } catch (e: Exception) {
+                    android.util.Log.e("SpeedLimit", "Fetch failed ($endpoint): ${e.message}")
+                    null
+                }
             }
-            val json = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            val elements = JSONObject(json).getJSONArray("elements")
-            android.util.Log.d("SpeedLimit", "$endpoint → ${elements.length()} way(s) at ($lat, $lon)")
-            for (i in 0 until elements.length()) {
-                val tags = elements.getJSONObject(i).optJSONObject("tags") ?: continue
-                android.util.Log.d("SpeedLimit", "  way[$i] highway=${tags.optString("highway")} maxspeed=${tags.optString("maxspeed")}")
-                val raw = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() }
-                    ?: tags.optString("maxspeed:advisory", "").takeIf { it.isNotEmpty() }
-                    ?: continue
-                val kph = parseMaxspeedKph(raw)
-                if (kph != null) return@withContext kph
-            }
-            return@withContext null  // API responded — road found but no maxspeed tag
-        } catch (e: Exception) {
-            android.util.Log.e("SpeedLimit", "Fetch failed ($endpoint): ${e.message} — trying next")
         }
+        // Return the first non-null result; if all return null, return null.
+        jobs.awaitAll().firstOrNull { it != null }
     }
-    android.util.Log.e("SpeedLimit", "All Overpass endpoints unreachable")
-    null
 }
 
 private fun parseMaxspeedKph(value: String): Float? {
