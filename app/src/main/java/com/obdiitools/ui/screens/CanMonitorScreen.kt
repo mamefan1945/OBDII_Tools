@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -35,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -78,8 +80,14 @@ fun CanMonitorScreen(
     val showUnknown    by viewModel.showUnknown.collectAsState()
     val dbcLoaded      by viewModel.dbcLoaded.collectAsState()
 
+    val rawListState = rememberLazyListState()
+
     DisposableEffect(Unit) {
         onDispose { viewModel.stopMonitoring() }
+    }
+
+    LaunchedEffect(filteredFrames.size) {
+        if (!showDecoded && filteredFrames.isNotEmpty()) rawListState.scrollToItem(0)
     }
 
     val subtitle = if (showDecoded) "${decodedSignals.size} signals" else "${filteredFrames.size} frames"
@@ -241,6 +249,7 @@ fun CanMonitorScreen(
                     return@Scaffold
                 }
                 LazyColumn(
+                    state = rawListState,
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {

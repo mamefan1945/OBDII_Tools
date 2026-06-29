@@ -97,7 +97,7 @@ class CanMonitorViewModel @Inject constructor(
         if (_isMonitoring.value) return
         _isMonitoring.value = true
         repository.pausePolling()
-        monitorJob = viewModelScope.launch {
+        monitorJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 repository.canMonitorFlow().collect { frame ->
                     // Raw frame buffer (newest first, capped at MAX_FRAMES)
