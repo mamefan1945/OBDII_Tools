@@ -358,7 +358,7 @@ private fun DashboardContent(
                     )
                     StatItem(
                         label = "FUEL USED",
-                        value = "${"%.2f".format(sessionFuelLitres)} L",
+                        value = UnitConverter.formatFuelVolume(sessionFuelLitres, prefs.fuelEconomyUnit),
                         color = NeonYellow,
                     )
                 }

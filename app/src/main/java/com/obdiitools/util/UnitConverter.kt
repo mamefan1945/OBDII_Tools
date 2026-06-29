@@ -85,6 +85,16 @@ object UnitConverter {
         SpeedUnit.MPH -> "%.0f".format(kph * 0.621371f)
     }
 
+    fun formatDistance(km: Float, unit: SpeedUnit): String = when (unit) {
+        SpeedUnit.KMH -> "${"%.1f".format(km)} km"
+        SpeedUnit.MPH -> "${"%.1f".format(km * 0.621371f)} mi"
+    }
+
+    fun formatFuelVolume(litres: Float, unit: FuelEconomyUnit): String = when (unit) {
+        FuelEconomyUnit.L100KM -> "${"%.2f".format(litres)} L"
+        FuelEconomyUnit.MPG_US -> "${"%.2f".format(litres / 3.78541f)} gal"
+    }
+
     fun formatTemp(celsius: Int, unit: TemperatureUnit): String = when (unit) {
         TemperatureUnit.CELSIUS    -> "$celsius"
         TemperatureUnit.FAHRENHEIT -> "%.0f".format(celsius * 9f / 5f + 32f)

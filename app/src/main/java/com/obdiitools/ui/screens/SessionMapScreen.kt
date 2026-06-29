@@ -48,6 +48,7 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.obdiitools.data.SessionDataPoint
+import com.obdiitools.data.SpeedUnit
 import com.obdiitools.data.UserPreferences
 import com.obdiitools.ui.components.GlassCard
 import com.obdiitools.ui.theme.BackgroundDeep
@@ -57,6 +58,12 @@ import com.obdiitools.ui.theme.TextPrimary
 import com.obdiitools.ui.theme.TextSecondary
 import com.obdiitools.util.UnitConverter
 import com.obdiitools.viewmodel.SessionViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.sin
@@ -70,6 +77,7 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
     val prefs by viewModel.userPreferences.collectAsState()
     var selectedPoint by remember { mutableStateOf<SessionDataPoint?>(null) }
 
+    // Cumulative fuel (litres) at each GPS index
     val cumulativeFuel = remember(gpsPoints) {
         val result = FloatArray(gpsPoints.size)
         var total = 0f
@@ -85,11 +93,55 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
         }
         result.toList()
     }
+
+    // Cumulative distance (metres) at each GPS index
+    val cumulativeDistancesM = remember(gpsPoints) {
+        val result = FloatArray(gpsPoints.size)
+        for (i in 1 until gpsPoints.size) {
+            val prev = gpsPoints[i - 1]
+            val curr = gpsPoints[i]
+            result[i] = result[i - 1] + if (
+                prev.latitude != null && prev.longitude != null &&
+                curr.latitude != null && curr.longitude != null
+            ) {
+                haversineMetres(prev.latitude, prev.longitude, curr.latitude, curr.longitude).toFloat()
+            } else 0f
+        }
+        result.toList()
+    }
+    val totalDistanceM = cumulativeDistancesM.lastOrNull() ?: 0f
+
     val costAtPoint = remember(selectedPoint, cumulativeFuel, prefs) {
         selectedPoint?.let { pt ->
             val idx = gpsPoints.indexOfFirst { it.id == pt.id }
             if (idx >= 0) UnitConverter.fuelCost(cumulativeFuel.getOrElse(idx) { 0f }, prefs)
             else null
+        }
+    }
+
+    val distanceInfoM: Pair<Float, Float>? = remember(selectedPoint, cumulativeDistancesM) {
+        selectedPoint?.let { pt ->
+            val idx = gpsPoints.indexOfFirst { it.id == pt.id }
+            if (idx >= 0) {
+                val soFar = cumulativeDistancesM.getOrElse(idx) { 0f }
+                soFar to (totalDistanceM - soFar)
+            } else null
+        }
+    }
+
+    // Speed limit fetched on-demand from OSM Overpass when a point is selected
+    var speedLimitKph by remember { mutableStateOf<Float?>(null) }
+    var speedLimitLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedPoint) {
+        val pt = selectedPoint
+        if (pt?.latitude != null && pt.longitude != null) {
+            speedLimitLoading = true
+            speedLimitKph = null
+            speedLimitKph = fetchSpeedLimitKph(pt.latitude, pt.longitude)
+            speedLimitLoading = false
+        } else {
+            speedLimitKph = null
+            speedLimitLoading = false
         }
     }
 
@@ -212,6 +264,9 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
                     prefs = prefs,
                     sessionStartMs = gpsPoints.firstOrNull()?.timestampMs ?: pt.timestampMs,
                     costSoFar = costAtPoint,
+                    speedLimitKph = speedLimitKph,
+                    speedLimitLoading = speedLimitLoading,
+                    distanceInfoM = distanceInfoM,
                     onDismiss = { selectedPoint = null },
                 )
             }
@@ -225,10 +280,24 @@ private fun OBDPointCard(
     prefs: UserPreferences,
     sessionStartMs: Long,
     costSoFar: Float?,
+    speedLimitKph: Float?,
+    speedLimitLoading: Boolean,
+    distanceInfoM: Pair<Float, Float>?,
     onDismiss: () -> Unit,
 ) {
     val totalSec = (point.timestampMs - sessionStartMs) / 1000
     val timeLabel = "%d:%02d into session".format(totalSec / 60, totalSec % 60)
+
+    val distLabel: String? = distanceInfoM?.let { (soFarM, remainingM) ->
+        val (soFar, remaining) = when (prefs.speedUnit) {
+            SpeedUnit.MPH -> soFarM / 1609.34f to remainingM / 1609.34f
+            SpeedUnit.KMH -> soFarM / 1000f to remainingM / 1000f
+        }
+        val unit = if (prefs.speedUnit == SpeedUnit.MPH) "mi" else "km"
+        "${"%.1f".format(soFar)} / -${"%.1f".format(remaining)} $unit"
+    }
+
+    val headerLine = if (distLabel != null) "$timeLabel  ·  $distLabel" else timeLabel
 
     GlassCard(
         modifier = Modifier
@@ -243,7 +312,8 @@ private fun OBDPointCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    timeLabel,
+                    headerLine,
+                    modifier = Modifier.weight(1f),
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
@@ -257,8 +327,14 @@ private fun OBDPointCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                point.speedKph?.let {
-                    OBDPointStat("Speed", "${UnitConverter.formatSpeed(it, prefs.speedUnit)} ${prefs.speedUnit.symbol}")
+                point.speedKph?.let { kph ->
+                    val speedStr = UnitConverter.formatSpeed(kph, prefs.speedUnit)
+                    val limitStr = when {
+                        speedLimitLoading -> "?"
+                        speedLimitKph != null -> UnitConverter.formatSpeed(speedLimitKph.toInt(), prefs.speedUnit)
+                        else -> "--"
+                    }
+                    OBDPointStat("Speed / Limit", "$speedStr / $limitStr ${prefs.speedUnit.symbol}")
                 }
                 point.rpm?.let {
                     OBDPointStat("RPM", "$it")
@@ -297,6 +373,38 @@ private fun OBDPointStat(label: String, value: String) {
             color = TextSecondary,
         )
     }
+}
+
+private suspend fun fetchSpeedLimitKph(lat: Double, lon: Double): Float? = withContext(Dispatchers.IO) {
+    try {
+        val query = "[out:json][timeout:10];way(around:30,$lat,$lon)[highway][maxspeed];out tags;"
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val conn = URL("https://overpass-api.de/api/interpreter?data=$encoded")
+            .openConnection() as HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout    = 10_000
+        conn.setRequestProperty("User-Agent", "OBDIITools/1.0")
+        val json = conn.inputStream.bufferedReader().use { it.readText() }
+        conn.disconnect()
+        val elements = JSONObject(json).getJSONArray("elements")
+        for (i in 0 until elements.length()) {
+            val tags = elements.getJSONObject(i).optJSONObject("tags") ?: continue
+            val maxspeed = tags.optString("maxspeed", "").takeIf { it.isNotEmpty() } ?: continue
+            val kph = parseMaxspeedKph(maxspeed)
+            if (kph != null) return@withContext kph
+        }
+        null
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun parseMaxspeedKph(value: String): Float? {
+    val s = value.trim().lowercase()
+    if (s in setOf("none", "signals", "national", "rural", "urban", "living_street", "walk")) return null
+    val mphMatch = Regex("""^(\d+(?:\.\d+)?)\s*mph$""").find(s)
+    if (mphMatch != null) return mphMatch.groupValues[1].toFloat() * 1.60934f
+    return s.replace(Regex("""\s*km[/h]*$"""), "").toFloatOrNull()
 }
 
 private fun haversineMetres(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

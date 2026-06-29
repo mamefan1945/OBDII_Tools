@@ -11,8 +11,11 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.obdiitools.MainActivity
+import com.obdiitools.data.PreferencesRepository
+import com.obdiitools.data.UserPreferences
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.OBDData
+import com.obdiitools.util.UnitConverter
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +29,7 @@ import javax.inject.Inject
 class OBDForegroundService : Service() {
 
     @Inject lateinit var repository: OBDRepository
+    @Inject lateinit var prefsRepository: PreferencesRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val nm by lazy { getSystemService(NOTIFICATION_SERVICE) as NotificationManager }
@@ -33,7 +37,7 @@ class OBDForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        val initial = buildNotification("Connecting…", null)
+        val initial = buildNotification("Connecting…", null, UserPreferences())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, initial, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         } else {
@@ -44,11 +48,15 @@ class OBDForegroundService : Service() {
 
     private fun observeState() {
         serviceScope.launch {
-            combine(repository.connectionState, repository.obdData) { state, data -> state to data }
-                .collect { (state, data) ->
+            combine(
+                repository.connectionState,
+                repository.obdData,
+                prefsRepository.userPreferences,
+            ) { state, data, prefs -> Triple(state, data, prefs) }
+                .collect { (state, data, prefs) ->
                     when (state) {
-                        is ConnectionState.Connected  -> nm.notify(NOTIFICATION_ID, buildNotification(state.deviceName, data))
-                        is ConnectionState.Connecting -> nm.notify(NOTIFICATION_ID, buildNotification("Connecting to ${state.deviceName}…", null))
+                        is ConnectionState.Connected  -> nm.notify(NOTIFICATION_ID, buildNotification(state.deviceName, data, prefs))
+                        is ConnectionState.Connecting -> nm.notify(NOTIFICATION_ID, buildNotification("Connecting to ${state.deviceName}…", null, prefs))
                         is ConnectionState.Disconnected,
                         is ConnectionState.Error -> {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -71,7 +79,7 @@ class OBDForegroundService : Service() {
         return START_STICKY
     }
 
-    private fun buildNotification(deviceName: String, data: OBDData?): Notification {
+    private fun buildNotification(deviceName: String, data: OBDData?, prefs: UserPreferences): Notification {
         val tapIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
@@ -85,7 +93,7 @@ class OBDForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("OBD2 — $deviceName")
-            .setContentText(data?.statsLine() ?: "Waiting for data…")
+            .setContentText(data?.statsLine(prefs) ?: "Waiting for data…")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(tapIntent)
             .setOngoing(true)
@@ -94,11 +102,11 @@ class OBDForegroundService : Service() {
             .build()
     }
 
-    private fun OBDData.statsLine(): String {
+    private fun OBDData.statsLine(prefs: UserPreferences): String {
         val parts = mutableListOf<String>()
         rpm?.let { parts.add("$it RPM") }
-        speedKph?.let { parts.add("$it km/h") }
-        coolantTempC?.let { parts.add("${it}°C") }
+        speedKph?.let { parts.add("${UnitConverter.formatSpeed(it, prefs.speedUnit)} ${prefs.speedUnit.symbol}") }
+        coolantTempC?.let { parts.add("${UnitConverter.formatTemp(it, prefs.temperatureUnit)} ${prefs.temperatureUnit.symbol}") }
         return parts.joinToString(" · ").ifEmpty { "Running…" }
     }
 

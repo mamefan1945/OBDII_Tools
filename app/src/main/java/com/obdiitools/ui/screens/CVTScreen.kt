@@ -44,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.obdiitools.data.SpeedUnit
 import com.obdiitools.data.TemperatureUnit
 import com.obdiitools.data.UserPreferences
+import com.obdiitools.util.UnitConverter
 import com.obdiitools.obd.CVTData
 import com.obdiitools.obd.CVTDataSource
 import com.obdiitools.obd.CVTReading
@@ -196,12 +197,8 @@ private fun LockupStateBanner(reading: CVTReading<LockupState>) {
 
 @Composable
 private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
-    val speedLabel = if (prefs.speedUnit == SpeedUnit.MPH) "VEHICLE SPEED" else "VEHICLE SPEED"
     val speedValue = data.speedKph.value?.let { kph ->
-        when (prefs.speedUnit) {
-            SpeedUnit.KMH -> "$kph km/h"
-            SpeedUnit.MPH -> "${"%.0f".format(kph * 0.621371f)} mph"
-        }
+        "${UnitConverter.formatSpeed(kph, prefs.speedUnit)} ${prefs.speedUnit.symbol}"
     }
     val tempValue = data.cvtTempC.value?.let { c ->
         when (prefs.temperatureUnit) {
@@ -217,7 +214,7 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
             leftValue  = data.engineRpm.value?.let { "$it RPM" },
             leftSource = data.engineRpm.source,
             leftAccent = NeonCyan,
-            rightLabel  = speedLabel,
+            rightLabel  = "VEHICLE SPEED",
             rightValue  = speedValue,
             rightSource = data.speedKph.source,
             rightAccent = NeonOrange,

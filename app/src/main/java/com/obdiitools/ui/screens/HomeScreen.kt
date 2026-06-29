@@ -154,7 +154,7 @@ fun HomeScreen(
 
             // Trip summary card (shown after disconnect while session data is fresh)
             tripSummary?.let { trip ->
-                TripSummaryCard(trip = trip, onDismiss = { viewModel.dismissTripSummary() })
+                TripSummaryCard(trip = trip, prefs = prefs, onDismiss = { viewModel.dismissTripSummary() })
             }
 
             // VIN card
@@ -402,7 +402,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun TripSummaryCard(trip: TripSummary, onDismiss: () -> Unit) {
+private fun TripSummaryCard(trip: TripSummary, prefs: UserPreferences, onDismiss: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth(), accentColor = NeonGreen) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
@@ -424,15 +424,15 @@ private fun TripSummaryCard(trip: TripSummary, onDismiss: () -> Unit) {
             val durationStr = if (mins > 0) "${mins}m ${secs}s" else "${secs}s"
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TripStat("DURATION", durationStr, modifier = Modifier.weight(1f))
-                TripStat("DISTANCE", trip.distanceKm?.let { "${"%.1f".format(it)} km" } ?: "--", modifier = Modifier.weight(1f))
+                TripStat("DISTANCE", trip.distanceKm?.let { UnitConverter.formatDistance(it, prefs.speedUnit) } ?: "--", modifier = Modifier.weight(1f))
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TripStat("MAX RPM", trip.maxRpm?.let { "$it" } ?: "--", modifier = Modifier.weight(1f))
-                TripStat("AVG SPEED", trip.avgSpeedKph?.let { "${"%.0f".format(it)} kph" } ?: "--", modifier = Modifier.weight(1f))
+                TripStat("AVG SPEED", trip.avgSpeedKph?.let { "${UnitConverter.formatSpeed(it.toInt(), prefs.speedUnit)} ${prefs.speedUnit.symbol}" } ?: "--", modifier = Modifier.weight(1f))
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TripStat("MAX SPEED", trip.maxSpeedKph?.let { "${it} kph" } ?: "--", modifier = Modifier.weight(1f))
-                TripStat("MAX COOLANT", trip.maxCoolantTempC?.let { "${it}°C" } ?: "--", modifier = Modifier.weight(1f))
+                TripStat("MAX SPEED", trip.maxSpeedKph?.let { "${UnitConverter.formatSpeed(it, prefs.speedUnit)} ${prefs.speedUnit.symbol}" } ?: "--", modifier = Modifier.weight(1f))
+                TripStat("MAX COOLANT", trip.maxCoolantTempC?.let { "${UnitConverter.formatTemp(it, prefs.temperatureUnit)} ${prefs.temperatureUnit.symbol}" } ?: "--", modifier = Modifier.weight(1f))
             }
         }
     }
