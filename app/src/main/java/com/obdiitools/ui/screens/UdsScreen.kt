@@ -75,6 +75,8 @@ fun UdsScreen(
     val isConnected = connectionState is ConnectionState.Connected
     val selectedEcu by viewModel.selectedEcu.collectAsState()
     val customAddress by viewModel.customAddress.collectAsState()
+    val headerInput by viewModel.headerInput.collectAsState()
+    val prefixInput by viewModel.prefixInput.collectAsState()
     val didInput by viewModel.didInput.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val responses by viewModel.responses.collectAsState()
@@ -226,6 +228,7 @@ fun UdsScreen(
                         )
                     }
                 }
+
                 if (isScanning) {
                     val (done, total) = scanProgress ?: (0 to 128)
                     Spacer(Modifier.height(8.dp))
@@ -243,6 +246,7 @@ fun UdsScreen(
                         color = TextSecondary.copy(alpha = 0.6f),
                     )
                 }
+
                 if (scanResults.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -267,6 +271,61 @@ fun UdsScreen(
 
             if (scanResults.isNotEmpty()) {
                 item { Spacer(Modifier.height(4.dp)) }
+            }
+
+            // ── Header / Prefix override ────────────────────────────────────
+            item {
+                HorizontalDivider(color = SurfaceBorder)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "REQUEST OVERRIDE (OPTIONAL)",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    color = TextSecondary,
+                    letterSpacing = 2.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = headerInput,
+                    onValueChange = { viewModel.setHeader(it) },
+                    label = { Text("Header (hex)", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                    placeholder = { Text("e.g. 7E0", fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp,
+                        color = TextPrimary,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedLabelColor = NeonCyan,
+                    ),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = prefixInput,
+                    onValueChange = { viewModel.setPrefix(it) },
+                    label = { Text("Prefix (hex)", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                    placeholder = { Text("e.g. 22", fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp,
+                        color = TextPrimary,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedLabelColor = NeonCyan,
+                    ),
+                )
+                Spacer(Modifier.height(4.dp))
             }
 
             // ── DID section ───────────────────────────────────────────────────
@@ -301,6 +360,7 @@ fun UdsScreen(
                         focusedLabelColor = NeonCyan,
                     ),
                 )
+
                 Spacer(Modifier.height(12.dp))
                 Text(
                     "COMMON DIDs",
@@ -346,6 +406,7 @@ fun UdsScreen(
                         }
                     }
                 }
+
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = { viewModel.sendRequest() },
@@ -397,9 +458,11 @@ fun UdsScreen(
                         )
                     }
                 }
+
                 items(responses) { response ->
                     UdsResponseCard(response)
                 }
+
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
@@ -504,6 +567,7 @@ private fun UdsResponseCard(response: UdsResponse) {
                 color = borderColor,
             )
         }
+
         if (response.isSuccess) {
             Text(
                 response.displayHex,
