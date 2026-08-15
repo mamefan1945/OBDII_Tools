@@ -30,6 +30,12 @@ class UdsViewModel @Inject constructor(
     private val _customAddress = MutableStateFlow("")
     val customAddress: StateFlow<String> = _customAddress.asStateFlow()
 
+    private val _headerInput = MutableStateFlow("")
+    val headerInput: StateFlow<String> = _headerInput.asStateFlow()
+
+    private val _prefixInput = MutableStateFlow("")
+    val prefixInput: StateFlow<String> = _prefixInput.asStateFlow()
+
     private val _didInput = MutableStateFlow("")
     val didInput: StateFlow<String> = _didInput.asStateFlow()
 
@@ -48,6 +54,8 @@ class UdsViewModel @Inject constructor(
 
     fun selectEcu(ecu: KnownEcu) { _selectedEcu.value = ecu }
     fun setCustomAddress(addr: String) { _customAddress.value = addr.uppercase().take(3) }
+    fun setHeader(header: String) { _headerInput.value = header.uppercase().take(8) }
+    fun setPrefix(prefix: String) { _prefixInput.value = prefix.uppercase().take(8) }
     fun setDid(did: String) { _didInput.value = did.uppercase().take(4) }
     fun clearHistory() { _responses.value = emptyList() }
 
@@ -77,13 +85,26 @@ class UdsViewModel @Inject constructor(
         val ecu = _selectedEcu.value
         val address = if (ecu == KnownEcu.CUSTOM) _customAddress.value else ecu.address
         val did = _didInput.value
+        val header = _headerInput.value.trim()
+        val prefix = _prefixInput.value.trim()
         if (address.isBlank() || did.length < 4) return
 
         viewModelScope.launch {
             _isLoading.value = true
             repository.pausePolling()
             try {
-                val response = repository.queryUds(address, did)
+                val response = if (header.isBlank() && prefix.isBlank()) {
+                    // No overrides — use the standard ATSH + UDS request path.
+                    repository.queryUds(address, did)
+                } else {
+                    // Custom header/prefix: build and send the raw command ourselves.
+                    if (header.isNotBlank()) {
+                        repository.queryRaw("AT SH $header")
+                    }
+                    val command = if (prefix.isNotBlank()) "$prefix$did" else did
+                    val raw = repository.queryRaw(command)
+                    UdsResponse.parse(address, did, raw)
+                }
                 _responses.value = listOf(response) + _responses.value
             } finally {
                 repository.resumePolling()
