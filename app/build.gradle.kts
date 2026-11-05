@@ -35,10 +35,22 @@ android {
 
         buildConfigField("long",   "BUILD_TIME", "${System.currentTimeMillis()}L")
         buildConfigField("String", "GIT_HASH",   "\"$gitHash\"")
-        manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
+        manifestPlaceholders["MAPS_API_KEY"] =
+            localProperties.getProperty("MAPS_API_KEY")
+                ?: System.getenv("GOOGLE_MAPS_API_KEY")
+                ?: ""
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug").apply {
+                storeFile = file(System.getenv("ANDROID_DEBUG_KEYSTORE") ?: "${System.getProperty("user.home")}/.android/debug.keystore")
+                storeType = "PKCS12"
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: "android"
+            }
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
