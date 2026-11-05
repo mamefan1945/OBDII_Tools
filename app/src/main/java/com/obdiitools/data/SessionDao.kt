@@ -29,8 +29,8 @@ interface SessionDao {
     @Query("SELECT * FROM session_data_points WHERE sessionId = :sessionId ORDER BY timestampMs ASC")
     suspend fun getDataPointsForSession(sessionId: Long): List<SessionDataPoint>
 
-    @Query("UPDATE sessions SET make = :make, model = :model WHERE id = :id")
-    suspend fun updateMakeModel(id: Long, make: String, model: String)
+    @Query("UPDATE sessions SET make = :make, model = :model, vin = :vin WHERE id = :id")
+    suspend fun updateMakeModelVin(id: Long, make: String, model: String, vin: String?)
 
     @Query("DELETE FROM sessions WHERE id = :id")
     suspend fun deleteSession(id: Long)

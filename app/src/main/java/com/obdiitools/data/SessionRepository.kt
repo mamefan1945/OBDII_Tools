@@ -150,9 +150,9 @@ class SessionRepository @Inject constructor(
         )
     }
 
-    suspend fun updateCurrentSessionMakeModel(make: String, model: String) {
+    suspend fun updateCurrentSessionMakeModel(make: String, model: String, vin: String? = null) {
         val id = currentSessionId ?: return
-        dao.updateMakeModel(id, make, model)
+        dao.updateMakeModelVin(id, make, model, vin)
     }
 
     suspend fun getDataPoints(sessionId: Long): List<SessionDataPoint> =
