@@ -136,9 +136,9 @@ fun SessionScreen(
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch(Dispatchers.IO) {
             try {
-                val count = viewModel.importBackup(context, uri)
+                val (imported, skipped) = viewModel.importBackup(context, uri)
                 withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(context, "Imported $count session(s)", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, "Restored $imported session(s); skipped $skipped already-existing session(s)", android.widget.Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
