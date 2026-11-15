@@ -29,7 +29,7 @@ object SessionBackup {
         sessions: List<SessionEntity>,
         pointsBySession: Map<Long, List<SessionDataPoint>>,
         options: SessionBackupOptions,
-    ): Intent {
+    ) {
         val json = JSONObject().put("format", "obdiitools-session-backup")
             .put("version", 1)
             .put("options", JSONObject()
