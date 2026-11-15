@@ -134,27 +134,13 @@ class CVTViewModel @Inject constructor(
                 "Nissan CVT7 controller confirmed at ${discovery.ecuAddress}. Live values are read directly from the transmission controller; hydraulic pressures are reported in MPa."
             return
         }
-        _sourceDescription.value = "Nissan CVT7 controller not confirmed at the supported addresses. Showing generic OBD-derived data where available."
-
-        // Tier 2: try extended Mode 01 PIDs some manufacturers use for
-        // transmission shaft speed (same 2-byte RPM formula as PID 0x0C).
-        for (pid in INPUT_SHAFT_CANDIDATES) {
-            val raw = repository.queryRaw(pid)
-            if (!isNoData(raw) && parseShaftRpm(raw) != null) {
-                inputShaftPid = pid
-                break
-            }
-        }
-
-        // CVT temp: standard engine oil temp PID (some vehicles share this
-        // with the transmission fluid sensor or oil-to-trans cooler circuit).
-        val tempRaw = repository.queryRaw(ELM327Protocol.PID.OIL_TEMP)
-        if (!isNoData(tempRaw) &&
-            ELM327Protocol.parseResponse(ELM327Protocol.PID.OIL_TEMP, tempRaw) != null) {
-            cvtTempPid = ELM327Protocol.PID.OIL_TEMP
-        }
-
-        _sourceDescription.value = buildSourceDescription()
+        // Do not substitute generic engine data or calculated estimates for
+        // transmission-controller telemetry. Until a supported TCM responds,
+        // leave every CVT measurement unavailable and keep retrying discovery
+        // only when the monitor is restarted.
+        _cvtData.value = CVTData()
+        _sourceDescription.value =
+            "Nissan CVT7 controller NOT CONFIRMED. No live transmission data is available. Generic OBD estimates are intentionally disabled so engine data cannot be mistaken for TCM telemetry."
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -163,6 +149,11 @@ class CVTViewModel @Inject constructor(
 
     private suspend fun poll() {
         while (currentCoroutineContext().isActive && repository.isConnected) {
+            if (!nissanCvt7Detected) {
+                // Discovery failed: never fall through to generic OBD polling.
+                delay(1000)
+                continue
+            }
             if (nissanCvt7Detected) {
                 nissanCvt7EcuAddress?.let { address -> repository.queryNissanCvt7LiveData(address) }?.let { sample ->
                     _cvtData.value = toCvtData(sample)
