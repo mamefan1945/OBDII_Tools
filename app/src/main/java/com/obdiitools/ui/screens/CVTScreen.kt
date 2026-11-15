@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -358,13 +359,17 @@ private fun ConnectionStatusCard(description: String) {
                 color = TextSecondary,
                 letterSpacing = 2.sp,
             )
-            Text(
-                description,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                color = TextSecondary,
-                lineHeight = 17.sp,
-            )
+            // Make diagnostic traces selectable so the complete response
+            // details can be copied and pasted into a support conversation.
+            SelectionContainer {
+                Text(
+                    description,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    lineHeight = 17.sp,
+                )
+            }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SourceBadge(CVTDataSource.SENSOR)
