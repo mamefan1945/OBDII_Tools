@@ -209,14 +209,26 @@ class OBDRepository @Inject constructor(
                 query("ATS0", 300)
                 query("ATST32", 300)
 
+                val trace = mutableListOf<String>()
                 for (address in NISSAN_CVT7_ECU_CANDIDATES) {
                     onProgress("Checking Nissan transmission address $address…")
                     query("ATSH $address", 400)
+
                     val session = queryLines("10C0", 1500)
+                    val sessionText = summarizeDiagnosticResponse(session)
                     val sessionAccepted = session.any { line ->
                         line.filterNot(Char::isWhitespace).uppercase().contains("50C0")
                     }
-                    if (!sessionAccepted) continue
+                    if (!sessionAccepted) {
+                        val reason = when {
+                            session.isEmpty() -> "no response"
+                            sessionText.contains("7F10") -> "session rejected ($sessionText)"
+                            else -> "no positive session response ($sessionText)"
+                        }
+                        trace.add("$address: $reason")
+                        onProgress(trace.joinToString("\n"))
+                        continue
+                    }
 
                     val response = queryLines("2101", 3500)
                     val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
@@ -224,7 +236,16 @@ class OBDRepository @Inject constructor(
                         onProgress("Nissan CVT7 controller confirmed at $address")
                         return@withTransaction com.obdiitools.obd.NissanCvt7DiscoveryResult(address, sample)
                     }
+                    val reason = if (response.isEmpty()) {
+                        "session accepted; 2101 no response"
+                    } else {
+                        "session accepted; 2101 not decoded (" +
+                            summarizeDiagnosticResponse(response) + ")"
+                    }
+                    trace.add("$address: $reason")
+                    onProgress(trace.joinToString("\n"))
                 }
+                onProgress("TCM NOT CONFIRMED\n" + trace.joinToString("\n"))
                 null
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
@@ -233,6 +254,14 @@ class OBDRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun summarizeDiagnosticResponse(lines: List<String>): String {
+        val summary = lines
+            .map { it.filterNot(Char::isWhitespace).uppercase() }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        return summary.ifBlank { "empty response" }.take(90)
     }
 
     /** Reads one sample from the already-discovered physical controller address. */
