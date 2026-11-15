@@ -214,7 +214,7 @@ class OBDRepository @Inject constructor(
                     query("ATSH $address", 400)
                     val session = queryLines("10C0", 1500)
                     val sessionAccepted = session.any { line ->
-                        line.filterNot(Char::isWhitespace).uppercase().startsWith("50C0")
+                        line.filterNot(Char::isWhitespace).uppercase().contains("50C0")
                     }
                     if (!sessionAccepted) continue
 
@@ -247,7 +247,7 @@ class OBDRepository @Inject constructor(
                 query("ATSH ${ecuAddress.uppercase()}", 400)
                 query("ATST32", 300)
                 val session = queryLines("10C0", 1200)
-                if (session.none { it.filterNot(Char::isWhitespace).uppercase().startsWith("50C0") }) {
+                if (session.none { it.filterNot(Char::isWhitespace).uppercase().contains("50C0") }) {
                     return@withTransaction null
                 }
                 val response = queryLines("2101", 3000)
