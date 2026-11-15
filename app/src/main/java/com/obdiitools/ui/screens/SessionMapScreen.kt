@@ -150,6 +150,12 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
 
     LaunchedEffect(sessionId) { viewModel.loadGpsTrail(sessionId) }
 
+    val startMarkerState = remember(gpsPoints) {
+        gpsPoints.firstOrNull()?.let { MarkerState(position = it.latLng()) }
+    }
+    val endMarkerState = remember(gpsPoints) {
+        gpsPoints.lastOrNull()?.let { MarkerState(position = it.latLng()) }
+    }
     val cameraPositionState = rememberCameraPositionState()
     LaunchedEffect(gpsPoints) {
         if (gpsPoints.size >= 2) {
@@ -209,14 +215,12 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
                     color  = NeonCyan,
                     width  = 8f,
                 )
-                Marker(
-                    state = MarkerState(position = gpsPoints.first().latLng()),
-                    title = "Start",
-                )
-                Marker(
-                    state = MarkerState(position = gpsPoints.last().latLng()),
-                    title = "End",
-                )
+                startMarkerState?.let { markerState ->
+                    Marker(state = markerState, title = "Start")
+                }
+                endMarkerState?.let { markerState ->
+                    Marker(state = markerState, title = "End")
+                }
                 selectedPoint?.let { pt ->
                     Circle(
                         center      = pt.latLng(),
