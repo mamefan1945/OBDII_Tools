@@ -261,13 +261,6 @@ class OBDRepository @Inject constructor(
         }
     }
 
-    private companion object {
-        // Physical 11-bit addresses found during the Nissan enhanced-diagnostic
-        // investigation. A positive response alone is not enough: 0x21/0x01
-        // must also decode as the expected CVT7 live-data block.
-        val NISSAN_CVT7_ECU_CANDIDATES = listOf("7E1", "752", "745", "748")
-    }
-
     // ── Per-ECU PID support discovery ────────────────────────────────────────
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.
@@ -760,6 +753,9 @@ class OBDRepository @Inject constructor(
     }
 
     companion object {
+        // Candidate 11-bit Nissan enhanced-diagnostic addresses. Accept only
+        // a valid CVT7 0x21/0x01 data block, not merely an ECU response.
+        private val NISSAN_CVT7_ECU_CANDIDATES = listOf("7E1", "752", "745", "748")
         private const val ALERT_CHANNEL_ID = "obd_alerts"
         private const val NO_RESPONSE_TIMEOUT_MS = 10_000L
     }
