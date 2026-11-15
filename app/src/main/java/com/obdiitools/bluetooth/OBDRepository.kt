@@ -218,45 +218,29 @@ class OBDRepository @Inject constructor(
                     trace.add("$address 10C0: ${summarizeDiagnosticResponse(session)}")
                     onProgress(trace.takeLast(3).joinToString("\n"))
 
-                    // Try the Nissan identification/status reads even if the
-                    // optional session request is refused.
-                    val idA0 = queryLines("22F1A0", 1800)
-                    val id87 = queryLines("22F187", 1800)
-                    val vin = queryLines("22F190", 1800)
-                    val dtcInfo = queryLines("190209", 1800)
-                    val identityConfirmed =
-                        com.obdiitools.obd.NissanCvt7Protocol.isExpectedTcmIdentity(id87)
+                    // Follow the vehicle-specific request sequence established from
+                    // the captured reference behavior. The Mode 22 part-number DID
+                    // is not a prerequisite: some compatible controllers do not
+                    // expose that optional identifier.
+                    val initReply = queryLines("17FF00", 1800)
+                    trace.add("$address 17FF00: ${summarizeDiagnosticResponse(initReply)}")
+                    onProgress(trace.takeLast(4).joinToString("\n"))
 
-                    trace.add("$address 22F1A0: ${summarizeDiagnosticResponse(idA0)}")
-                    trace.add("$address 22F187: ${summarizeDiagnosticResponse(id87)}")
-                    trace.add("$address 22F190: ${summarizeDiagnosticResponse(vin)}")
-                    trace.add("$address 190209: ${summarizeDiagnosticResponse(dtcInfo)}")
+                    val statusReply = queryLines("2103", 1800)
+                    trace.add("$address 2103: ${summarizeDiagnosticResponse(statusReply)}")
+                    onProgress(trace.takeLast(4).joinToString("\n"))
+
+                    val liveReply = queryLines("2101", 3000)
+                    trace.add("$address 2101: ${summarizeDiagnosticResponse(liveReply)}")
                     onProgress(trace.takeLast(5).joinToString("\n"))
 
-                    val dataReplies = mutableListOf<Pair<String, List<String>>>()
-                    val requests = listOf("2101", "2110", "2170") +
-                        (0x80..0x8F).map { "21%02X".format(it) }
-                    for (request in requests) {
-                        val reply = queryLines(request, 1400)
-                        dataReplies.add(request to reply)
-                        trace.add("$address $request: ${summarizeDiagnosticResponse(reply)}")
-                        onProgress(trace.takeLast(4).joinToString("\n"))
-                    }
-
-                    val liveReply = dataReplies.firstOrNull { it.first == "2101" }?.second.orEmpty()
                     val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(liveReply)
-                    if (identityConfirmed && sample != null) {
-                        onProgress("Nissan CVT7 TCM identified at $address; live data decoded")
+                    if (sample != null) {
+                        onProgress("Nissan CVT7 data response decoded at $address")
                         return@withTransaction com.obdiitools.obd.NissanCvt7DiscoveryResult(address, sample)
                     }
 
-                    val reason = when {
-                        identityConfirmed -> "TCM identity matched; 2101 response not yet decodable"
-                        id87.any { it.contains("7F22", ignoreCase = true) } ->
-                            "part-number identifier rejected; other read-only replies recorded"
-                        else -> "no matching TCM part-number response; candidate not accepted"
-                    }
-                    trace.add("$address: $reason")
+                    trace.add("$address: no decodable 2101 live-data response")
                     onProgress(trace.takeLast(8).joinToString("\n"))
                 }
                 onProgress("TCM NOT CONFIRMED\n" + trace.takeLast(28).joinToString("\n"))
@@ -289,10 +273,9 @@ class OBDRepository @Inject constructor(
                 query("ATSP6", 600)
                 query("ATSH ${ecuAddress.uppercase()}", 400)
                 query("ATST32", 300)
-                val session = queryLines("10C0", 1200)
-                if (session.none { it.filterNot(Char::isWhitespace).uppercase().contains("50C0") }) {
-                    return@withTransaction null
-                }
+                // The extended session is established during discovery and
+                // remains active while the adapter stays connected. Re-requesting
+                // it on every 300 ms poll adds latency and can interrupt streaming.
                 val response = queryLines("2101", 3000)
                 com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
             } finally {
