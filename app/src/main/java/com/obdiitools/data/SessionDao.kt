@@ -3,6 +3,7 @@ package com.obdiitools.data
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.OnConflictStrategy
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +17,12 @@ interface SessionDao {
 
     @Insert
     suspend fun insertDataPoint(point: SessionDataPoint)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertImportedSession(session: SessionEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertImportedDataPoints(points: List<SessionDataPoint>)
 
     @Query("SELECT * FROM sessions ORDER BY startTimeMs DESC")
     fun getAllSessions(): Flow<List<SessionEntity>>
