@@ -84,6 +84,7 @@ fun UdsScreen(
     val scanProgress by viewModel.scanProgress.collectAsState()
     val nissanProbeProgress by viewModel.nissanProbeProgress.collectAsState()
     val nissanProbeResults by viewModel.nissanProbeResults.collectAsState()
+    val nissanProbeStatus by viewModel.nissanProbeStatus.collectAsState()
     val isScanning = scanProgress != null
 
     Scaffold(
@@ -343,8 +344,15 @@ fun UdsScreen(
                             color = NeonGreen,
                         )
                     }
-                } else if (nissanProbeProgress == null && nissanProbeResults.isEmpty()) {
-                    // Results are only shown after a probe has run.
+                }
+                nissanProbeStatus?.let { status ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        status,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = if (nissanProbeResults.isEmpty()) NeonOrange else NeonGreen,
+                    )
                 }
             }
 
