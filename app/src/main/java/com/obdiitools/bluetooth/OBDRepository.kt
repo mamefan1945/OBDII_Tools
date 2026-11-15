@@ -190,6 +190,30 @@ class OBDRepository @Inject constructor(
         }
     }
 
+    /**
+     * Reads one Nissan CVT7 live-data sample using the fixed 11-bit, 500-kbit/s
+     * CAN protocol and the transmission controller's physical request address.
+     * Only session selection and read-data requests are sent.
+     */
+    suspend fun queryNissanCvt7LiveData(): com.obdiitools.obd.NissanCvt7LiveData? {
+        val conn = connection ?: return null
+        return conn.withTransaction {
+            try {
+                query("ATSP6", 600)
+                query("ATSH 7E1", 400)
+                query("ATST32", 300)
+                queryLines("10C0", 1500)
+                val response = queryLines("2101", 3000)
+                com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { query("ATSH 7DF", 400) }
+                    runCatching { query("ATSP0", 600) }
+                }
+            }
+        }
+    }
+
     // ── Per-ECU PID support discovery ────────────────────────────────────────
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.
