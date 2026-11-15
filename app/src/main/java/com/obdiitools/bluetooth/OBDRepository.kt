@@ -596,7 +596,10 @@ class OBDRepository @Inject constructor(
         onProgress: (done: Int, total: Int) -> Unit,
     ) {
         val conn = connection ?: return
-        val addresses = (0x700..0x77F).map { "%03X".format(it) }
+        // Nissan and many other vehicles use standard 11-bit diagnostic
+        // request IDs 0x7E0-0x7E7 for powertrain ECUs (e.g. ECM/TCM).
+        // Keep the manufacturer-specific 0x700 range as well.
+        val addresses = ((0x700..0x77F) + (0x7E0..0x7E7)).map { "%03X".format(it) }
         val total = addresses.size
         conn.withTransaction {
             val tx = this
