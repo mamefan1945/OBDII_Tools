@@ -40,7 +40,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.13'
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Verify Gradle configuration
@@ -54,7 +54,6 @@ jobs:
 
       - name: Build debug APK
         env:
-          # Optional in CI: the app remains buildable without a Maps key.
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: gradle --no-daemon assembleDebug
 
