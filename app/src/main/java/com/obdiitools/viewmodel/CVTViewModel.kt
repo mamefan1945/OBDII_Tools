@@ -11,6 +11,7 @@ import com.obdiitools.obd.CVTReading
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.ELM327Protocol
 import com.obdiitools.obd.LockupState
+import com.obdiitools.obd.NissanCvt7LiveData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -73,6 +74,7 @@ class CVTViewModel @Inject constructor(
     private var inputShaftPid: String? = null
     private var cvtTempPid: String? = null
     private var probeComplete = false
+    private var nissanCvt7Detected = false
 
     // Lockup inference — rolling window of (rpm, speed) samples
     private data class Sample(val rpm: Int, val speed: Int)
@@ -100,6 +102,10 @@ class CVTViewModel @Inject constructor(
         pollJob?.cancel()
         pollJob = null
         probeComplete = false
+        nissanCvt7Detected = false
+        inputShaftPid = null
+        cvtTempPid = null
+        window.clear()
         _cvtData.value = CVTData()
         releaseActivePollingPause()
     }
@@ -114,6 +120,15 @@ class CVTViewModel @Inject constructor(
     // ──────────────────────────────────────────────────────────────────────────
 
     private suspend fun probe() {
+        val nissanSample = repository.queryNissanCvt7LiveData()
+        if (nissanSample != null) {
+            nissanCvt7Detected = true
+            _cvtData.value = toCvtData(nissanSample)
+            _sourceDescription.value =
+                "Nissan CVT7 controller detected at 7E1. Live values are read directly from the transmission controller; hydraulic pressures are reported in MPa."
+            return
+        }
+
         // Tier 2: try extended Mode 01 PIDs some manufacturers use for
         // transmission shaft speed (same 2-byte RPM formula as PID 0x0C).
         for (pid in INPUT_SHAFT_CANDIDATES) {
@@ -141,6 +156,14 @@ class CVTViewModel @Inject constructor(
 
     private suspend fun poll() {
         while (currentCoroutineContext().isActive && repository.isConnected) {
+            if (nissanCvt7Detected) {
+                repository.queryNissanCvt7LiveData()?.let { sample ->
+                    _cvtData.value = toCvtData(sample)
+                }
+                delay(300)
+                continue
+            }
+
             val rpm     = query(ELM327Protocol.PID.RPM)     as? Int
             val speed   = query(ELM327Protocol.PID.SPEED)   as? Int
             val throttle = query(ELM327Protocol.PID.THROTTLE) as? Float
@@ -181,6 +204,23 @@ class CVTViewModel @Inject constructor(
 
             delay(250)
         }
+    }
+
+    private fun toCvtData(sample: NissanCvt7LiveData): CVTData {
+        fun measured(value: Float) = CVTReading(value, CVTDataSource.SENSOR)
+        return CVTData(
+            speedKph = cvtReading(sample.vehicleSpeedKph),
+            engineRpm = cvtReading(sample.engineRpm),
+            inputShaftRpm = CVTReading(null, CVTDataSource.UNAVAILABLE),
+            slipRpm = CVTReading(null, CVTDataSource.UNAVAILABLE),
+            lockupState = CVTReading(LockupState.UNKNOWN, CVTDataSource.UNAVAILABLE),
+            cvtTempC = cvtReading(sample.fluidTemperatureC),
+            cvtRatio = measured(sample.gearRatio),
+            primaryPressureMpa = measured(sample.primaryPressureMpa),
+            secondaryPressureMpa = measured(sample.secondaryPressureMpa),
+            targetSecondaryPressureMpa = measured(sample.targetSecondaryPressureMpa),
+            linePressureMpa = measured(sample.linePressureMpa),
+        )
     }
 
     // ──────────────────────────────────────────────────────────────────────────
