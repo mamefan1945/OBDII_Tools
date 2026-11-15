@@ -58,6 +58,9 @@ class UdsViewModel @Inject constructor(
     private val _nissanProbeResults = MutableStateFlow<List<String>>(emptyList())
     val nissanProbeResults: StateFlow<List<String>> = _nissanProbeResults.asStateFlow()
 
+    private val _nissanProbeStatus = MutableStateFlow<String?>(null)
+    val nissanProbeStatus: StateFlow<String?> = _nissanProbeStatus.asStateFlow()
+
     fun startNissanDiscovery() {
         if (_isLoading.value || _scanProgress.value != null || _nissanProbeProgress.value != null) return
         val address = if (_selectedEcu.value == KnownEcu.CUSTOM) _customAddress.value else _selectedEcu.value.address
@@ -65,6 +68,7 @@ class UdsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _nissanProbeResults.value = emptyList()
+            _nissanProbeStatus.value = null
             _nissanProbeProgress.value = 0 to 256
             repository.pausePolling()
             try {
@@ -72,6 +76,9 @@ class UdsViewModel @Inject constructor(
                     _nissanProbeProgress.value = done to total
                 }
                 _nissanProbeResults.value = hits
+                _nissanProbeStatus.value = if (hits.isEmpty()) "Probe completed: no positive Mode 21 responses were received from $address." else "Probe completed: ${hits.size} positive response(s) from $address."
+            } catch (e: Exception) {
+                _nissanProbeStatus.value = "Probe failed: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 _nissanProbeProgress.value = null
                 repository.resumePolling()
