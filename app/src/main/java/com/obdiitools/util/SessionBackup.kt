@@ -1,14 +1,11 @@
 package com.obdiitools.util
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import androidx.core.content.FileProvider
 import com.obdiitools.data.SessionDataPoint
 import com.obdiitools.data.SessionEntity
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -26,8 +23,9 @@ data class ImportedSessionBackup(
 )
 
 object SessionBackup {
-    fun buildShareIntent(
+    fun writeBackup(
         context: Context,
+        destination: Uri,
         sessions: List<SessionEntity>,
         pointsBySession: Map<Long, List<SessionDataPoint>>,
         options: SessionBackupOptions,
@@ -78,22 +76,15 @@ object SessionBackup {
             }
         }
         json.put("sessions", sessionArray).put("dataPoints", pointArray)
-        val dir = File(context.cacheDir, "exports").also { it.mkdirs() }
-        val file = File(dir, "obdiitools_sessions_${System.currentTimeMillis()}.zip")
-        ZipOutputStream(file.outputStream().buffered()).use { zip ->
+        val output = context.contentResolver.openOutputStream(destination, "w")
+            ?: error("Unable to create the selected backup file")
+        ZipOutputStream(output.buffered()).use { zip ->
             zip.putNextEntry(ZipEntry("backup.json"))
             zip.write(json.toString().toByteArray(Charsets.UTF_8))
             zip.closeEntry()
             zip.putNextEntry(ZipEntry("README.txt"))
-            zip.write("OBDII Tools session backup. Import this ZIP from Drive History > Import.\n".toByteArray())
+            zip.write("OBDII Tools session backup. Restore it from Drive History > Restore Sessions.\\n".toByteArray())
             zip.closeEntry()
-        }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        return Intent(Intent.ACTION_SEND).apply {
-            type = "application/zip"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "OBDII Tools session backup")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }
 
