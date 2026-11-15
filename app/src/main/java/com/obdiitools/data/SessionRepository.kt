@@ -161,6 +161,10 @@ class SessionRepository @Inject constructor(
     suspend fun importSessions(sessions: List<SessionEntity>, pointsByOldId: Map<Long, List<SessionDataPoint>>): Int {
         var imported = 0
         sessions.forEach { oldSession ->
+            // Match on trip start time and adapter/device name, not the backup's database ID.
+            if (dao.findMatchingImportedSession(oldSession.startTimeMs, oldSession.deviceName) != null) {
+                return@forEach
+            }
             val newId = dao.insertImportedSession(oldSession.copy(id = 0))
             if (newId != -1L) {
                 imported++
