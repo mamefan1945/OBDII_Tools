@@ -154,6 +154,42 @@ class OBDRepository @Inject constructor(
         }
     }
 
+    /**
+     * Read-only Nissan enhanced-diagnostic discovery.
+     * Probes Mode 21 local identifiers without changing ECU session, coding,
+     * adaptations, or actuator state. A positive 61 response is evidence that
+     * this ECU implements the service; it is not yet a decoded CVT data item.
+     */
+    suspend fun probeNissanLocalIdentifiers(
+        ecuAddress: String,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ): List<String> {
+        val conn = connection ?: return emptyList()
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return emptyList()
+        return conn.withTransaction {
+            val tx = this
+            val hits = mutableListOf<String>()
+            try {
+                tx.query("ATSH ${ecuAddress.uppercase()}", 400)
+                for (identifier in 0x00..0xFF) {
+                    val id = "%02X".format(identifier)
+                    val lines = tx.queryLines("21$id", 350)
+                    val response = lines.map { it.replace(" ", "").uppercase() }
+                        .firstOrNull { it.startsWith("61$id") || it.startsWith("7F21") }
+                    if (response?.startsWith("61$id") == true) {
+                        hits.add("21$id -> $response")
+                    }
+                    onProgress(identifier + 1, 256)
+                }
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { tx.query("ATSH 7DF", 300) }
+                }
+            }
+            hits
+        }
+    }
+
     // ── Per-ECU PID support discovery ────────────────────────────────────────
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.
