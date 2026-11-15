@@ -52,6 +52,34 @@ class UdsViewModel @Inject constructor(
     private val _scanProgress = MutableStateFlow<Pair<Int, Int>?>(null)
     val scanProgress: StateFlow<Pair<Int, Int>?> = _scanProgress.asStateFlow()
 
+    private val _nissanProbeProgress = MutableStateFlow<Pair<Int, Int>?>(null)
+    val nissanProbeProgress: StateFlow<Pair<Int, Int>?> = _nissanProbeProgress.asStateFlow()
+
+    private val _nissanProbeResults = MutableStateFlow<List<String>>(emptyList())
+    val nissanProbeResults: StateFlow<List<String>> = _nissanProbeResults.asStateFlow()
+
+    fun startNissanDiscovery() {
+        if (_isLoading.value || _scanProgress.value != null || _nissanProbeProgress.value != null) return
+        val address = if (_selectedEcu.value == KnownEcu.CUSTOM) _customAddress.value else _selectedEcu.value.address
+        if (!address.matches(Regex("(?i)^[0-9A-F]{3}$"))) return
+        viewModelScope.launch {
+            _isLoading.value = true
+            _nissanProbeResults.value = emptyList()
+            _nissanProbeProgress.value = 0 to 256
+            repository.pausePolling()
+            try {
+                val hits = repository.probeNissanLocalIdentifiers(address) { done, total ->
+                    _nissanProbeProgress.value = done to total
+                }
+                _nissanProbeResults.value = hits
+            } finally {
+                _nissanProbeProgress.value = null
+                repository.resumePolling()
+                _isLoading.value = false
+            }
+        }
+    }
+
     fun selectEcu(ecu: KnownEcu) { _selectedEcu.value = ecu }
     fun setCustomAddress(addr: String) { _customAddress.value = addr.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(3) }
     fun setHeader(header: String) { _headerInput.value = header.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(8) }
