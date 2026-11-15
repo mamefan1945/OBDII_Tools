@@ -60,7 +60,7 @@ class SessionViewModel @Inject constructor(
         SessionBackup.writeBackup(context, uri, currentSessions, points, options)
     }
 
-    suspend fun importBackup(context: Context, uri: Uri): Int {
+    suspend fun importBackup(context: Context, uri: Uri): Pair<Int, Int> {
         val backup = SessionBackup.readImport(context, uri)
         return sessionRepository.importSessions(backup.sessions, backup.pointsByOldId)
     }
