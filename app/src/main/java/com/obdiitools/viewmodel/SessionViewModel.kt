@@ -1,11 +1,16 @@
 package com.obdiitools.viewmodel
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.data.PreferencesRepository
 import com.obdiitools.data.SessionDataPoint
 import com.obdiitools.data.SessionEntity
 import com.obdiitools.data.SessionRepository
+import com.obdiitools.util.SessionBackup
+import com.obdiitools.util.SessionBackupOptions
 import com.obdiitools.data.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +52,19 @@ class SessionViewModel @Inject constructor(
         viewModelScope.launch {
             _gpsPoints.value = sessionRepository.getGpsPoints(sessionId)
         }
+    }
+
+    suspend fun createBackupShareIntent(context: Context, options: SessionBackupOptions): Intent {
+        val currentSessions = sessionRepository.allSessions.let { flow ->
+            kotlinx.coroutines.flow.first(flow)
+        }
+        val points = currentSessions.associate { it.id to sessionRepository.getDataPoints(it.id) }
+        return SessionBackup.buildShareIntent(context, currentSessions, points, options)
+    }
+
+    suspend fun importBackup(context: Context, uri: Uri): Int {
+        val backup = SessionBackup.readImport(context, uri)
+        return sessionRepository.importSessions(backup.sessions, backup.pointsByOldId)
     }
 
     fun deleteSession(sessionId: Long) {
