@@ -158,11 +158,13 @@ class SessionRepository @Inject constructor(
     suspend fun getDataPoints(sessionId: Long): List<SessionDataPoint> =
         dao.getDataPointsForSession(sessionId)
 
-    suspend fun importSessions(sessions: List<SessionEntity>, pointsByOldId: Map<Long, List<SessionDataPoint>>): Int {
+    suspend fun importSessions(sessions: List<SessionEntity>, pointsByOldId: Map<Long, List<SessionDataPoint>>): Pair<Int, Int> {
         var imported = 0
+        var skipped = 0
         sessions.forEach { oldSession ->
             // Match on the trip start timestamp, not the backup's database ID or optional vehicle fields.
             if (dao.findMatchingImportedSession(oldSession.startTimeMs) != null) {
+                skipped++
                 return@forEach
             }
             val newId = dao.insertImportedSession(oldSession.copy(id = 0))
@@ -172,7 +174,7 @@ class SessionRepository @Inject constructor(
                 if (points.isNotEmpty()) dao.insertImportedDataPoints(points)
             }
         }
-        return imported
+        return imported to skipped
     }
 
     suspend fun getGpsPoints(sessionId: Long): List<SessionDataPoint> =
