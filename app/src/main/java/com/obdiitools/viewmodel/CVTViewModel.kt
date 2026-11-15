@@ -139,8 +139,7 @@ class CVTViewModel @Inject constructor(
         // leave every CVT measurement unavailable and keep retrying discovery
         // only when the monitor is restarted.
         _cvtData.value = CVTData()
-        _sourceDescription.value =
-            "Nissan CVT7 controller NOT CONFIRMED. No live transmission data is available. Generic OBD estimates are intentionally disabled so engine data cannot be mistaken for TCM telemetry."
+        // Keep the per-address diagnostic trace supplied by repository discovery.
     }
 
     // ──────────────────────────────────────────────────────────────────────────
