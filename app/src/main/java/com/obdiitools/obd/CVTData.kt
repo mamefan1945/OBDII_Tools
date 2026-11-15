@@ -26,4 +26,8 @@ data class CVTData(
     val lockupState:   CVTReading<LockupState>   = CVTReading(LockupState.UNKNOWN),
     val cvtTempC:      CVTReading<Int>           = CVTReading(null),
     val cvtRatio:      CVTReading<Float>         = CVTReading(null),
+    val primaryPressureMpa: CVTReading<Float>   = CVTReading(null),
+    val secondaryPressureMpa: CVTReading<Float> = CVTReading(null),
+    val targetSecondaryPressureMpa: CVTReading<Float> = CVTReading(null),
+    val linePressureMpa: CVTReading<Float>      = CVTReading(null),
 )

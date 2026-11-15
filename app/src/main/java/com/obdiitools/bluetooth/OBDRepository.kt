@@ -190,6 +190,120 @@ class OBDRepository @Inject constructor(
         }
     }
 
+    /**
+     * Identifies the transmission with Nissan enhanced diagnostic reads before
+     * attempting live-data decoding. Only read/session-selection requests are
+     * used; erase, reset, programming, security-access and actuator operations
+     * are deliberately excluded.
+     */
+    suspend fun discoverNissanCvt7(
+        onProgress: (String) -> Unit = {},
+    ): com.obdiitools.obd.NissanCvt7DiscoveryResult? {
+        val conn = connection ?: return null
+        return conn.withTransaction {
+            try {
+                query("ATSP6", 600)
+                query("ATE0", 300)
+                query("ATH0", 300)
+                query("ATS0", 300)
+                query("ATST32", 300)
+                query("ATCAF1", 300)
+
+                val trace = mutableListOf<String>()
+                for (address in NISSAN_CVT7_ECU_CANDIDATES) {
+                    onProgress("Identifying transmission controller at $address…")
+                    query("ATSH $address", 400)
+
+                    val session = queryLines("10C0", 1500)
+                    trace.add("$address 10C0: ${summarizeDiagnosticResponse(session)}")
+                    onProgress(trace.takeLast(3).joinToString("\n"))
+
+                    // Try the Nissan identification/status reads even if the
+                    // optional session request is refused.
+                    val idA0 = queryLines("22F1A0", 1800)
+                    val id87 = queryLines("22F187", 1800)
+                    val vin = queryLines("22F190", 1800)
+                    val dtcInfo = queryLines("190209", 1800)
+                    val identityConfirmed =
+                        com.obdiitools.obd.NissanCvt7Protocol.isExpectedTcmIdentity(id87)
+
+                    trace.add("$address 22F1A0: ${summarizeDiagnosticResponse(idA0)}")
+                    trace.add("$address 22F187: ${summarizeDiagnosticResponse(id87)}")
+                    trace.add("$address 22F190: ${summarizeDiagnosticResponse(vin)}")
+                    trace.add("$address 190209: ${summarizeDiagnosticResponse(dtcInfo)}")
+                    onProgress(trace.takeLast(5).joinToString("\n"))
+
+                    val dataReplies = mutableListOf<Pair<String, List<String>>>()
+                    val requests = listOf("2101", "2110", "2170") +
+                        (0x80..0x8F).map { "21%02X".format(it) }
+                    for (request in requests) {
+                        val reply = queryLines(request, 1400)
+                        dataReplies.add(request to reply)
+                        trace.add("$address $request: ${summarizeDiagnosticResponse(reply)}")
+                        onProgress(trace.takeLast(4).joinToString("\n"))
+                    }
+
+                    val liveReply = dataReplies.firstOrNull { it.first == "2101" }?.second.orEmpty()
+                    val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(liveReply)
+                    if (identityConfirmed && sample != null) {
+                        onProgress("Nissan CVT7 TCM identified at $address; live data decoded")
+                        return@withTransaction com.obdiitools.obd.NissanCvt7DiscoveryResult(address, sample)
+                    }
+
+                    val reason = when {
+                        identityConfirmed -> "TCM identity matched; 2101 response not yet decodable"
+                        id87.any { it.contains("7F22", ignoreCase = true) } ->
+                            "part-number identifier rejected; other read-only replies recorded"
+                        else -> "no matching TCM part-number response; candidate not accepted"
+                    }
+                    trace.add("$address: $reason")
+                    onProgress(trace.takeLast(8).joinToString("\n"))
+                }
+                onProgress("TCM NOT CONFIRMED\n" + trace.takeLast(28).joinToString("\n"))
+                null
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { query("ATSH 7DF", 400) }
+                    runCatching { query("ATSP0", 600) }
+                }
+            }
+        }
+    }
+
+    private fun summarizeDiagnosticResponse(lines: List<String>): String {
+        val summary = lines
+            .map { it.filterNot(Char::isWhitespace).uppercase() }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        return summary.ifBlank { "empty response" }.take(90)
+    }
+
+    /** Reads one sample from the already-discovered physical controller address. */
+    suspend fun queryNissanCvt7LiveData(
+        ecuAddress: String,
+    ): com.obdiitools.obd.NissanCvt7LiveData? {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return null
+        val conn = connection ?: return null
+        return conn.withTransaction {
+            try {
+                query("ATSP6", 600)
+                query("ATSH ${ecuAddress.uppercase()}", 400)
+                query("ATST32", 300)
+                val session = queryLines("10C0", 1200)
+                if (session.none { it.filterNot(Char::isWhitespace).uppercase().contains("50C0") }) {
+                    return@withTransaction null
+                }
+                val response = queryLines("2101", 3000)
+                com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { query("ATSH 7DF", 400) }
+                    runCatching { query("ATSP0", 600) }
+                }
+            }
+        }
+    }
+
     // ── Per-ECU PID support discovery ────────────────────────────────────────
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.
@@ -682,6 +796,9 @@ class OBDRepository @Inject constructor(
     }
 
     companion object {
+        // Candidate 11-bit Nissan enhanced-diagnostic addresses. Accept only
+        // a valid CVT7 0x21/0x01 data block, not merely an ECU response.
+        private val NISSAN_CVT7_ECU_CANDIDATES = listOf("7E1", "752", "745", "748")
         private const val ALERT_CHANNEL_ID = "obd_alerts"
         private const val NO_RESPONSE_TIMEOUT_MS = 10_000L
     }

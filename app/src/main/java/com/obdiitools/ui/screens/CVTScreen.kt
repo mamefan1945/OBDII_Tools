@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -132,9 +133,11 @@ fun CVTScreen(
                     .padding(bottom = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Keep discovery progress and TCM confirmation visible without
+                // requiring the user to scroll past the metric cards.
+                ConnectionStatusCard(sourceDesc)
                 LockupStateBanner(cvtData.lockupState)
                 MetricGrid(cvtData, prefs)
-                DataSourceCard(sourceDesc)
             }
         }
     }
@@ -230,14 +233,34 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
             rightAccent = if ((data.slipRpm.value ?: 0) > 100) NeonRed else NeonGreen,
         )
         MetricRow(
-            leftLabel  = "DRIVE RATIO",
-            leftValue  = data.cvtRatio.value?.let { "${"%.1f".format(it)} RPM/km·h" },
+            leftLabel  = "GEAR RATIO",
+            leftValue  = data.cvtRatio.value?.let { "%.2f".format(it) },
             leftSource = data.cvtRatio.source,
             leftAccent = NeonYellow,
             rightLabel  = "CVT TEMP",
             rightValue  = tempValue,
             rightSource = data.cvtTempC.source,
             rightAccent = NeonRed,
+        )
+        MetricRow(
+            leftLabel = "PRIMARY PRESSURE",
+            leftValue = data.primaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            leftSource = data.primaryPressureMpa.source,
+            leftAccent = NeonPurple,
+            rightLabel = "SECONDARY PRESSURE",
+            rightValue = data.secondaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            rightSource = data.secondaryPressureMpa.source,
+            rightAccent = NeonCyan,
+        )
+        MetricRow(
+            leftLabel = "TARGET SECONDARY",
+            leftValue = data.targetSecondaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            leftSource = data.targetSecondaryPressureMpa.source,
+            leftAccent = NeonYellow,
+            rightLabel = "LINE PRESSURE",
+            rightValue = data.linePressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            rightSource = data.linePressureMpa.source,
+            rightAccent = NeonOrange,
         )
     }
 }
@@ -325,24 +348,28 @@ private fun SourceBadge(source: CVTDataSource) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DataSourceCard(description: String) {
+private fun ConnectionStatusCard(description: String) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "DATA SOURCES",
+                "TCM CONNECTION STATUS",
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 fontSize = 10.sp,
                 color = TextSecondary,
                 letterSpacing = 2.sp,
             )
-            Text(
-                description,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                color = TextSecondary,
-                lineHeight = 17.sp,
-            )
+            // Make diagnostic traces selectable so the complete response
+            // details can be copied and pasted into a support conversation.
+            SelectionContainer {
+                Text(
+                    description,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    lineHeight = 17.sp,
+                )
+            }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SourceBadge(CVTDataSource.SENSOR)
