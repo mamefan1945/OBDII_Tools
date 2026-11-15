@@ -239,6 +239,26 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
             rightSource = data.cvtTempC.source,
             rightAccent = NeonRed,
         )
+        MetricRow(
+            leftLabel = "PRIMARY PRESSURE",
+            leftValue = data.primaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            leftSource = data.primaryPressureMpa.source,
+            leftAccent = NeonPurple,
+            rightLabel = "SECONDARY PRESSURE",
+            rightValue = data.secondaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            rightSource = data.secondaryPressureMpa.source,
+            rightAccent = NeonCyan,
+        )
+        MetricRow(
+            leftLabel = "TARGET SECONDARY",
+            leftValue = data.targetSecondaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            leftSource = data.targetSecondaryPressureMpa.source,
+            leftAccent = NeonYellow,
+            rightLabel = "LINE PRESSURE",
+            rightValue = data.linePressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
+            rightSource = data.linePressureMpa.source,
+            rightAccent = NeonOrange,
+        )
     }
 }
 
