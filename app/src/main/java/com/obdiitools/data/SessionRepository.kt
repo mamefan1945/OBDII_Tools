@@ -158,6 +158,19 @@ class SessionRepository @Inject constructor(
     suspend fun getDataPoints(sessionId: Long): List<SessionDataPoint> =
         dao.getDataPointsForSession(sessionId)
 
+    suspend fun importSessions(sessions: List<SessionEntity>, pointsByOldId: Map<Long, List<SessionDataPoint>>): Int {
+        var imported = 0
+        sessions.forEach { oldSession ->
+            val newId = dao.insertImportedSession(oldSession.copy(id = 0))
+            if (newId != -1L) {
+                imported++
+                val points = pointsByOldId[oldSession.id].orEmpty().map { it.copy(id = 0, sessionId = newId) }
+                if (points.isNotEmpty()) dao.insertImportedDataPoints(points)
+            }
+        }
+        return imported
+    }
+
     suspend fun getGpsPoints(sessionId: Long): List<SessionDataPoint> =
         dao.getGpsPointsForSession(sessionId)
 
