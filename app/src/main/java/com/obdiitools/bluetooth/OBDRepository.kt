@@ -238,13 +238,16 @@ class OBDRepository @Inject constructor(
                 }
 
                 connection = conn
-                candidateConnection = null
                 _connectionState.value = ConnectionState.Connected(deviceInfo.name, deviceInfo.address)
                 _lastTripSummary.value = null
                 sessionRepository.startSession(deviceInfo.name)
                 startPolling()
+                candidateConnection = null
             } catch (e: Exception) {
-                candidateConnection?.close()
+                candidateConnection?.let { candidate ->
+                    candidate.close()
+                    if (connection === candidate) connection = null
+                }
                 _connectionState.value = ConnectionState.Error(e.message ?: "Connection failed")
             }
         }
