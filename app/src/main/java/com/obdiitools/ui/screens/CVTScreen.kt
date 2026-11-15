@@ -132,9 +132,11 @@ fun CVTScreen(
                     .padding(bottom = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Keep discovery progress and TCM confirmation visible without
+                // requiring the user to scroll past the metric cards.
+                ConnectionStatusCard(sourceDesc)
                 LockupStateBanner(cvtData.lockupState)
                 MetricGrid(cvtData, prefs)
-                DataSourceCard(sourceDesc)
             }
         }
     }
@@ -345,11 +347,11 @@ private fun SourceBadge(source: CVTDataSource) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DataSourceCard(description: String) {
+private fun ConnectionStatusCard(description: String) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "DATA SOURCES",
+                "TCM CONNECTION STATUS",
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 fontSize = 10.sp,
