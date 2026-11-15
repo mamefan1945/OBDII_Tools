@@ -191,18 +191,65 @@ class OBDRepository @Inject constructor(
     }
 
     /**
-     * Reads one Nissan CVT7 live-data sample using the fixed 11-bit, 500-kbit/s
-     * CAN protocol and the transmission controller's physical request address.
-     * Only session selection and read-data requests are sent.
+     * Searches the known Nissan enhanced-diagnostic CAN addresses for a CVT7
+     * controller. A controller is accepted only when it enters the requested
+     * diagnostic session and returns a structurally valid 0x21/0x01 data block.
+     * All requests are reads/session selection; no clear, reset, coding, or
+     * actuator commands are sent.
      */
-    suspend fun queryNissanCvt7LiveData(): com.obdiitools.obd.NissanCvt7LiveData? {
+    suspend fun discoverNissanCvt7(
+        onProgress: (String) -> Unit = {},
+    ): com.obdiitools.obd.NissanCvt7DiscoveryResult? {
         val conn = connection ?: return null
         return conn.withTransaction {
             try {
                 query("ATSP6", 600)
-                query("ATSH 7E1", 400)
+                query("ATE0", 300)
+                query("ATH0", 300)
+                query("ATS0", 300)
                 query("ATST32", 300)
-                queryLines("10C0", 1500)
+
+                for (address in NISSAN_CVT7_ECU_CANDIDATES) {
+                    onProgress("Checking Nissan transmission address $address…")
+                    query("ATSH $address", 400)
+                    val session = queryLines("10C0", 1500)
+                    val sessionAccepted = session.any { line ->
+                        line.filterNot(Char::isWhitespace).uppercase().startsWith("50C0")
+                    }
+                    if (!sessionAccepted) continue
+
+                    val response = queryLines("2101", 3500)
+                    val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
+                    if (sample != null) {
+                        onProgress("Nissan CVT7 controller confirmed at $address")
+                        return@withTransaction com.obdiitools.obd.NissanCvt7DiscoveryResult(address, sample)
+                    }
+                }
+                null
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { query("ATSH 7DF", 400) }
+                    runCatching { query("ATSP0", 600) }
+                }
+            }
+        }
+    }
+
+    /** Reads one sample from the already-discovered physical controller address. */
+    suspend fun queryNissanCvt7LiveData(
+        ecuAddress: String,
+    ): com.obdiitools.obd.NissanCvt7LiveData? {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return null
+        val conn = connection ?: return null
+        return conn.withTransaction {
+            try {
+                query("ATSP6", 600)
+                query("ATSH ${ecuAddress.uppercase()}", 400)
+                query("ATST32", 300)
+                val session = queryLines("10C0", 1200)
+                if (session.none { it.filterNot(Char::isWhitespace).uppercase().startsWith("50C0") }) {
+                    return@withTransaction null
+                }
                 val response = queryLines("2101", 3000)
                 com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
             } finally {
@@ -212,6 +259,13 @@ class OBDRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    private companion object {
+        // Physical 11-bit addresses found during the Nissan enhanced-diagnostic
+        // investigation. A positive response alone is not enough: 0x21/0x01
+        // must also decode as the expected CVT7 live-data block.
+        val NISSAN_CVT7_ECU_CANDIDATES = listOf("7E1", "752", "745", "748")
     }
 
     // ── Per-ECU PID support discovery ────────────────────────────────────────
