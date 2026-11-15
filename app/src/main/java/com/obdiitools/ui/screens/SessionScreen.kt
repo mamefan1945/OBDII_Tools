@@ -21,9 +21,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Share
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -67,6 +74,7 @@ import com.obdiitools.data.TemperatureUnit
 import com.obdiitools.data.UserPreferences
 import com.obdiitools.ui.theme.BackgroundDeep
 import com.obdiitools.util.SessionExporter
+import com.obdiitools.util.SessionBackupOptions
 import com.obdiitools.util.getSessionTitle
 import com.obdiitools.util.UnitConverter
 import kotlinx.coroutines.Dispatchers
