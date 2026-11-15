@@ -9,6 +9,11 @@ import kotlin.math.roundToInt
  * positive response identifier (0x61 0x01). Offsets are relative to that
  * data block, not to the service bytes or transport framing.
  */
+data class NissanCvt7DiscoveryResult(
+    val ecuAddress: String,
+    val liveData: NissanCvt7LiveData,
+)
+
 data class NissanCvt7LiveData(
     val vehicleSpeedKph: Int,
     val engineRpm: Int,
