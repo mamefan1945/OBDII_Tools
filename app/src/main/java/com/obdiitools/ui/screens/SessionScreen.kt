@@ -221,6 +221,54 @@ fun SessionScreen(
             )
         }
     }
+
+    if (showBackupDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupDialog = false },
+            title = { Text("Export all sessions") },
+            text = {
+                Column {
+                    Text("Choose what to include in the ZIP backup. Session dates are always included.")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeVehicle, onCheckedChange = { includeVehicle = it })
+                        Text("Vehicle details and VIN")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeStats, onCheckedChange = { includeStats = it })
+                        Text("Trip statistics")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeTelemetry, onCheckedChange = { includeTelemetry = it })
+                        Text("OBD telemetry (RPM, speed, etc.)")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeGps, onCheckedChange = { includeGps = it })
+                        Text("GPS coordinates and accuracy")
+                    }
+                    Text("GPS data can reveal travel history and precise locations.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBackupDialog = false
+                    val options = SessionBackupOptions(includeVehicle, includeStats, includeTelemetry, includeGps)
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val intent = viewModel.createBackupShareIntent(context, options)
+                            withContext(Dispatchers.Main) {
+                                context.startActivity(android.content.Intent.createChooser(intent, "Save session backup"))
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Export failed: " + (e.message ?: "Unknown error"), android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }) { Text("Export ZIP") }
+            },
+            dismissButton = { TextButton(onClick = { showBackupDialog = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
