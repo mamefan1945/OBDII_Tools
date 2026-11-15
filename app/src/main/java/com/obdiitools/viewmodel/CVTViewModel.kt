@@ -129,9 +129,9 @@ class CVTViewModel @Inject constructor(
         if (discovery != null) {
             nissanCvt7Detected = true
             nissanCvt7EcuAddress = discovery.ecuAddress
-            _cvtData.value = toCvtData(discovery.liveData)
+            _cvtData.value = discovery.liveData?.let(::toCvtData) ?: CVTData()
             _sourceDescription.value =
-                "Nissan CVT7 controller confirmed at ${discovery.ecuAddress}. Live values are read directly from the transmission controller; hydraulic pressures are reported in MPa."
+                "Nissan CVT7 controller confirmed at ${discovery.ecuAddress}. Live values come directly from the transmission controller; hydraulic pressures are reported in MPa. Unverified measurements remain N/A rather than displaying guessed values."
             return
         }
         // Do not substitute generic engine data or calculated estimates for
