@@ -115,6 +115,24 @@ fun SessionScreen(
     var includeStats by remember { mutableStateOf(true) }
     var includeTelemetry by remember { mutableStateOf(true) }
     var includeGps by remember { mutableStateOf(true) }
+    val backupOptions = remember { mutableStateOf(SessionBackupOptions()) }
+    val saveBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) scope.launch(Dispatchers.IO) {
+            try {
+                viewModel.writeBackup(context, uri, backupOptions.value)
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Backup saved", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Backup failed: " + (e.message ?: "Unable to save file"), android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch(Dispatchers.IO) {
             try {
@@ -225,7 +243,7 @@ fun SessionScreen(
     if (showBackupDialog) {
         AlertDialog(
             onDismissRequest = { showBackupDialog = false },
-            title = { Text("Export all sessions") },
+            title = { Text("Backup all sessions") },
             text = {
                 Column {
                     Text("Choose what to include in the ZIP backup. Session dates are always included.")
@@ -251,20 +269,10 @@ fun SessionScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showBackupDialog = false
-                    val options = SessionBackupOptions(includeVehicle, includeStats, includeTelemetry, includeGps)
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            val intent = viewModel.createBackupShareIntent(context, options)
-                            withContext(Dispatchers.Main) {
-                                context.startActivity(android.content.Intent.createChooser(intent, "Save session backup"))
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "Export failed: " + (e.message ?: "Unknown error"), android.widget.Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                }) { Text("Export ZIP") }
+                    backupOptions.value = SessionBackupOptions(includeVehicle, includeStats, includeTelemetry, includeGps)
+                    val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                    saveBackupLauncher.launch("obdiitools_sessions_$stamp.zip")
+                }) { Text("Choose save location") }
             },
             dismissButton = { TextButton(onClick = { showBackupDialog = false }) { Text("Cancel") } },
         )
