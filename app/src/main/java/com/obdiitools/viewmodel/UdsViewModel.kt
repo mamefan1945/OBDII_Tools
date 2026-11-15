@@ -102,7 +102,7 @@ class UdsViewModel @Inject constructor(
                     repository.queryUds(address, did)
                 } else {
                     val command = "${prefix.ifBlank { "22" }}$did"
-                    val raw = repository.queryRawUdsOverride(header.ifBlank { null }, command)
+                    val raw = repository.queryRawUdsOverride(header.takeIf { it.isNotBlank() }, command)
                     UdsResponse.parse(address, did, raw)
                 }
                 _responses.value = listOf(response) + _responses.value
