@@ -27,6 +27,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions ORDER BY startTimeMs DESC")
     fun getAllSessions(): Flow<List<SessionEntity>>
 
+    @Query("SELECT * FROM sessions WHERE startTimeMs = :startTimeMs AND deviceName = :deviceName LIMIT 1")
+    suspend fun findMatchingImportedSession(startTimeMs: Long, deviceName: String): SessionEntity?
+
     @Query("SELECT * FROM sessions WHERE id = :id")
     suspend fun getSessionById(id: Long): SessionEntity?
 
