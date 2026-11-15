@@ -55,8 +55,15 @@ object NissanCvt7Protocol {
     fun parseLiveData(lines: List<String>): NissanCvt7LiveData? {
         if (lines.isEmpty()) return null
 
+        // ELM327 adapters may return a multi-frame response as indexed
+        // records (0:, 1:, ... F:) preceded by a total-length token (e.g.
+        // "07A"). Those transport labels are not response bytes. Strip them
+        // before joining the payload; otherwise the 6101 marker is lost.
         val hexLines = lines.mapNotNull { line ->
-            val compact = line.filterNot(Char::isWhitespace).uppercase()
+            var compact = line.filterNot(Char::isWhitespace).uppercase()
+            if (compact.matches(Regex("^[0-9A-F]{2,3}$"))) return@mapNotNull null
+            compact = compact.replace(Regex("^[0-9A-F]{3}(?=[0-9A-F]:)"), "")
+            compact = compact.replace(Regex("^[0-9A-F]:"), "")
             compact.takeIf {
                 it.isNotEmpty() && it.all { ch -> ch in '0'..'9' || ch in 'A'..'F' }
             }
