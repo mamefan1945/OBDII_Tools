@@ -15,6 +15,7 @@ import com.obdiitools.obd.ELM327Protocol
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -344,17 +345,23 @@ class ELM327BleConnection(
                         }
                     }
                 } catch (_: TimeoutCancellationException) { /* no data in 200ms, continue */ }
+                catch (_: ClosedReceiveChannelException) { break }
             }
         } finally {
-            sendRaw("\r")
-            Thread.sleep(400)
-            drainRxChannel()
-            sendRaw("ATS0")
-            Thread.sleep(100)
-            drainRxChannel()
-            sendRaw("ATH0")
-            Thread.sleep(100)
-            drainRxChannel()
+            // Do not attempt adapter-state restoration after an unexpected disconnect.
+            if (isConnected) {
+                runCatching {
+                    sendRaw("\r")
+                    Thread.sleep(400)
+                    drainRxChannel()
+                    sendRaw("ATS0")
+                    Thread.sleep(100)
+                    drainRxChannel()
+                    sendRaw("ATH0")
+                    Thread.sleep(100)
+                    drainRxChannel()
+                }
+            }
         }
     }
 
