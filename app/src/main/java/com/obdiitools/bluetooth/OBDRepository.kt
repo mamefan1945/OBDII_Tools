@@ -259,7 +259,7 @@ class OBDRepository @Inject constructor(
             .map { it.filterNot(Char::isWhitespace).uppercase() }
             .filter { it.isNotBlank() }
             .joinToString(" ")
-        return summary.ifBlank { "empty response" }.take(90)
+        return summary.ifBlank { "empty response" }.take(512)
     }
 
     /** Reads one sample from the already-discovered physical controller address. */
