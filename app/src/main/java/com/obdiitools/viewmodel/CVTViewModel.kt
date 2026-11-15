@@ -75,6 +75,7 @@ class CVTViewModel @Inject constructor(
     private var cvtTempPid: String? = null
     private var probeComplete = false
     private var nissanCvt7Detected = false
+    private var nissanCvt7EcuAddress: String? = null
 
     // Lockup inference — rolling window of (rpm, speed) samples
     private data class Sample(val rpm: Int, val speed: Int)
@@ -103,6 +104,7 @@ class CVTViewModel @Inject constructor(
         pollJob = null
         probeComplete = false
         nissanCvt7Detected = false
+        nissanCvt7EcuAddress = null
         inputShaftPid = null
         cvtTempPid = null
         window.clear()
@@ -120,14 +122,19 @@ class CVTViewModel @Inject constructor(
     // ──────────────────────────────────────────────────────────────────────────
 
     private suspend fun probe() {
-        val nissanSample = repository.queryNissanCvt7LiveData()
-        if (nissanSample != null) {
+        _sourceDescription.value = "Searching for the Nissan CVT7 transmission controller…"
+        val discovery = repository.discoverNissanCvt7 { progress ->
+            _sourceDescription.value = progress
+        }
+        if (discovery != null) {
             nissanCvt7Detected = true
-            _cvtData.value = toCvtData(nissanSample)
+            nissanCvt7EcuAddress = discovery.ecuAddress
+            _cvtData.value = toCvtData(discovery.liveData)
             _sourceDescription.value =
-                "Nissan CVT7 controller detected at 7E1. Live values are read directly from the transmission controller; hydraulic pressures are reported in MPa."
+                "Nissan CVT7 controller confirmed at ${discovery.ecuAddress}. Live values are read directly from the transmission controller; hydraulic pressures are reported in MPa."
             return
         }
+        _sourceDescription.value = "Nissan CVT7 controller not confirmed at the supported addresses. Showing generic OBD-derived data where available."
 
         // Tier 2: try extended Mode 01 PIDs some manufacturers use for
         // transmission shaft speed (same 2-byte RPM formula as PID 0x0C).
@@ -157,7 +164,7 @@ class CVTViewModel @Inject constructor(
     private suspend fun poll() {
         while (currentCoroutineContext().isActive && repository.isConnected) {
             if (nissanCvt7Detected) {
-                repository.queryNissanCvt7LiveData()?.let { sample ->
+                nissanCvt7EcuAddress?.let { address -> repository.queryNissanCvt7LiveData(address) }?.let { sample ->
                     _cvtData.value = toCvtData(sample)
                 }
                 delay(300)
