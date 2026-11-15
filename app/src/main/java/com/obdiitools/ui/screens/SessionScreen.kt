@@ -110,6 +110,25 @@ fun SessionScreen(
     var selectedSession by remember { mutableStateOf<SessionEntity?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var showBackupDialog by remember { mutableStateOf(false) }
+    var includeVehicle by remember { mutableStateOf(true) }
+    var includeStats by remember { mutableStateOf(true) }
+    var includeTelemetry by remember { mutableStateOf(true) }
+    var includeGps by remember { mutableStateOf(true) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch(Dispatchers.IO) {
+            try {
+                val count = viewModel.importBackup(context, uri)
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Imported $count session(s)", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Import failed: " + (e.message ?: "Invalid file"), android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     LaunchedEffect(sessionId, sessions) {
         if (sessionId != null && selectedSession == null) {
@@ -146,7 +165,15 @@ fun SessionScreen(
             },
             navigationIcon = {
                 IconButton(onClick = {
-                    if (selectedSession != null) {
+                    if (selectedSession == null) {
+                    IconButton(onClick = { importLauncher.launch(arrayOf("application/zip", "text/csv", "application/octet-stream")) }) {
+                        Icon(Icons.Default.FileUpload, contentDescription = "Import sessions", tint = NeonCyan)
+                    }
+                    IconButton(onClick = { showBackupDialog = true }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export all sessions", tint = NeonGreen)
+                    }
+                }
+                if (selectedSession != null) {
                         selectedSession = null
                     } else {
                         onBack()
