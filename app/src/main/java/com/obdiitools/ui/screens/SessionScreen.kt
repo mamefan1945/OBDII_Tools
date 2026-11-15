@@ -251,6 +251,14 @@ private fun SessionRow(
                 fontSize = 11.sp,
                 color = TextSecondary,
             )
+            session.vin?.takeIf { it.isNotBlank() }?.let { vin ->
+                Text(
+                    "VIN: $vin",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = TextSecondary,
+                )
+            }
             val duration = session.endTimeMs?.let { ((it - session.startTimeMs) / 60000).toInt() }
             if (duration != null) {
                 Text(
@@ -363,6 +371,16 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                     item { StatChip("Est. Cost", "$${"%.2f".format(cost)}", NeonGreen) }
                 }
             }
+        }
+
+        session.vin?.takeIf { it.isNotBlank() }?.let { vin ->
+            Text(
+                "VIN: $vin",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = NeonCyan,
+            )
+            Spacer(Modifier.height(8.dp))
         }
 
         Spacer(Modifier.height(12.dp))

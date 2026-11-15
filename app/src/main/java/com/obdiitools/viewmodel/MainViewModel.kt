@@ -112,8 +112,8 @@ class MainViewModel @Inject constructor(
                             try {
                                 val info = vinRepository.fetchAndDecodeVin()
                                 _vinInfo.value = info
-                                if (info != null && (info.make.isNotBlank() || info.model.isNotBlank())) {
-                                    sessionRepository.updateCurrentSessionMakeModel(info.make, info.model)
+                                if (info != null && (info.vin.isNotBlank() || info.make.isNotBlank() || info.model.isNotBlank())) {
+                                    sessionRepository.updateCurrentSessionMakeModel(info.make, info.model, info.vin)
                                 }
                             } finally {
                                 _vinLoading.value = false

@@ -37,6 +37,11 @@ object SessionExporter {
         val sb = StringBuilder()
         sb.appendLine("# OBDII Tools Session Export")
         sb.appendLine("# Device,${csvSafeCell(session.deviceName)}")
+        session.vin?.takeIf { it.isNotBlank() }?.let { sb.appendLine("# VIN,${csvSafeCell(it)}") }
+        if (session.make.isNotBlank() || session.model.isNotBlank()) {
+            val vehicle = listOf(session.make, session.model).filter { it.isNotBlank() }.joinToString(" ")
+            sb.appendLine("# Vehicle,${csvSafeCell(vehicle)}")
+        }
         sb.appendLine("# Start,${timestampFmt.format(Date(session.startTimeMs))}")
         session.endTimeMs?.let {
             sb.appendLine("# End,${timestampFmt.format(Date(it))}")

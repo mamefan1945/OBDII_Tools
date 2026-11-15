@@ -18,6 +18,7 @@ data class SessionEntity(
     val make: String = "",
     val model: String = "",
     val totalFuelLitres: Float? = null,
+    val vin: String? = null,
 )
 
 @Entity(
