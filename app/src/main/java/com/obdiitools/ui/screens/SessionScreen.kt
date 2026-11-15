@@ -165,15 +165,7 @@ fun SessionScreen(
             },
             navigationIcon = {
                 IconButton(onClick = {
-                    if (selectedSession == null) {
-                    IconButton(onClick = { importLauncher.launch(arrayOf("application/zip", "text/csv", "application/octet-stream")) }) {
-                        Icon(Icons.Default.FileUpload, contentDescription = "Import sessions", tint = NeonCyan)
-                    }
-                    IconButton(onClick = { showBackupDialog = true }) {
-                        Icon(Icons.Default.FileDownload, contentDescription = "Export all sessions", tint = NeonGreen)
-                    }
-                }
-                if (selectedSession != null) {
+                    if (selectedSession != null) {
                         selectedSession = null
                     } else {
                         onBack()
@@ -183,6 +175,14 @@ fun SessionScreen(
                 }
             },
             actions = {
+                if (selectedSession == null) {
+                    IconButton(onClick = { importLauncher.launch(arrayOf("application/zip", "text/csv", "application/octet-stream")) }) {
+                        Icon(Icons.Default.FileUpload, contentDescription = "Import sessions", tint = NeonCyan)
+                    }
+                    IconButton(onClick = { showBackupDialog = true }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export all sessions", tint = NeonGreen)
+                    }
+                }
                 if (selectedSession != null) {
                     IconButton(onClick = { onNavigateToMap(selectedSession?.id ?: return@IconButton) }) {
                         Icon(Icons.Default.Map, contentDescription = "View trail on map", tint = NeonCyan)
