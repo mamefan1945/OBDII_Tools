@@ -1,7 +1,6 @@
 package com.obdiitools.viewmodel
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -55,10 +54,10 @@ class SessionViewModel @Inject constructor(
         }
     }
 
-    suspend fun createBackupShareIntent(context: Context, options: SessionBackupOptions): Intent {
+    suspend fun writeBackup(context: Context, uri: Uri, options: SessionBackupOptions) {
         val currentSessions = sessionRepository.allSessions.first()
         val points = currentSessions.associate { it.id to sessionRepository.getDataPoints(it.id) }
-        return SessionBackup.buildShareIntent(context, currentSessions, points, options)
+        SessionBackup.writeBackup(context, uri, currentSessions, points, options)
     }
 
     suspend fun importBackup(context: Context, uri: Uri): Int {
