@@ -82,6 +82,8 @@ fun UdsScreen(
     val responses by viewModel.responses.collectAsState()
     val scanResults by viewModel.scanResults.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
+    val nissanProbeProgress by viewModel.nissanProbeProgress.collectAsState()
+    val nissanProbeResults by viewModel.nissanProbeResults.collectAsState()
     val isScanning = scanProgress != null
 
     Scaffold(
@@ -271,6 +273,79 @@ fun UdsScreen(
 
             if (scanResults.isNotEmpty()) {
                 item { Spacer(Modifier.height(4.dp)) }
+            }
+
+            // ── Nissan read-only diagnostic discovery ──────────────────────
+            item {
+                HorizontalDivider(color = SurfaceBorder)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "NISSAN ENHANCED-DIAGNOSTIC DISCOVERY",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    color = TextSecondary,
+                    letterSpacing = 1.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Read-only test of Nissan Mode 21 local identifiers at the selected ECU address. This does not change ECU settings or activate components.",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = TextSecondary,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { viewModel.startNissanDiscovery() },
+                    enabled = !isLoading && !isScanning && nissanProbeProgress == null,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NeonOrange.copy(alpha = 0.18f),
+                        disabledContainerColor = SurfaceBorder.copy(alpha = 0.2f),
+                    ),
+                ) {
+                    Text(
+                        if (nissanProbeProgress != null) "PROBING NISSAN DATA…" else "PROBE NISSAN DATA IDENTIFIERS",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonOrange,
+                    )
+                }
+                nissanProbeProgress?.let { (done, total) ->
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { done.toFloat() / total },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = NeonOrange,
+                        trackColor = SurfaceBorder.copy(alpha = 0.3f),
+                    )
+                    Text(
+                        "$done / $total identifiers tested",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = TextSecondary,
+                    )
+                }
+                if (nissanProbeProgress == null && nissanProbeResults.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "${nissanProbeResults.size} POSITIVE RESPONSE(S)",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = NeonGreen,
+                    )
+                    nissanProbeResults.forEach { hit ->
+                        Text(
+                            hit,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = NeonGreen,
+                        )
+                    }
+                } else if (nissanProbeProgress == null && nissanProbeResults.isEmpty()) {
+                    // Results are only shown after a probe has run.
+                }
             }
 
             // ── Header / Prefix override ────────────────────────────────────
