@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -55,9 +56,7 @@ class SessionViewModel @Inject constructor(
     }
 
     suspend fun createBackupShareIntent(context: Context, options: SessionBackupOptions): Intent {
-        val currentSessions = sessionRepository.allSessions.let { flow ->
-            kotlinx.coroutines.flow.first(flow)
-        }
+        val currentSessions = sessionRepository.allSessions.first()
         val points = currentSessions.associate { it.id to sessionRepository.getDataPoints(it.id) }
         return SessionBackup.buildShareIntent(context, currentSessions, points, options)
     }
