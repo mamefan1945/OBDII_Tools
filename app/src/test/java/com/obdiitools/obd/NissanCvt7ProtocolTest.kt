@@ -6,6 +6,23 @@ import org.junit.Test
 
 class NissanCvt7ProtocolTest {
     @Test
+    fun recognizesKnownTransmissionPartNumberFromAsciiDid() {
+        val partNumber = "31036-4AT0C"
+        val encoded = partNumber.toByteArray(Charsets.US_ASCII)
+            .joinToString("") { "%02X".format(it) }
+        assertEquals(true, NissanCvt7Protocol.isExpectedTcmIdentity(listOf("62F187$encoded")))
+        assertEquals(true, NissanCvt7Protocol.isExpectedTcmIdentity(listOf("04", "62 F1 87 $encoded")))
+    }
+
+    @Test
+    fun doesNotTreatOtherModuleIdentifiersAsTransmission() {
+        val otherPart = "23710-4AT0C".toByteArray(Charsets.US_ASCII)
+            .joinToString("") { "%02X".format(it) }
+        assertEquals(false, NissanCvt7Protocol.isExpectedTcmIdentity(listOf("62F187$otherPart")))
+        assertEquals(false, NissanCvt7Protocol.isExpectedTcmIdentity(listOf("7F2231")))
+    }
+
+    @Test
     fun decodesLiveDataFieldsFromPositiveResponse() {
         val bytes = IntArray(76)
         bytes[7] = 22
