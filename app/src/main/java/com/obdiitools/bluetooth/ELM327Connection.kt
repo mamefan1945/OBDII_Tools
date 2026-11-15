@@ -95,7 +95,7 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
             Thread.sleep(50)
             drainInput()
             sendRaw("1001")
-            readResponseLines(timeoutMs = 200).firstOrNull() ?: ""
+            readResponseLines(timeoutMs = 600).firstOrNull() ?: ""
         } catch (e: Exception) {
             ""
         }
