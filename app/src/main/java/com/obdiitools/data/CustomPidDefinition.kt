@@ -17,11 +17,15 @@ data class CustomPidDefinition(
     val formula: FormulaType,
 ) {
     fun evaluate(rawResponse: String): Float? {
-        val cleaned = rawResponse.replace(" ", "").uppercase().trim()
+        val normalizedCommand = command.trim().uppercase()
+        if (!isValidCommand(normalizedCommand)) return null
+        val cleaned = rawResponse.replace(Regex("\\s+"), "").uppercase()
         if (cleaned.isEmpty() || cleaned.contains("NODATA") ||
             cleaned.contains("ERROR") || cleaned.contains("?")) return null
-        // Skip mode+pid prefix (4 hex chars = 2 bytes)
-        val data = if (cleaned.length >= 4) cleaned.substring(4) else return null
+        if (cleaned.length % 2 != 0 || !cleaned.all { it in '0'..'9' || it in 'A'..'F' }) return null
+        val expectedPrefix = "41" + normalizedCommand.substring(2)
+        if (!cleaned.startsWith(expectedPrefix)) return null
+        val data = cleaned.substring(expectedPrefix.length)
         val needsTwoBytes = formula == FormulaType.TWO_BYTE_DIV4 || formula == FormulaType.TWO_BYTE_DIV100
         if (needsTwoBytes && data.length < 4) return null
         return try {
@@ -36,5 +40,11 @@ data class CustomPidDefinition(
                 FormulaType.TWO_BYTE_DIV100 -> (a * 256 + b) / 100f
             }
         } catch (e: Exception) { null }
+    }
+
+    companion object {
+        /** Custom formulas currently support standard Mode 01 single-PID requests only. */
+        fun isValidCommand(command: String): Boolean =
+            command.trim().matches(Regex("(?i)^01[0-9A-F]{2}$"))
     }
 }

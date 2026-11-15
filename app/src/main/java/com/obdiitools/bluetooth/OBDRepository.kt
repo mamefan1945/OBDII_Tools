@@ -98,6 +98,7 @@ class OBDRepository @Inject constructor(
     private val notifId = AtomicInteger(2000)
 
     @Volatile private var pollingPaused = false
+    private val pollingPauseCount = AtomicInteger(0)
     @Volatile private var pollCycleCount = 0
     @Volatile private var multiPidCapable: Boolean? = null
     @Volatile private var cachedThresholds = AlertThresholds()
@@ -110,8 +111,16 @@ class OBDRepository @Inject constructor(
         }
     }
 
-    fun pausePolling() { pollingPaused = true }
-    fun resumePolling() { pollingPaused = false }
+    /** Reference-counted pause ownership prevents overlapping screens from resuming one another. */
+    fun pausePolling() {
+        pollingPauseCount.incrementAndGet()
+        pollingPaused = true
+    }
+
+    fun resumePolling() {
+        val remaining = pollingPauseCount.updateAndGet { count -> (count - 1).coerceAtLeast(0) }
+        pollingPaused = remaining > 0
+    }
 
     suspend fun queryRaw(command: String): String =
         try { connection?.query(command) ?: "" } catch (_: java.io.IOException) { "" }
@@ -122,40 +131,68 @@ class OBDRepository @Inject constructor(
     suspend fun queryRawUds(ecuAddress: String, did: String): String =
         connection?.queryUds(ecuAddress, did) ?: ""
 
+    /**
+     * Sends an overridden UDS header and request as one serialized operation,
+     * restoring the normal functional-request header even if the request fails.
+     */
+    suspend fun queryRawUdsOverride(header: String?, command: String): String {
+        val conn = connection ?: return ""
+        if (!command.matches(Regex("(?i)^[0-9A-F]{6,10}$")) ||
+            (header != null && !header.matches(Regex("(?i)^(?:[0-9A-F]{3}|[0-9A-F]{8})$")))) return ""
+        return conn.withTransaction {
+            val tx = this
+            try {
+                if (header != null) tx.query("ATSH $header", 400)
+                val lines = tx.queryLines(command, 3000)
+                lines.firstOrNull { line ->
+                    val cleaned = line.filterNot { it.isWhitespace() }.uppercase()
+                    cleaned.startsWith("62") || cleaned.startsWith("7F")
+                } ?: lines.firstOrNull().orEmpty()
+            } finally {
+                if (header != null) withContext(NonCancellable) { tx.query("ATSH 7DF", 300) }
+            }
+        }
+    }
+
     // ── Per-ECU PID support discovery ────────────────────────────────────────
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.
     // Always restores ATSH 7DF on completion.
     suspend fun queryModeSupport(ecuAddress: String, mode: String): Set<String> {
         val conn = connection ?: return emptySet()
-        val modeVal = mode.toIntOrNull(16) ?: return emptySet()
+        val normalizedMode = mode.uppercase()
+        val modeVal = normalizedMode.toIntOrNull(16) ?: return emptySet()
+        if (!ecuAddress.uppercase().matches(Regex("^[0-9A-F]{3}$")) ||
+            !normalizedMode.matches(Regex("^[0-9A-F]{2}$")) || modeVal !in 1..0x0A) return emptySet()
         val responsePrefix = "%02X".format(modeVal + 0x40)
         return withContext(Dispatchers.IO) {
-            val supported = mutableSetOf<String>()
-            runCatching {
-                conn.query("ATSH $ecuAddress", 400)
-                Thread.sleep(150)
-                for (group in listOf("00", "20", "40", "60", "80", "A0", "C0")) {
-                    val header = "$responsePrefix${group.uppercase()}"
-                    val lines = conn.queryLines("$mode$group", 1200)
-                    val cleaned = lines
-                        .map { it.replace(" ", "").uppercase() }
-                        .firstOrNull { it.startsWith(header) } ?: continue
-                    // Mode 09 has an extra NODI byte inserted before the 4-byte bitmask
-                    val bitmaskAt = header.length + if (modeVal == 9) 2 else 0
-                    if (cleaned.length < bitmaskAt + 8) continue
-                    val bitmask = cleaned.substring(bitmaskAt, bitmaskAt + 8).toLongOrNull(16) ?: continue
-                    val base = group.toInt(16)
-                    for (bit in 0..31) {
-                        if ((bitmask and (1L shl (31 - bit))) != 0L) {
-                            supported.add("$mode%02X".format(base + bit + 1).uppercase())
+            conn.withTransaction {
+                val tx = this
+                val supported = mutableSetOf<String>()
+                try {
+                    tx.query("ATSH $ecuAddress", 400)
+                    delay(150)
+                    for (group in listOf("00", "20", "40", "60", "80", "A0", "C0")) {
+                        val header = "$responsePrefix$group"
+                        val lines = tx.queryLines("$normalizedMode$group", 1200)
+                        val cleaned = lines.map { it.replace(" ", "").uppercase() }
+                            .firstOrNull { it.startsWith(header) } ?: continue
+                        val bitmaskAt = header.length + if (modeVal == 9) 2 else 0
+                        if (cleaned.length < bitmaskAt + 8) continue
+                        val bitmask = cleaned.substring(bitmaskAt, bitmaskAt + 8).toLongOrNull(16) ?: continue
+                        val base = group.toInt(16)
+                        for (bit in 0..31) {
+                            if ((bitmask and (1L shl (31 - bit))) != 0L) {
+                                supported.add("$normalizedMode%02X".format(base + bit + 1))
+                            }
                         }
+                        if ((bitmask and 1L) == 0L) break
                     }
-                    if ((bitmask and 1L) == 0L) break
+                } finally {
+                    withContext(NonCancellable) { tx.query("ATSH 7DF", 300) }
                 }
+                supported
             }
-            runCatching { conn.query("ATSH 7DF", 300) }
-            supported
         }
     }
 
@@ -166,19 +203,23 @@ class OBDRepository @Inject constructor(
     suspend fun connect(deviceInfo: BluetoothDeviceInfo) {
         _connectionState.value = ConnectionState.Connecting(deviceInfo.name, deviceInfo.address)
         withContext(Dispatchers.IO) {
+            var candidateConnection: OBDConnection? = null
             try {
                 val device = scanner.getRemoteDevice(deviceInfo.address)
                     ?: throw Exception("Device not found")
                 scanner.adapter?.cancelDiscovery()
 
-                val conn: OBDConnection = if (deviceInfo.isBle) {
-                    ELM327BleConnection(context, device)
-                } else {
-                    val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                    socket.connect()
-                    ELM327Connection(socket)
-                }
+                val conn: OBDConnection = SerializedOBDConnection(
+                    if (deviceInfo.isBle) {
+                        ELM327BleConnection(context, device)
+                    } else {
+                        val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+                        socket.connect()
+                        ELM327Connection(socket)
+                    }
+                )
 
+                candidateConnection = conn
                 val initialized = conn.initialize()
                 if (!initialized) {
                     conn.close()
@@ -197,11 +238,13 @@ class OBDRepository @Inject constructor(
                 }
 
                 connection = conn
+                candidateConnection = null
                 _connectionState.value = ConnectionState.Connected(deviceInfo.name, deviceInfo.address)
                 _lastTripSummary.value = null
                 sessionRepository.startSession(deviceInfo.name)
                 startPolling()
             } catch (e: Exception) {
+                candidateConnection?.close()
                 _connectionState.value = ConnectionState.Error(e.message ?: "Connection failed")
             }
         }
@@ -212,7 +255,7 @@ class OBDRepository @Inject constructor(
         pollingJob = null
         pollCycleCount = 0
         multiPidCapable = null
-        pollingPaused = false  // reset so reconnect starts polling immediately
+        pollingPaused = pollingPauseCount.get() > 0  // outstanding operations retain their pause ownership
         connection?.close()
         connection = null
         _connectionState.value = ConnectionState.Disconnected
@@ -283,6 +326,11 @@ class OBDRepository @Inject constructor(
 
     private suspend fun pollAllPids() {
         val conn = connection ?: return
+        conn.withTransaction { pollAllPidsLocked(this) }
+    }
+
+    /** Caller owns the adapter transaction for the complete polling cycle. */
+    private suspend fun pollAllPidsLocked(conn: OBDConnection) {
         if (pollingPaused) return
         val supported = _supportedPids.value
 
@@ -361,6 +409,10 @@ class OBDRepository @Inject constructor(
         val results = mutableMapOf<String, Float?>()
         for (pid in pids) {
             if (pollingPaused) return
+            if (!CustomPidDefinition.isValidCommand(pid.command)) {
+                results[pid.id] = null
+                continue
+            }
             val raw = conn.query(pid.command, 500)
             results[pid.id] = pid.evaluate(raw)
         }
@@ -454,23 +506,20 @@ class OBDRepository @Inject constructor(
         pausePolling()
         try {
             delay(120)
-            val stored  = readDtcRaw(conn, ELM327Protocol.PID.GET_STORED_DTC)
-            val pending = readDtcRaw(conn, ELM327Protocol.PID.GET_PENDING_DTC)
-
-            val storedDtcs = ELM327Protocol.parseDTCs(stored, false)
-            val pendingDtcs = ELM327Protocol.parseDTCs(pending, true)
-
-            val allDtcs = (storedDtcs + pendingDtcs).map { dtc ->
-                dtc.copy(description = DTCDatabase.getDescription(dtc.code))
-            }.distinctBy { it.code }
-
-            _dtcList.value = allDtcs
-
-            if (storedDtcs.isNotEmpty()) {
-                fetchFreezeFrames(conn, storedDtcs)
+            conn.withTransaction {
+                val tx = this
+                val stored = readDtcRaw(tx, ELM327Protocol.PID.GET_STORED_DTC)
+                val pending = readDtcRaw(tx, ELM327Protocol.PID.GET_PENDING_DTC)
+                val storedDtcs = ELM327Protocol.parseDTCs(stored, false)
+                val pendingDtcs = ELM327Protocol.parseDTCs(pending, true)
+                val allDtcs = (storedDtcs + pendingDtcs).map { dtc ->
+                    dtc.copy(description = DTCDatabase.getDescription(dtc.code))
+                }.distinctBy { it.code }
+                _dtcList.value = allDtcs
+                if (storedDtcs.isNotEmpty()) fetchFreezeFrames(tx, storedDtcs)
             }
         } catch (_: java.io.IOException) {
-            // adapter went offline mid-scan; polling loop will handle disconnect
+            // Adapter went offline mid-scan; polling loop handles disconnection.
         } finally {
             resumePolling()
         }
@@ -517,7 +566,7 @@ class OBDRepository @Inject constructor(
         pausePolling()
         try {
             delay(120)
-            val raw = conn.query(ELM327Protocol.PID.READINESS, 1000)
+            val raw = conn.withTransaction { query(ELM327Protocol.PID.READINESS, 1000) }
             _readinessStatus.value = parseReadinessStatus(raw)
         } catch (_: java.io.IOException) {
             // adapter went offline; polling loop will handle disconnect
@@ -530,6 +579,10 @@ class OBDRepository @Inject constructor(
         (connection?.canMonitorFlow() ?: emptyFlow()).mapNotNull { CanFrame.parse(it) }
 
     suspend fun queryUds(ecuAddress: String, did: String): UdsResponse {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$")) ||
+            !did.matches(Regex("(?i)^[0-9A-F]{4}$"))) {
+            return UdsResponse.parse(ecuAddress, did, "ERROR")
+        }
         val conn = connection ?: return UdsResponse.parse(ecuAddress, did, "")
         val raw = conn.queryUds(ecuAddress, did)
         return UdsResponse.parse(ecuAddress, did, raw)
@@ -542,24 +595,25 @@ class OBDRepository @Inject constructor(
         val conn = connection ?: return
         val addresses = (0x700..0x77F).map { "%03X".format(it) }
         val total = addresses.size
-        try {
-            withContext(Dispatchers.IO) {
-                for ((index, addr) in addresses.withIndex()) {
-                    onProgress(index, total)
-                    val raw = conn.pingEcu(addr).replace(" ", "").uppercase().trim()
-                    val result = when {
-                        raw.startsWith("5001") ->
-                            com.obdiitools.obd.EcuScanResult(addr, hasPositiveResponse = true)
-                        raw.startsWith("7F") && raw.length >= 6 ->
-                            com.obdiitools.obd.EcuScanResult(addr, hasPositiveResponse = false, nrc = raw.substring(4, 6))
-                        else -> null
+        conn.withTransaction {
+            val tx = this
+            try {
+                withContext(Dispatchers.IO) {
+                    for ((index, addr) in addresses.withIndex()) {
+                        onProgress(index, total)
+                        val raw = tx.pingEcu(addr).replace(" ", "").uppercase().trim()
+                        val result = when {
+                            raw.startsWith("5001") ->
+                                com.obdiitools.obd.EcuScanResult(addr, hasPositiveResponse = true)
+                            raw.startsWith("7F") && raw.length >= 6 ->
+                                com.obdiitools.obd.EcuScanResult(addr, hasPositiveResponse = false, nrc = raw.substring(4, 6))
+                            else -> null
+                        }
+                        if (result != null) onResult(result)
                     }
-                    if (result != null) onResult(result)
                 }
-            }
-        } finally {
-            withContext(NonCancellable + Dispatchers.IO) {
-                conn.query("ATSH 7DF", 300)
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) { tx.query("ATSH 7DF", 300) }
             }
         }
         onProgress(total, total)
@@ -570,7 +624,7 @@ class OBDRepository @Inject constructor(
         pausePolling()
         return try {
             delay(120)
-            val response = conn.query(ELM327Protocol.PID.CLEAR_DTC)
+            val response = conn.withTransaction { query(ELM327Protocol.PID.CLEAR_DTC) }
             if (response.contains("ERROR", ignoreCase = true) || response.contains("?")) {
                 false
             } else {

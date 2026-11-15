@@ -211,10 +211,10 @@ private fun AddPidDialog(onDismiss: () -> Unit, onAdd: (String, String, String, 
                 )
                 OutlinedTextField(
                     value = command,
-                    onValueChange = { command = it.uppercase(); commandError = false },
+                    onValueChange = { command = it.uppercase().filter { c -> c in '0'..'9' || c in 'A'..'F' }.take(4); commandError = false },
                     label = { Text("PID Command (e.g. 0115)", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                     isError = commandError,
-                    supportingText = if (commandError) { { Text("Required", fontFamily = FontFamily.Monospace, fontSize = 10.sp) } } else null,
+                    supportingText = if (commandError) { { Text("Use 4 hex digits: 01xx", fontFamily = FontFamily.Monospace, fontSize = 10.sp) } } else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonCyan, focusedLabelColor = NeonCyan),
@@ -258,7 +258,7 @@ private fun AddPidDialog(onDismiss: () -> Unit, onAdd: (String, String, String, 
             TextButton(
                 onClick = {
                     nameError = name.isBlank()
-                    commandError = command.isBlank()
+                    commandError = !CustomPidDefinition.isValidCommand(command)
                     if (!nameError && !commandError) {
                         onAdd(name, command, unit, formula)
                     }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Session telemetry can contain VINs, locations, and driving history. -->
+    <exclude domain="database" path="." />
+    <!-- DataStore preferences can contain third-party API credentials. -->
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="file" path="datastore/" />
+</full-backup-content>

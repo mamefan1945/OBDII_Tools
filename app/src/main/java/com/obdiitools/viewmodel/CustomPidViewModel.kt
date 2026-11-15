@@ -30,13 +30,19 @@ class CustomPidViewModel @Inject constructor(
     val showAddDialog = MutableStateFlow(false)
 
     fun addPid(name: String, command: String, unit: String, formula: FormulaType) {
+        val cleanName = name.trim()
+        val cleanCommand = command.trim().uppercase()
+        val cleanUnit = unit.trim()
+        if (cleanName.isEmpty() || cleanName.length > 64 ||
+            cleanUnit.length > 16 || !CustomPidDefinition.isValidCommand(cleanCommand)) return
+
         viewModelScope.launch {
             customPidRepository.addPid(
                 CustomPidDefinition(
-                    id      = newCustomPidId(),
-                    name    = name,
-                    command = command.uppercase().trim(),
-                    unit    = unit,
+                    id = newCustomPidId(),
+                    name = cleanName,
+                    command = cleanCommand,
+                    unit = cleanUnit,
                     formula = formula,
                 )
             )

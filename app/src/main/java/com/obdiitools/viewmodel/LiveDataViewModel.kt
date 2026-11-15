@@ -47,12 +47,37 @@ class LiveDataViewModel @Inject constructor(
 
     private var scanJob: Job? = null
 
-    fun startLiveScan() {
+    private var pauseGeneration = 0L
+    private var activePauseLease: Long? = null
+
+    @Synchronized
+    private fun acquirePollingPause(): Long {
+        val lease = ++pauseGeneration
+        activePauseLease = lease
         repository.pausePolling()
+        return lease
+    }
+
+    @Synchronized
+    private fun releasePollingPause(lease: Long) {
+        if (activePauseLease == lease) {
+            activePauseLease = null
+            repository.resumePolling()
+        }
+    }
+
+    @Synchronized
+    private fun releaseActivePollingPause() {
+        activePauseLease?.let { releasePollingPause(it) }
+    }
+
+    fun startLiveScan() {
+        stopLiveScan()
+        val pauseLease = acquirePollingPause()
         _discoveryComplete.value = false
-        scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            delay(400) // let the dashboard polling loop finish any in-flight query
+            try {
+                delay(400) // let the dashboard polling loop finish any in-flight query
 
             // ── Phase 1: Discovery ────────────────────────────────────────────
             // Query every PID once to learn which are supported. Progress bar is
@@ -87,6 +112,9 @@ class LiveDataViewModel @Inject constructor(
                 }
                 _pidValues.value = current.toList()
             }
+            } finally {
+                releasePollingPause(pauseLease)
+            }
         }
     }
 
@@ -100,7 +128,7 @@ class LiveDataViewModel @Inject constructor(
         scanJob?.cancel()
         scanJob = null
         _scanIndex.value = -1
-        repository.resumePolling()
+        releaseActivePollingPause()
     }
 
     override fun onCleared() {

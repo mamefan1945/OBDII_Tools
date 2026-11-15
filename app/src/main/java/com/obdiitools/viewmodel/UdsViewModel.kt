@@ -53,14 +53,15 @@ class UdsViewModel @Inject constructor(
     val scanProgress: StateFlow<Pair<Int, Int>?> = _scanProgress.asStateFlow()
 
     fun selectEcu(ecu: KnownEcu) { _selectedEcu.value = ecu }
-    fun setCustomAddress(addr: String) { _customAddress.value = addr.uppercase().take(3) }
-    fun setHeader(header: String) { _headerInput.value = header.uppercase().take(8) }
-    fun setPrefix(prefix: String) { _prefixInput.value = prefix.uppercase().take(8) }
-    fun setDid(did: String) { _didInput.value = did.uppercase().take(4) }
+    fun setCustomAddress(addr: String) { _customAddress.value = addr.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(3) }
+    fun setHeader(header: String) { _headerInput.value = header.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(8) }
+    fun setPrefix(prefix: String) { _prefixInput.value = prefix.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(2) }
+    fun setDid(did: String) { _didInput.value = did.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(4) }
     fun clearHistory() { _responses.value = emptyList() }
 
     fun startEcuScan() {
-        if (_scanProgress.value != null) return
+        if (_scanProgress.value != null || _isLoading.value) return
+        _scanProgress.value = 0 to 128
         viewModelScope.launch {
             _scanResults.value = emptyList()
             repository.pausePolling()
@@ -87,22 +88,21 @@ class UdsViewModel @Inject constructor(
         val did = _didInput.value
         val header = _headerInput.value.trim()
         val prefix = _prefixInput.value.trim()
-        if (address.isBlank() || did.length < 4) return
+        if (!address.matches(Regex("(?i)^[0-9A-F]{3}$")) ||
+            !did.matches(Regex("(?i)^[0-9A-F]{4}$")) ||
+            (header.isNotEmpty() && !header.matches(Regex("(?i)^(?:[0-9A-F]{3}|[0-9A-F]{8})$"))) ||
+            (prefix.isNotEmpty() && prefix != "22") ||
+            _isLoading.value || _scanProgress.value != null) return
 
         viewModelScope.launch {
             _isLoading.value = true
             repository.pausePolling()
             try {
                 val response = if (header.isBlank() && prefix.isBlank()) {
-                    // No overrides — use the standard ATSH + UDS request path.
                     repository.queryUds(address, did)
                 } else {
-                    // Custom header/prefix: build and send the raw command ourselves.
-                    if (header.isNotBlank()) {
-                        repository.queryRaw("AT SH $header")
-                    }
-                    val command = if (prefix.isNotBlank()) "$prefix$did" else did
-                    val raw = repository.queryRaw(command)
+                    val command = "${prefix.ifBlank { "22" }}$did"
+                    val raw = repository.queryRawUdsOverride(header.ifBlank { null }, command)
                     UdsResponse.parse(address, did, raw)
                 }
                 _responses.value = listOf(response) + _responses.value

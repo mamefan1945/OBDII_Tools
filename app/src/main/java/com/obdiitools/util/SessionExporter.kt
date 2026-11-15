@@ -36,14 +36,14 @@ object SessionExporter {
     private fun buildCsv(session: SessionEntity, points: List<SessionDataPoint>): String {
         val sb = StringBuilder()
         sb.appendLine("# OBDII Tools Session Export")
-        sb.appendLine("# Device,${session.deviceName}")
+        sb.appendLine("# Device,${csvSafeCell(session.deviceName)}")
         sb.appendLine("# Start,${timestampFmt.format(Date(session.startTimeMs))}")
         session.endTimeMs?.let {
             sb.appendLine("# End,${timestampFmt.format(Date(it))}")
             val durMin = (it - session.startTimeMs) / 60_000
             sb.appendLine("# Duration,${durMin} min")
         }
-        session.distanceKm?.let { sb.appendLine("# Distance,${"%.2f".format(it)} km") }
+        session.distanceKm?.let { sb.appendLine("# Distance,${"%.2f".format(Locale.US, it)} km") }
         session.maxRpm?.let { sb.appendLine("# Max RPM,$it") }
         session.maxSpeedKph?.let { sb.appendLine("# Max Speed,$it kph") }
         session.maxCoolantTempC?.let { sb.appendLine("# Max Coolant,$it C") }
@@ -52,15 +52,22 @@ object SessionExporter {
         for (pt in points) {
             val elapsed = (pt.timestampMs - session.startTimeMs) / 1000f
             sb.append(pt.timestampMs).append(',')
-            sb.append("%.1f".format(elapsed)).append(',')
+            sb.append("%.1f".format(Locale.US, elapsed)).append(',')
             sb.append(pt.rpm ?: "").append(',')
             sb.append(pt.speedKph ?: "").append(',')
             sb.append(pt.coolantTempC ?: "").append(',')
-            sb.append(pt.throttlePercent?.let { "%.1f".format(it) } ?: "").append(',')
-            sb.append(pt.engineLoadPercent?.let { "%.1f".format(it) } ?: "").append(',')
-            sb.append(pt.mafGramsPerSec?.let { "%.2f".format(it) } ?: "").append(',')
-            sb.appendLine(pt.batteryVoltage?.let { "%.2f".format(it) } ?: "")
+            sb.append(pt.throttlePercent?.let { "%.1f".format(Locale.US, it) } ?: "").append(',')
+            sb.append(pt.engineLoadPercent?.let { "%.1f".format(Locale.US, it) } ?: "").append(',')
+            sb.append(pt.mafGramsPerSec?.let { "%.2f".format(Locale.US, it) } ?: "").append(',')
+            sb.appendLine(pt.batteryVoltage?.let { "%.2f".format(Locale.US, it) } ?: "")
         }
         return sb.toString()
     }
+}
+
+/** Quote CSV text and neutralize spreadsheet formula prefixes in untrusted fields. */
+internal fun csvSafeCell(value: String): String {
+    val firstMeaningful = value.dropWhile { it.isWhitespace() }.firstOrNull()
+    val safeValue = if (firstMeaningful in listOf('=', '+', '-', '@')) "'$value" else value
+    return "\"" + safeValue.replace("\"", "\"\"") + "\""
 }

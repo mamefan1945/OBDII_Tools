@@ -74,6 +74,39 @@ class CanMonitorViewModel @Inject constructor(
     private var signalMap: Map<Long, Pair<DbcMessage, List<DbcSignal>>> = emptyMap()
     private var monitorJob: Job? = null
 
+    private var pauseGeneration = 0L
+    private var activePauseLease: Long? = null
+
+    @Synchronized
+    private fun acquirePollingPause(): Long {
+        val lease = ++pauseGeneration
+        activePauseLease = lease
+        repository.pausePolling()
+        return lease
+    }
+
+    @Synchronized
+    private fun releasePollingPause(lease: Long) {
+        if (activePauseLease == lease) {
+            activePauseLease = null
+            repository.resumePolling()
+        }
+    }
+
+    @Synchronized
+    private fun releaseActivePollingPause() {
+        activePauseLease?.let { releasePollingPause(it) }
+    }
+
+    @Synchronized
+    private fun finishMonitoring(lease: Long) {
+        if (activePauseLease == lease) {
+            activePauseLease = null
+            _isMonitoring.value = false
+            repository.resumePolling()
+        }
+    }
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
@@ -96,7 +129,7 @@ class CanMonitorViewModel @Inject constructor(
     fun startMonitoring() {
         if (_isMonitoring.value) return
         _isMonitoring.value = true
-        repository.pausePolling()
+        val pauseLease = acquirePollingPause()
         monitorJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 repository.canMonitorFlow().collect { frame ->
@@ -121,8 +154,7 @@ class CanMonitorViewModel @Inject constructor(
                     }
                 }
             } finally {
-                _isMonitoring.value = false
-                repository.resumePolling()
+                finishMonitoring(pauseLease)
             }
         }
     }
@@ -131,7 +163,7 @@ class CanMonitorViewModel @Inject constructor(
         monitorJob?.cancel()
         monitorJob = null
         _isMonitoring.value = false
-        repository.resumePolling()
+        releaseActivePollingPause()
     }
 
     override fun onCleared() {

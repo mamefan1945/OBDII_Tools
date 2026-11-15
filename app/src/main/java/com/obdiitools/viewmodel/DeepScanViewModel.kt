@@ -7,7 +7,10 @@ import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.guessModuleName
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,6 +51,7 @@ class DeepScanViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ConnectionState.Disconnected)
 
     private var scanJob: Job? = null
+    private val scanMutex = Mutex()
 
     private val mode01Names: Map<String, String> by lazy {
         AllPidDefinitions.ALL.associate { it.command.uppercase() to it.name }
@@ -56,10 +60,11 @@ class DeepScanViewModel @Inject constructor(
     fun startScan() {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            repository.pausePolling()
-            _scanState.value = ScanState(isScanning = true, phase = "Discovering ECUs on CAN bus…")
-            delay(300)
-            try {
+            scanMutex.withLock {
+                repository.pausePolling()
+                _scanState.value = ScanState(isScanning = true, phase = "Discovering ECUs on CAN bus…")
+                try {
+                    delay(300)
                 // ── Phase 1: ECU discovery ────────────────────────────────────
                 val foundAddresses = mutableListOf<String>()
                 repository.scanEcus(
@@ -118,17 +123,19 @@ class DeepScanViewModel @Inject constructor(
                     phase = "Complete — $total PIDs across ${results.size} address${if (results.size != 1) "es" else ""}",
                     progress = null,
                 )
-            } catch (_: Exception) {
-                _scanState.value = _scanState.value.copy(isScanning = false, phase = "Scan interrupted")
-            } finally {
-                repository.resumePolling()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    _scanState.value = _scanState.value.copy(isScanning = false, phase = "Scan interrupted")
+                } finally {
+                    repository.resumePolling()
+                }
             }
         }
     }
 
     fun cancelScan() {
         scanJob?.cancel()
-        repository.resumePolling()
         _scanState.value = _scanState.value.copy(isScanning = false, progress = null, phase = "Cancelled")
     }
 

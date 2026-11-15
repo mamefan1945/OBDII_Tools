@@ -45,6 +45,30 @@ class CVTViewModel @Inject constructor(
 
     private var pollJob: Job? = null
 
+    private var pauseGeneration = 0L
+    private var activePauseLease: Long? = null
+
+    @Synchronized
+    private fun acquirePollingPause(): Long {
+        val lease = ++pauseGeneration
+        activePauseLease = lease
+        repository.pausePolling()
+        return lease
+    }
+
+    @Synchronized
+    private fun releasePollingPause(lease: Long) {
+        if (activePauseLease == lease) {
+            activePauseLease = null
+            repository.resumePolling()
+        }
+    }
+
+    @Synchronized
+    private fun releaseActivePollingPause() {
+        activePauseLease?.let { releasePollingPause(it) }
+    }
+
     // Discovered PIDs (null = not supported by this vehicle)
     private var inputShaftPid: String? = null
     private var cvtTempPid: String? = null
@@ -55,16 +79,20 @@ class CVTViewModel @Inject constructor(
     private val window = ArrayDeque<Sample>(WINDOW_SIZE + 1)
 
     fun start() {
-        if (!repository.isConnected) return
-        repository.pausePolling()
+        if (!repository.isConnected || pollJob?.isActive == true) return
         pollJob?.cancel()
+        val pauseLease = acquirePollingPause()
         pollJob = viewModelScope.launch {
-            delay(350)  // let the main polling loop wind down
-            if (!probeComplete) {
-                probe()
-                probeComplete = true
+            try {
+                delay(350)  // let the main polling loop wind down
+                if (!probeComplete) {
+                    probe()
+                    probeComplete = true
+                }
+                poll()
+            } finally {
+                releasePollingPause(pauseLease)
             }
-            poll()
         }
     }
 
@@ -73,7 +101,7 @@ class CVTViewModel @Inject constructor(
         pollJob = null
         probeComplete = false
         _cvtData.value = CVTData()
-        repository.resumePolling()
+        releaseActivePollingPause()
     }
 
     override fun onCleared() {

@@ -3,6 +3,9 @@ package com.obdiitools.bluetooth
 import kotlinx.coroutines.flow.Flow
 
 interface OBDConnection {
+    /** Runs a multi-command adapter operation without allowing interleaving. */
+    suspend fun <T> withTransaction(block: suspend OBDConnection.() -> T): T = block(this)
+
     val isConnected: Boolean
     val lastByteReceivedMs: Long
     fun resetActivityTimer()

@@ -17,10 +17,12 @@ data class CanFrame(
             val tokens = line.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }
             if (tokens.size < 2) return null
             val id = tokens[0].uppercase()
-            if (id.length < 3 || id.any { !it.isDigit() && it.uppercaseChar() !in 'A'..'F' }) return null
-            val data = tokens.drop(1).mapNotNull { it.toIntOrNull(16) }
-            if (data.isEmpty()) return null
-            return CanFrame(id, data, line.trim())
+            if (id.length !in 3..8 || !id.all { it in '0'..'9' || it in 'A'..'F' }) return null
+            val numericId = id.toLongOrNull(16) ?: return null
+            if (numericId > 0x1FFFFFFF || (id.length == 3 && numericId > 0x7FF)) return null
+            val byteTokens = tokens.drop(1)
+            if (byteTokens.isEmpty() || byteTokens.size > 8 || byteTokens.any { it.length != 2 || !it.all { c -> c in '0'..'9' || c.uppercaseChar() in 'A'..'F' } }) return null
+            return CanFrame(id, byteTokens.map { it.toInt(16) }, line.trim())
         }
     }
 }
@@ -56,13 +58,16 @@ data class UdsResponse(
 
     companion object {
         fun parse(ecuAddress: String, did: String, raw: String): UdsResponse {
-            val cleaned = raw.replace(" ", "").uppercase().trim()
+            val cleaned = raw.filterNot { it.isWhitespace() }.uppercase()
+            val validHex = cleaned.isNotEmpty() && cleaned.length % 2 == 0 &&
+                cleaned.all { it in '0'..'9' || it in 'A'..'F' }
+            val expectedPrefix = "62" + did.uppercase()
             return when {
                 cleaned.isEmpty() ->
                     UdsResponse(ecuAddress, did, "", false, "NC", "No response")
-                cleaned.startsWith("62") && cleaned.length >= 6 ->
+                cleaned.startsWith(expectedPrefix) && validHex && cleaned.length >= 6 ->
                     UdsResponse(ecuAddress, did, cleaned.substring(6), true)
-                cleaned.startsWith("7F") && cleaned.length >= 6 -> {
+                cleaned.startsWith("7F") && validHex && cleaned.length >= 6 -> {
                     val nrc = cleaned.substring(4, 6)
                     UdsResponse(ecuAddress, did, cleaned, false, nrc, nrcDescription(nrc))
                 }
@@ -71,7 +76,7 @@ data class UdsResponse(
                 cleaned.contains("ERROR") || cleaned.contains("?") ->
                     UdsResponse(ecuAddress, did, "", false, "ERR", "Communication error")
                 else ->
-                    UdsResponse(ecuAddress, did, cleaned, false, "UNK", "Unexpected response")
+                    UdsResponse(ecuAddress, did, "", false, "UNK", "Unexpected or malformed response")
             }
         }
 

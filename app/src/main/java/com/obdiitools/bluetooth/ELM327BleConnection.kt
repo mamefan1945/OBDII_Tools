@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.os.Build
 import com.obdiitools.util.AppLogger
@@ -34,6 +35,9 @@ class ELM327BleConnection(
     private val writeAck = Semaphore(0)
     // Released when CCCD write completes (or immediately if no CCCD needed)
     private val notifyReady = Semaphore(0)
+    private val servicesReady = Semaphore(0)
+    @Volatile private var initializationFailed = false
+    @Volatile private var lastWriteStatus = BluetoothGatt.GATT_SUCCESS
     private var gatt: BluetoothGatt? = null
     @Volatile private var txChar: BluetoothGattCharacteristic? = null
     @Volatile private var rxChar: BluetoothGattCharacteristic? = null
@@ -84,12 +88,28 @@ class ELM327BleConnection(
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             AppLogger.d(TAG, "onConnectionStateChange status=$status newState=$newState")
-            connected = newState == BluetoothProfile.STATE_CONNECTED
-            if (connected) gatt.discoverServices()
+            connected = status == BluetoothGatt.GATT_SUCCESS &&
+                newState == BluetoothProfile.STATE_CONNECTED
+            if (connected) {
+                if (!gatt.discoverServices()) {
+                    initializationFailed = true
+                    servicesReady.release()
+                }
+            } else {
+                initializationFailed = true
+                servicesReady.release()
+                notifyReady.release()
+            }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             AppLogger.d(TAG, "onServicesDiscovered status=$status services=${gatt.services.map { it.uuid }}")
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                initializationFailed = true
+                servicesReady.release()
+                notifyReady.release()
+                return
+            }
 
             // Try known profiles first (supports split TX/RX), then fall back to auto-detect.
             val (txC, rxC) = KNOWN_PROFILES.firstNotNullOfOrNull { profile ->
@@ -108,6 +128,9 @@ class ELM327BleConnection(
                     }
                 } ?: run {
                     AppLogger.w(TAG, "No suitable characteristic found — services: ${gatt.services.map { svc -> svc.uuid to svc.characteristics.map { it.uuid to it.properties } }}")
+                    initializationFailed = true
+                    servicesReady.release()
+                    notifyReady.release()
                     return
                 }
                 bidirectional to bidirectional
@@ -119,25 +142,35 @@ class ELM327BleConnection(
             rxChar = rxC
             AppLogger.d(TAG, "Using tx=${txC.uuid} rx=${rxC.uuid} writeNoResponse=$writeNoResponse tx.properties=${txC.properties} rx.properties=${rxC.properties}")
 
-            gatt.setCharacteristicNotification(rxC, true)
+            if (!gatt.setCharacteristicNotification(rxC, true)) {
+                initializationFailed = true
+                servicesReady.release()
+                notifyReady.release()
+                return
+            }
 
             // Write CCCD on the RX characteristic immediately — don't wait for MTU.
             val descriptor = rxC.getDescriptor(CCCD_UUID)
             if (descriptor != null) {
                 AppLogger.d(TAG, "Writing CCCD ENABLE_NOTIFICATION_VALUE")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                     @Suppress("DEPRECATION")
                     gatt.writeDescriptor(descriptor)
                 }
+                if (!started) {
+                    initializationFailed = true
+                    notifyReady.release()
+                }
                 // notifyReady released in onDescriptorWrite
             } else {
                 AppLogger.d(TAG, "No CCCD descriptor — peripheral auto-notifies")
                 notifyReady.release()
             }
+            servicesReady.release()
         }
 
         override fun onDescriptorWrite(
@@ -146,6 +179,7 @@ class ELM327BleConnection(
             status: Int,
         ) {
             AppLogger.d(TAG, "onDescriptorWrite status=$status descriptor=${descriptor.uuid}")
+            if (status != BluetoothGatt.GATT_SUCCESS) initializationFailed = true
             notifyReady.release()
         }
 
@@ -154,10 +188,12 @@ class ELM327BleConnection(
             characteristic: BluetoothGattCharacteristic,
             status: Int,
         ) {
+            lastWriteStatus = status
             writeAck.release()
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            if (characteristic.uuid != rxChar?.uuid) return
             @Suppress("DEPRECATION")
             val bytes = characteristic.value
             AppLogger.v(TAG, "onCharacteristicChanged (deprecated) ${bytes?.size ?: 0} bytes")
@@ -169,6 +205,7 @@ class ELM327BleConnection(
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
+            if (characteristic.uuid != rxChar?.uuid) return
             AppLogger.v(TAG, "onCharacteristicChanged ${value.size} bytes: ${value.take(20).map { it.toInt().toChar() }.joinToString("")}")
             rxChannel.trySend(value)
         }
@@ -179,21 +216,20 @@ class ELM327BleConnection(
     override suspend fun initialize(): Boolean {
         gatt = device.connectGatt(context, false, callback)
 
-        // Wait for service discovery — BLE can take longer than classic BT
-        var waited = 0
-        while (txChar == null && waited < 8000 && currentCoroutineContext().isActive) {
-            Thread.sleep(100)
-            waited += 100
-        }
-        if (txChar == null) {
-            AppLogger.w(TAG, "Service discovery timed out after ${waited}ms")
+        // Service discovery and notification subscription must succeed before any command.
+        val servicesDiscovered = servicesReady.tryAcquire(8000, TimeUnit.MILLISECONDS)
+        if (!servicesDiscovered || initializationFailed || !isConnected || txChar == null) {
+            AppLogger.w(TAG, "BLE service discovery failed or timed out")
+            close()
             return false
         }
-        AppLogger.d(TAG, "txChar ready after ${waited}ms, waiting for CCCD…")
-
-        // Wait for CCCD write to complete before sending any commands
         val cccReady = notifyReady.tryAcquire(3000, TimeUnit.MILLISECONDS)
-        AppLogger.d(TAG, "CCCD ready=$cccReady, sending BLE init sequence")
+        if (!cccReady || initializationFailed) {
+            AppLogger.w(TAG, "BLE notification subscription failed or timed out")
+            close()
+            return false
+        }
+        AppLogger.d(TAG, "BLE services and notifications ready; sending init sequence")
 
         // Configure the ELM327 — ATZ is intentionally skipped (see BLE_INIT_COMMANDS)
         for (cmd in BLE_INIT_COMMANDS) {
@@ -329,38 +365,48 @@ class ELM327BleConnection(
         txChar = null
         rxChar = null
         connected = false
+        rxChannel.close()
     }
 
     private fun sendRaw(command: String) {
-        val char = txChar ?: return
+        val char = txChar ?: throw java.io.IOException("BLE transmit characteristic is unavailable")
+        val activeGatt = gatt ?: throw java.io.IOException("BLE GATT connection is closed")
+        if (!connected) throw java.io.IOException("BLE adapter is disconnected")
         val bytes = "$command\r".toByteArray(Charsets.UTF_8)
+
         if (writeNoResponse) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt?.writeCharacteristic(char, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+            val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activeGatt.writeCharacteristic(char, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) == BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 char.value = bytes
                 @Suppress("DEPRECATION")
                 char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                 @Suppress("DEPRECATION")
-                gatt?.writeCharacteristic(char)
+                activeGatt.writeCharacteristic(char)
             }
-            // No-response writes fire-and-forget; no ACK callback is issued.
+            if (!started) throw java.io.IOException("BLE write was rejected by the platform")
+            return
+        }
+
+        writeAck.drainPermits()
+        lastWriteStatus = BluetoothGatt.GATT_SUCCESS
+        val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            activeGatt.writeCharacteristic(char, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
         } else {
-            writeAck.drainPermits()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt?.writeCharacteristic(char, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-            } else {
-                @Suppress("DEPRECATION")
-                char.value = bytes
-                @Suppress("DEPRECATION")
-                char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                @Suppress("DEPRECATION")
-                gatt?.writeCharacteristic(char)
-            }
-            if (!writeAck.tryAcquire(500, TimeUnit.MILLISECONDS)) {
-                AppLogger.w(TAG, "Write ACK timeout — BLE congestion or adapter hang")
-            }
+            @Suppress("DEPRECATION")
+            char.value = bytes
+            @Suppress("DEPRECATION")
+            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            @Suppress("DEPRECATION")
+            activeGatt.writeCharacteristic(char)
+        }
+        if (!started) throw java.io.IOException("BLE write was rejected by the platform")
+        if (!writeAck.tryAcquire(500, TimeUnit.MILLISECONDS)) {
+            throw java.io.IOException("BLE characteristic write timed out")
+        }
+        if (lastWriteStatus != BluetoothGatt.GATT_SUCCESS) {
+            throw java.io.IOException("BLE characteristic write failed with status $lastWriteStatus")
         }
     }
 

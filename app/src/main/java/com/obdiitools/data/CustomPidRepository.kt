@@ -23,6 +23,9 @@ class CustomPidRepository @Inject constructor(
     }
 
     suspend fun addPid(definition: CustomPidDefinition) {
+        if (!CustomPidDefinition.isValidCommand(definition.command) ||
+            definition.name.isBlank() || definition.name.length > 64 ||
+            definition.unit.length > 16) return
         dataStore.edit { prefs ->
             val current = prefs[KEY]?.let { deserialize(it) } ?: emptyList()
             prefs[KEY] = serialize(current + definition)
