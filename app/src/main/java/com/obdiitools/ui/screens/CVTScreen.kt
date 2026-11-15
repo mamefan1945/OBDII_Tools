@@ -230,8 +230,8 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
             rightAccent = if ((data.slipRpm.value ?: 0) > 100) NeonRed else NeonGreen,
         )
         MetricRow(
-            leftLabel  = "DRIVE RATIO",
-            leftValue  = data.cvtRatio.value?.let { "${"%.1f".format(it)} RPM/km·h" },
+            leftLabel  = "GEAR RATIO",
+            leftValue  = data.cvtRatio.value?.let { "%.2f".format(it) },
             leftSource = data.cvtRatio.source,
             leftAccent = NeonYellow,
             rightLabel  = "CVT TEMP",
