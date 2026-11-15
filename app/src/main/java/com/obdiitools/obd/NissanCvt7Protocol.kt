@@ -26,6 +26,24 @@ data class NissanCvt7LiveData(
 )
 
 object NissanCvt7Protocol {
+    /**
+     * Confirms the known TCM family from its read-only spare-part identifier.
+     * The DID payload is ASCII in the ECU response; normalize punctuation and
+     * whitespace before matching so transport formatting does not matter.
+     */
+    fun isExpectedTcmIdentity(lines: List<String>): Boolean {
+        val hex = lines.joinToString("") { it.filterNot(Char::isWhitespace).uppercase() }
+            .filter { it in "0123456789ABCDEF" }
+        val marker = hex.indexOf("62F187")
+        if (marker < 0) return false
+        val payload = hex.substring(marker + 6)
+        val ascii = payload.chunked(2).mapNotNull { pair ->
+            if (pair.length != 2) null else pair.toIntOrNull(16)?.toChar()
+        }.joinToString("")
+        val normalized = ascii.filter { it.isLetterOrDigit() }.uppercase()
+        return normalized.contains("31036") && normalized.contains("4AT0C")
+    }
+
     private const val DATA_LENGTH = 76
     private const val RESPONSE_PREFIX = "6101"
 
