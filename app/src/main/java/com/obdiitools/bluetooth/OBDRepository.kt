@@ -149,7 +149,7 @@ class OBDRepository @Inject constructor(
                     cleaned.startsWith("62") || cleaned.startsWith("7F")
                 } ?: lines.firstOrNull().orEmpty()
             } finally {
-                if (header != null) withContext(NonCancellable) { tx.query("ATSH 7DF", 300) }
+                if (header != null) withContext(NonCancellable) { runCatching { tx.query("ATSH 7DF", 300) } }
             }
         }
     }
@@ -616,7 +616,7 @@ class OBDRepository @Inject constructor(
                     }
                 }
             } finally {
-                withContext(NonCancellable + Dispatchers.IO) { tx.query("ATSH 7DF", 300) }
+                withContext(NonCancellable + Dispatchers.IO) { runCatching { tx.query("ATSH 7DF", 300) } }
             }
         }
         onProgress(total, total)
