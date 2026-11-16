@@ -197,30 +197,42 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
     private fun readResponseLines(timeoutMs: Long): List<String> {
         val lines = mutableListOf<String>()
         val sb = StringBuilder()
+        val buffer = ByteArray(1024)
         val deadline = System.currentTimeMillis() + timeoutMs
+        var promptReceived = false
+
+        fun finishLine() {
+            val line = sb.toString().replace(" ", "").trim()
+            if (line.isNotBlank()) lines.add(line)
+            sb.clear()
+        }
+
         try {
-            while (System.currentTimeMillis() < deadline) {
-                if (inputStream.available() > 0) {
-                    val b = inputStream.read()
-                    if (b == -1) break
+            while (System.currentTimeMillis() < deadline && !promptReceived) {
+                val available = inputStream.available()
+                if (available > 0) {
+                    // Drain a ready Bluetooth burst in one read rather than making
+                    // one InputStream call per byte. This matters for multi-frame
+                    // ISO-TP replies, which can deliver hundreds of bytes quickly.
+                    val count = inputStream.read(buffer, 0, minOf(available, buffer.size))
+                    if (count < 0) break
+                    if (count == 0) continue
                     _lastByteReceivedMs = System.currentTimeMillis()
-                    val c = b.toChar()
-                    when {
-                        c == '>' -> {
-                            val line = sb.toString().replace(" ", "").trim()
-                            if (line.isNotBlank()) lines.add(line)
-                            sb.clear()
-                            break
+
+                    for (index in 0 until count) {
+                        val c = buffer[index].toInt().toChar()
+                        when (c) {
+                            '>' -> {
+                                finishLine()
+                                promptReceived = true
+                                break
+                            }
+                            '\r', '\n' -> finishLine()
+                            else -> sb.append(c)
                         }
-                        c == '\r' || c == '\n' -> {
-                            val line = sb.toString().replace(" ", "").trim()
-                            if (line.isNotBlank()) lines.add(line)
-                            sb.clear()
-                        }
-                        else -> sb.append(c)
                     }
                 } else {
-                    Thread.sleep(5)
+                    Thread.sleep(2)
                 }
             }
         } catch (e: java.io.IOException) {
@@ -228,6 +240,9 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
         } catch (e: Exception) {
             // InterruptedException or other non-I/O errors
         }
+
+        // Preserve a final partial line when the adapter times out without a prompt.
+        if (sb.isNotEmpty()) finishLine()
         return lines
     }
 
