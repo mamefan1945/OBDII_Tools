@@ -36,6 +36,12 @@ class CVTViewModel @Inject constructor(
     val cvtData: StateFlow<CVTData> = _cvtData.asStateFlow()
 
     private val _sourceDescription = MutableStateFlow("Probing vehicle capabilities…")
+    private val _rawCapture = MutableStateFlow("")
+    val rawCapture: StateFlow<String> = _rawCapture.asStateFlow()
+
+    private val _isCapturing = MutableStateFlow(false)
+    val isCapturing: StateFlow<Boolean> = _isCapturing.asStateFlow()
+
     val sourceDescription: StateFlow<String> = _sourceDescription.asStateFlow()
 
     val connectionState: StateFlow<ConnectionState> = repository.connectionState
@@ -120,6 +126,26 @@ class CVTViewModel @Inject constructor(
     // ──────────────────────────────────────────────────────────────────────────
     // Probe — runs once on first start to discover supported optional PIDs
     // ──────────────────────────────────────────────────────────────────────────
+
+    fun captureRawTransmissionData() {
+        val address = nissanCvt7EcuAddress ?: return
+        if (_isCapturing.value) return
+        viewModelScope.launch {
+            repository.pausePolling()
+            _isCapturing.value = true
+            _rawCapture.value = "Starting raw TCM capture…"
+            try {
+                _rawCapture.value = repository.captureNissanCvt7RawData(address) { progress ->
+                    _rawCapture.value = progress
+                }
+            } catch (error: Exception) {
+                _rawCapture.value = "Capture failed: ${error.message ?: "unknown error"}"
+            } finally {
+                _isCapturing.value = false
+                repository.resumePolling()
+            }
+        }
+    }
 
     private suspend fun probe() {
         _sourceDescription.value = "Searching for the Nissan CVT7 transmission controller…"
