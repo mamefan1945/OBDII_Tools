@@ -52,9 +52,25 @@ jobs:
       - name: Run Android lint
         run: gradle --no-daemon lintDebug
 
+      - name: Restore Android signing keystore
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_DEBUG_KEYSTORE_BASE64}" ]; then
+            echo "ANDROID_DEBUG_KEYSTORE secret is empty or unavailable."
+            exit 1
+          fi
+          KEYSTORE_PATH="${RUNNER_TEMP}/obdii-debug.keystore"
+          printf '%s' "${ANDROID_DEBUG_KEYSTORE_BASE64}" | base64 --decode > "${KEYSTORE_PATH}"
+          test -s "${KEYSTORE_PATH}"
+          echo "ANDROID_DEBUG_KEYSTORE=${KEYSTORE_PATH}" >> "${GITHUB_ENV}"
+
       - name: Build debug APK
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle --no-daemon assembleDebug
 
       - name: Upload debug APK
