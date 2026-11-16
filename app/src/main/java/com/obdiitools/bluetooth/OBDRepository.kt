@@ -309,9 +309,24 @@ class OBDRepository @Inject constructor(
                 report.append("Session 10C0: ").append(session.joinToString(" | ")).append("\n")
                 report.append("Requests are read-only profile identifiers; values are not decoded.\n\n")
                 requests.forEachIndexed { index, request ->
-                    val lines = tx.queryLines(request, 4000)
+                    val lines = if (request == "2110") {
+                        // Capture this unusually large response as individual CAN frames.
+                        // CAF0 keeps ISO-TP frames separate; automatic flow control remains enabled.
+                        tx.query("ATCAF0", 300)
+                        tx.query("ATH1", 300)
+                        tx.query("ATS1", 300)
+                        try {
+                            tx.queryLines("02 21 10", 8000)
+                        } finally {
+                            tx.query("ATH0", 300)
+                            tx.query("ATS0", 300)
+                            tx.query("ATCAF1", 300)
+                        }
+                    } else {
+                        tx.queryLines(request, 4000)
+                    }
                     val raw = lines.joinToString(" ")
-                    report.append(request).append(": ")
+                    report.append(if (request == "2110") "2110 (raw CAN frames): " else "$request: ")
                     if (lines.isEmpty()) {
                         report.append("NO RESPONSE")
                     } else {
