@@ -21,6 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BluetoothDisabled
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -76,6 +78,9 @@ fun CVTScreen(
     val cvtData         by viewModel.cvtData.collectAsState()
     val prefs           by viewModel.userPreferences.collectAsState()
     val sourceDesc      by viewModel.sourceDescription.collectAsState()
+    val rawCapture      by viewModel.rawCapture.collectAsState()
+    val isCapturing     by viewModel.isCapturing.collectAsState()
+
     val isConnected     = connectionState is ConnectionState.Connected
 
     DisposableEffect(isConnected) {
@@ -136,6 +141,44 @@ fun CVTScreen(
                 // Keep discovery progress and TCM confirmation visible without
                 // requiring the user to scroll past the metric cards.
                 ConnectionStatusCard(sourceDesc)
+                if (sourceDesc.contains("controller confirmed", ignoreCase = true)) {
+                    Button(
+                        onClick = { viewModel.captureRawTransmissionData() },
+                        enabled = !isCapturing,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.85f)),
+                    ) {
+                        Text(
+                            if (isCapturing) "CAPTURING TCM DATA…" else "CAPTURE RAW TCM DATA",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = BackgroundDeep,
+                        )
+                    }
+                }
+                if (rawCapture.isNotBlank()) {
+                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "RAW TCM CAPTURE — SELECTABLE",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = NeonCyan,
+                            )
+                            SelectionContainer {
+                                Text(
+                                    rawCapture,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp,
+                                    color = TextSecondary,
+                                    lineHeight = 15.sp,
+                                )
+                            }
+                        }
+                    }
+                }
                 LockupStateBanner(cvtData.lockupState)
                 MetricGrid(cvtData, prefs)
             }
