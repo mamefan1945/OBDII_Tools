@@ -267,6 +267,66 @@ class OBDRepository @Inject constructor(
         return summary.ifBlank { "empty response" }.take(512)
     }
 
+    /**
+     * Captures raw replies for the read identifiers present in the supplied
+     * transmission profile. No values are interpreted and no write/control
+     * services are sent. Indexed ELM response lines are retained verbatim.
+     */
+    suspend fun captureNissanCvt7RawData(
+        ecuAddress: String,
+        onProgress: (String) -> Unit = {},
+    ): String {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return "Invalid TCM address."
+        val conn = connection ?: return "OBD adapter is disconnected."
+        val requests = buildList {
+            addAll(listOf("2100", "2101", "2102", "2110", "2120", "2170"))
+            (0x80..0x90).forEach { add("21%02X".format(it)) }
+            add("21E0")
+            (0xF0..0xFF).forEach { add("21%02X".format(it)) }
+            addAll(listOf("22F100", "22F1A0", "22F190"))
+        }
+        return conn.withTransaction {
+            val tx = this
+            val report = StringBuilder()
+            try {
+                tx.query("ATZ", 1500)
+                tx.query("ATE0", 300)
+                tx.query("ATAL", 300)
+                tx.query("ATH0", 300)
+                tx.query("ATS0", 300)
+                tx.query("ATST32", 300)
+                tx.query("ATSW00", 300)
+                tx.query("ATSP6", 600)
+                tx.query("ATCAF1", 300)
+                tx.query("ATSH ${ecuAddress.uppercase()}", 400)
+                tx.query("ATFCSH ${ecuAddress.uppercase()}", 300)
+                tx.query("ATFCSD 300000", 300)
+                tx.query("ATFCSM1", 300)
+                tx.query("ATCRA 7E9", 300)
+                val session = tx.queryLines("10C0", 1500)
+                report.append("NISSAN CVT7 RAW CAPTURE — ECU ${ecuAddress.uppercase()}\n")
+                report.append("Session 10C0: ").append(session.joinToString(" | ")).append("\n")
+                report.append("Requests are read-only profile identifiers; values are not decoded.\n\n")
+                requests.forEachIndexed { index, request ->
+                    val lines = tx.queryLines(request, 2500)
+                    report.append(request).append(": ")
+                    if (lines.isEmpty()) report.append("NO RESPONSE")
+                    else report.append(lines.joinToString(" "))
+                    report.append("\n")
+                    onProgress("Capturing ${index + 1}/${requests.size}: $request")
+                }
+                report.toString().take(24000)
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { tx.query("ATCRA", 300) }
+                    runCatching { tx.query("ATFCSM0", 300) }
+                    runCatching { tx.query("ATSH 7DF", 400) }
+                    runCatching { tx.query("ATSP0", 600) }
+                }
+            }
+        }
+    }
+
     /** Reads one sample from the already-discovered physical controller address. */
     suspend fun queryNissanCvt7LiveData(
         ecuAddress: String,
