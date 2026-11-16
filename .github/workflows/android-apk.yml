@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Android Build, Test, and APK
 
 on:
   push:
@@ -10,14 +10,20 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Validate, test, and build signed debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
@@ -35,26 +41,36 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: '8.13'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Verify Gradle configuration
+        run: gradle --no-daemon help
+
+      - name: Run unit tests
+        run: gradle --no-daemon testDebugUnitTest
+
+      - name: Run Android lint
+        run: gradle --no-daemon lintDebug
 
       - name: Restore signing keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
         run: |
-          test -n "$KEYSTORE_BASE64" || { echo "Missing ANDROID_DEBUG_KEYSTORE_BASE64 secret"; exit 1; }
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo "Missing or unavailable ANDROID_DEBUG_KEYSTORE secret"; exit 1; }
           mkdir -p "$HOME/.android"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+          test -s "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
 
       - name: Verify keystore certificate
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
+          set -euo pipefail
           test -n "$KEYSTORE_PASSWORD" || { echo "Missing ANDROID_KEYSTORE_PASSWORD secret"; exit 1; }
           keytool -list -v -keystore "$HOME/.android/debug.keystore" \
             -alias androiddebugkey -storepass "$KEYSTORE_PASSWORD"
-
-      - name: Run unit tests
-        run: gradle --no-daemon testDebugUnitTest
 
       - name: Build debug APK
         env:
@@ -63,6 +79,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           test -n "$GOOGLE_MAPS_API_KEY" || { echo "Missing GOOGLE_MAPS_API_KEY secret"; exit 1; }
           mkdir -p "$(dirname "$ANDROID_DEBUG_KEYSTORE")"
           cp "$HOME/.android/debug.keystore" "$ANDROID_DEBUG_KEYSTORE"
@@ -72,6 +89,7 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
+          set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$APK" || { echo "APK not found: $APK"; exit 1; }
           EXPECTED=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" \
@@ -93,3 +111,4 @@ jobs:
           name: OBDII_Tools-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
