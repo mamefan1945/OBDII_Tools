@@ -289,7 +289,8 @@ class OBDRepository @Inject constructor(
             val tx = this
             val report = StringBuilder()
             try {
-                tx.query("ATZ", 1500)
+                // Do not reset the adapter while its Bluetooth link is active.
+                // Some BLE ELM327 adapters reset their radio when ATZ is issued.
                 tx.query("ATE0", 300)
                 tx.query("ATAL", 300)
                 tx.query("ATH0", 300)
@@ -308,14 +309,22 @@ class OBDRepository @Inject constructor(
                 report.append("Session 10C0: ").append(session.joinToString(" | ")).append("\n")
                 report.append("Requests are read-only profile identifiers; values are not decoded.\n\n")
                 requests.forEachIndexed { index, request ->
-                    val lines = tx.queryLines(request, 2500)
+                    val lines = tx.queryLines(request, 4000)
+                    val raw = lines.joinToString(" ")
                     report.append(request).append(": ")
-                    if (lines.isEmpty()) report.append("NO RESPONSE")
-                    else report.append(lines.joinToString(" "))
+                    if (lines.isEmpty()) {
+                        report.append("NO RESPONSE")
+                    } else {
+                        report.append(raw)
+                        if (raw.contains("BUFFERFULL", ignoreCase = true)) {
+                            report.append(" [INCOMPLETE: adapter reported BUFFERFULL; do not decode]")
+                        }
+                    }
                     report.append("\n")
                     onProgress("Capturing ${index + 1}/${requests.size}: $request")
                 }
-                report.toString().take(24000)
+                report.append("\nCapture finished. BUFFERFULL responses, if any, are incomplete and excluded from decoding.")
+                report.toString()
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
                     runCatching { tx.query("ATCRA", 300) }
