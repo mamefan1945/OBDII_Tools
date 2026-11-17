@@ -1,6 +1,7 @@
 package com.obdiitools.data
 
 import com.obdiitools.obd.OBDData
+import com.obdiitools.obd.CVTData
 import com.obdiitools.util.UnitConverter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ class SessionRepository @Inject constructor(
     private var lastTimestampMs: Long? = null
     private var totalDistanceKm: Float = 0f
     private var totalFuelLitres: Float = 0f
+    private var lastCvtPointMs: Long = 0L
 
     private val _sessionFuelLitres = MutableStateFlow(0f)
     val sessionFuelLitres: StateFlow<Float> = _sessionFuelLitres.asStateFlow()
@@ -49,6 +51,7 @@ class SessionRepository @Inject constructor(
         lastTimestampMs = null
         totalDistanceKm = 0f
         totalFuelLitres = 0f
+        lastCvtPointMs = 0L
         _sessionFuelLitres.value = 0f
         gpsRepository.startUpdates()
         return id
@@ -103,6 +106,33 @@ class SessionRepository @Inject constructor(
                 accuracy = loc?.accuracy,
             )
         )
+    }
+
+    suspend fun recordCvtData(data: CVTData) = mutex.withLock {
+        val sessionId = currentSessionId ?: return@withLock
+        val now = System.currentTimeMillis()
+        if (now - lastCvtPointMs < 1000L) return@withLock
+        val values = listOf(
+            data.speedKph.value, data.engineRpm.value, data.slipRpm.value,
+            data.cvtTempC.value, data.cvtRatio.value, data.primaryPressureMpa.value,
+            data.secondaryPressureMpa.value, data.targetSecondaryPressureMpa.value,
+        )
+        if (values.all { it == null }) return@withLock
+        dao.insertDataPoint(
+            SessionDataPoint(
+                sessionId = sessionId,
+                timestampMs = now,
+                cvtSpeedKph = data.speedKph.value,
+                cvtEngineRpm = data.engineRpm.value,
+                cvtSlipRpm = data.slipRpm.value,
+                cvtTempC = data.cvtTempC.value,
+                cvtRatio = data.cvtRatio.value,
+                cvtPrimaryPressureMpa = data.primaryPressureMpa.value,
+                cvtSecondaryPressureMpa = data.secondaryPressureMpa.value,
+                cvtTargetSecondaryPressureMpa = data.targetSecondaryPressureMpa.value,
+            )
+        )
+        lastCvtPointMs = now
     }
 
     suspend fun endSession(): TripSummary? {
