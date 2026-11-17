@@ -66,6 +66,14 @@ object SessionBackup {
                         .put("engineLoadPercent", p.engineLoadPercent ?: JSONObject.NULL)
                         .put("mafGramsPerSec", p.mafGramsPerSec ?: JSONObject.NULL)
                         .put("batteryVoltage", p.batteryVoltage ?: JSONObject.NULL)
+                        .put("cvtSpeedKph", p.cvtSpeedKph ?: JSONObject.NULL)
+                        .put("cvtEngineRpm", p.cvtEngineRpm ?: JSONObject.NULL)
+                        .put("cvtSlipRpm", p.cvtSlipRpm ?: JSONObject.NULL)
+                        .put("cvtTempC", p.cvtTempC ?: JSONObject.NULL)
+                        .put("cvtRatio", p.cvtRatio ?: JSONObject.NULL)
+                        .put("cvtPrimaryPressureMpa", p.cvtPrimaryPressureMpa ?: JSONObject.NULL)
+                        .put("cvtSecondaryPressureMpa", p.cvtSecondaryPressureMpa ?: JSONObject.NULL)
+                        .put("cvtTargetSecondaryPressureMpa", p.cvtTargetSecondaryPressureMpa ?: JSONObject.NULL)
                 }
                 if (options.includeGps) {
                     point.put("latitude", p.latitude ?: JSONObject.NULL)
@@ -137,6 +145,14 @@ object SessionBackup {
                 engineLoadPercent = o.nullableFloat("engineLoadPercent"),
                 mafGramsPerSec = o.nullableFloat("mafGramsPerSec"),
                 batteryVoltage = o.nullableFloat("batteryVoltage"),
+                cvtSpeedKph = o.nullableInt("cvtSpeedKph"),
+                cvtEngineRpm = o.nullableInt("cvtEngineRpm"),
+                cvtSlipRpm = o.nullableInt("cvtSlipRpm"),
+                cvtTempC = o.nullableInt("cvtTempC"),
+                cvtRatio = o.nullableFloat("cvtRatio"),
+                cvtPrimaryPressureMpa = o.nullableFloat("cvtPrimaryPressureMpa"),
+                cvtSecondaryPressureMpa = o.nullableFloat("cvtSecondaryPressureMpa"),
+                cvtTargetSecondaryPressureMpa = o.nullableFloat("cvtTargetSecondaryPressureMpa"),
                 latitude = o.nullableDouble("latitude"), longitude = o.nullableDouble("longitude"),
                 accuracy = o.nullableFloat("accuracy"),
             )
