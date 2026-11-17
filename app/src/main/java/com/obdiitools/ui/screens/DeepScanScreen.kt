@@ -177,6 +177,14 @@ fun DeepScanScreen(
                             Text("CANCEL", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         }
                     } else {
+                        OutlinedButton(
+                            onClick = { viewModel.probeMazdaCx5Transmission() },
+                            enabled = !scanState.isProbingMazda,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
+                        ) {
+                            Text("MAZDA TCM", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        }
                         Button(
                             onClick = { viewModel.startScan() },
                             modifier = Modifier.weight(1f),
