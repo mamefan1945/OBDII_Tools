@@ -593,9 +593,10 @@ private fun VinDiagDialog(diag: VinDiagnostic?, running: Boolean, onDismiss: () 
                     // ── NHTSA ─────────────────────────────────────────────
                     DiagHeader("NHTSA VPIC  •  MAKE / MODEL / YEAR DECODE")
                     if (!diag.nhtsaAttempted) {
-                        DiagLine("Not attempted — no VIN was found above", TextSecondary)
+                        DiagLine("Not attempted — no live or previously retrieved VIN was available", TextSecondary)
                     } else {
                         DiagLine("VIN submitted: ${diag.vinSelected}", TextSecondary)
+                        diag.vinSource?.let { DiagLine("Source: $it", if (it.startsWith("Live")) NeonGreen else NeonOrange) }
                         if (diag.nhtsaError != null) {
                             DiagLine("✗  Network error: ${diag.nhtsaError}", NeonRed)
                             DiagLine("   Check internet connectivity", TextSecondary)
