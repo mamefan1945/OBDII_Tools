@@ -185,6 +185,14 @@ object SessionBackup {
                         speedKph = c[3].toIntOrNull(), coolantTempC = c[4].toIntOrNull(),
                         throttlePercent = c[5].toFloatOrNull(), engineLoadPercent = c[6].toFloatOrNull(),
                         mafGramsPerSec = c[7].toFloatOrNull(), batteryVoltage = c[8].toFloatOrNull(),
+                        cvtSpeedKph = c.getOrNull(9)?.toIntOrNull(),
+                        cvtEngineRpm = c.getOrNull(10)?.toIntOrNull(),
+                        cvtSlipRpm = c.getOrNull(11)?.toIntOrNull(),
+                        cvtTempC = c.getOrNull(12)?.toIntOrNull(),
+                        cvtRatio = c.getOrNull(13)?.toFloatOrNull(),
+                        cvtPrimaryPressureMpa = c.getOrNull(14)?.toFloatOrNull(),
+                        cvtSecondaryPressureMpa = c.getOrNull(15)?.toFloatOrNull(),
+                        cvtTargetSecondaryPressureMpa = c.getOrNull(16)?.toFloatOrNull(),
                     )
                 }
             }
