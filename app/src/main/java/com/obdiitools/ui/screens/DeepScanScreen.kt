@@ -264,10 +264,10 @@ private fun EcuResultCard(result: DeepScanViewModel.EcuResult) {
                     color = accentColor,
                 )
                 Text(
-                    result.moduleName ?: "Unknown Module (address not mapped)",
+                    result.addressHint?.let { "Address hint · $it" } ?: "ECU function not identified",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
-                    color = if (result.moduleName != null) TextPrimary else TextSecondary,
+                    color = if (result.addressHint != null) TextPrimary else TextSecondary,
                 )
                 result.ecuVin?.let { vin ->
                     Text(
