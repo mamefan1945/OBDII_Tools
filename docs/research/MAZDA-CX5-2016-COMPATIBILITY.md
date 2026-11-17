@@ -35,6 +35,17 @@ Reference: https://pelican.clutch.engineering/cars/mazda/cx-5/parameters
 
 No Mazda-specific value is decoded or presented until a real response has been captured and its byte layout, scaling, units and applicability are verified.
 
+## Read-only Mazda automatic-transmission probe
+
+Deep Scan includes a user-invoked probe for the 2016 CX-5 automatic TCM at request ID 0x7E1. It reads two Mode 22 / UDS ReadDataByIdentifier values and performs no writes:
+
+- DID 1E12: selected transmission gear. The parameter catalogue lists the TCM request/response pair as 7E1 to 7E9 and marks 2016 supported. Values 1–6 represent forward gears; 50, 60, and 70 represent neutral, reverse, and park.
+- DID 1E1C: transmission-fluid temperature. The catalogue lists 7E1 to 7E9, a signed 16-bit value divided by 16 to obtain °C, and marks 2016–2026 confirmed.
+
+The decoder validates the positive response service and matching DID before displaying a value. Unsupported, malformed, or absent values remain unavailable. This probe is user-invoked rather than automatically sent to every vehicle.
+
+Reference: https://pelican.clutch.engineering/cars/mazda/cx-5/parameters
+
 ## Important limits
 
 - This is not yet a complete Mazda M-MDS replacement or a guarantee of access to every module.
