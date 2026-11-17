@@ -34,6 +34,12 @@ object SessionExporter {
     }
 
     private fun buildCsv(session: SessionEntity, points: List<SessionDataPoint>): String {
+        val slips = points.mapNotNull { point -> point.cvtSlipRpm?.let { point.timestampMs to it } }
+            .sortedBy { it.first }
+        val endpointSamples = slips.filter { isSlipEndpoint(it.second) }
+        val endpointPercent = if (slips.isEmpty()) 0.0 else endpointSamples.size * 100.0 / slips.size
+        val longestEndpointRunMs = longestEndpointRunMs(slips)
+
         val sb = StringBuilder()
         sb.appendLine("# OBDII Tools Session Export")
         sb.appendLine("# Device,${csvSafeCell(session.deviceName)}")
@@ -52,8 +58,12 @@ object SessionExporter {
         session.maxRpm?.let { sb.appendLine("# Max RPM,$it") }
         session.maxSpeedKph?.let { sb.appendLine("# Max Speed,$it kph") }
         session.maxCoolantTempC?.let { sb.appendLine("# Max Coolant,$it C") }
+        sb.appendLine("# CVT slip endpoint candidates,${endpointSamples.size} of ${slips.size} samples (${"%.1f".format(Locale.US, endpointPercent)}%)")
+        sb.appendLine("# Longest endpoint run,${"%.1f".format(Locale.US, longestEndpointRunMs / 1000.0)} sec")
+        sb.appendLine("# Endpoint means signed-byte limit (+127 or -128); it is not proof of physical sensor saturation.")
+        sb.appendLine("# Raw slip byte is reconstructed losslessly from the signed decoded byte.")
         sb.appendLine("#")
-        sb.appendLine("timestamp_ms,elapsed_sec,rpm,speed_kph,coolant_c,throttle_pct,engine_load_pct,maf_g_s,battery_v,cvt_speed_kph,cvt_engine_rpm,cvt_slip_rpm,cvt_temp_c,cvt_ratio,cvt_primary_pressure_mpa,cvt_secondary_pressure_mpa,cvt_target_secondary_pressure_mpa")
+        sb.appendLine("timestamp_ms,elapsed_sec,rpm,speed_kph,coolant_c,throttle_pct,engine_load_pct,maf_g_s,battery_v,cvt_speed_kph,cvt_engine_rpm,cvt_slip_rpm,cvt_slip_raw_hex,cvt_slip_endpoint_candidate,cvt_temp_c,cvt_ratio,cvt_primary_pressure_mpa,cvt_secondary_pressure_mpa,cvt_target_secondary_pressure_mpa")
         for (pt in points) {
             val elapsed = (pt.timestampMs - session.startTimeMs) / 1000f
             sb.append(pt.timestampMs).append(',')
@@ -68,6 +78,8 @@ object SessionExporter {
             sb.append(pt.cvtSpeedKph ?: "").append(',')
             sb.append(pt.cvtEngineRpm ?: "").append(',')
             sb.append(pt.cvtSlipRpm ?: "").append(',')
+            sb.append(pt.cvtSlipRpm?.let(::rawSlipHex) ?: "").append(',')
+            sb.append(pt.cvtSlipRpm?.let { isSlipEndpoint(it).toString() } ?: "").append(',')
             sb.append(pt.cvtTempC ?: "").append(',')
             sb.append(pt.cvtRatio?.let { "%.3f".format(Locale.US, it) } ?: "").append(',')
             sb.append(pt.cvtPrimaryPressureMpa?.let { "%.3f".format(Locale.US, it) } ?: "").append(',')
@@ -75,6 +87,31 @@ object SessionExporter {
             sb.appendLine(pt.cvtTargetSecondaryPressureMpa?.let { "%.3f".format(Locale.US, it) } ?: "")
         }
         return sb.toString()
+    }
+
+    private fun isSlipEndpoint(slipRpm: Int): Boolean = slipRpm == 127 || slipRpm == -128
+
+    private fun rawSlipHex(slipRpm: Int): String =
+        (slipRpm and 0xFF).toString(16).uppercase(Locale.US).padStart(2, '0')
+
+    private fun longestEndpointRunMs(samples: List<Pair<Long, Int>>): Long {
+        var runStart: Long? = null
+        var previousTime: Long? = null
+        var longest = 0L
+        for ((time, slip) in samples) {
+            if (!isSlipEndpoint(slip)) {
+                runStart = null
+                previousTime = null
+                continue
+            }
+            if (previousTime == null || time - previousTime > 2500L) {
+                runStart = time
+            }
+            previousTime = time
+            val duration = time - (runStart ?: time)
+            if (duration > longest) longest = duration
+        }
+        return longest
     }
 }
 
