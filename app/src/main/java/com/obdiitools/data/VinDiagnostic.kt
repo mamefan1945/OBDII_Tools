@@ -14,6 +14,7 @@ data class VinDiagnostic(
 
     // Which VIN was ultimately selected
     val vinSelected: String? = null,
+    val vinSource: String? = null,
 
     // NHTSA VPIC decode
     val nhtsaAttempted: Boolean = false,
