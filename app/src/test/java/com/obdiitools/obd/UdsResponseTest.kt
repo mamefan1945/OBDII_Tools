@@ -59,5 +59,25 @@ class UdsResponseTest {
         assertEquals(null, parseUdsVin(UdsResponse.parse("7E0", "F190", "62F190$shortHex")))
         assertEquals(null, parseUdsVin(UdsResponse.parse("7E0", "F190", "7F2211")))
     }
+    @Test
+    fun ecuDiscoveryAcceptsStandardObdPidSupportResponse() {
+        val result = parseEcuScanResult("7E0", "0:4100BE3EA813")
+        assertTrue(result?.hasPositiveResponse == true)
+        assertEquals("7E0", result?.address)
+    }
+
+    @Test
+    fun ecuDiscoveryAcceptsUdsPositiveAndServiceSpecificNegativeResponses() {
+        assertTrue(parseEcuScanResult("7E1", "5001")?.hasPositiveResponse == true)
+        val negative = parseEcuScanResult("7E1", "7F1011")
+        assertFalse(negative?.hasPositiveResponse ?: true)
+        assertEquals("11", negative?.nrc)
+    }
+
+    @Test
+    fun ecuDiscoveryDoesNotTreatUnrelatedNegativeResponseAsPresenceEvidence() {
+        assertEquals(null, parseEcuScanResult("7E0", "7F2211"))
+    }
+
 
 }
