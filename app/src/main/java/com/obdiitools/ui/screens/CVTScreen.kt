@@ -212,7 +212,12 @@ fun CVTScreen(
                         }
                     }
                 }
-                LockupStateBanner(cvtData.lockupState)
+                if (cvtData.lockupState.value != null &&
+                    cvtData.lockupState.value != LockupState.UNKNOWN &&
+                    cvtData.lockupState.source != CVTDataSource.UNAVAILABLE
+                ) {
+                    LockupStateBanner(cvtData.lockupState)
+                }
                 MetricGrid(cvtData, prefs)
 
                 if (sourceDesc.contains("controller confirmed", ignoreCase = true)) {
@@ -371,70 +376,83 @@ private fun LockupStateBanner(reading: CVTReading<LockupState>) {
 // 2-column metric grid
 // ──────────────────────────────────────────────────────────────────────────────
 
+private data class MetricDisplay(
+    val label: String,
+    val value: String,
+    val source: CVTDataSource,
+    val accent: Color,
+)
+
 @Composable
 private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
-    val speedValue = data.speedKph.value?.let { kph ->
-        "${UnitConverter.formatSpeed(kph, prefs.speedUnit)} ${prefs.speedUnit.symbol}"
-    }
-    val tempValue = data.cvtTempC.value?.let { c ->
-        when (prefs.temperatureUnit) {
-            TemperatureUnit.CELSIUS    -> "$c °C"
-            TemperatureUnit.FAHRENHEIT -> "${"%.0f".format(c * 9f / 5f + 32f)} °F"
+    val metrics = buildList {
+        data.engineRpm.value?.let {
+            add(MetricDisplay("ENGINE RPM", "$it RPM", data.engineRpm.source, NeonCyan))
+        }
+        data.speedKph.value?.let {
+            add(MetricDisplay("VEHICLE SPEED", "${UnitConverter.formatSpeed(it, prefs.speedUnit)} ${prefs.speedUnit.symbol}", data.speedKph.source, NeonOrange))
+        }
+        data.inputShaftRpm.value?.let {
+            add(MetricDisplay("INPUT SHAFT", "$it RPM", data.inputShaftRpm.source, NeonPurple))
+        }
+        data.slipRpm.value?.let {
+            val signed = if (it >= 0) "+$it" else "$it"
+            add(MetricDisplay("SLIP RPM", "$signed RPM", data.slipRpm.source, if (it > 100) NeonRed else NeonGreen))
+        }
+        data.cvtRatio.value?.let {
+            add(MetricDisplay("GEAR RATIO", "%.2f".format(it), data.cvtRatio.source, NeonYellow))
+        }
+        data.cvtTempC.value?.let {
+            val value = when (prefs.temperatureUnit) {
+                TemperatureUnit.CELSIUS -> "$it °C"
+                TemperatureUnit.FAHRENHEIT -> "${"%.0f".format(it * 9f / 5f + 32f)} °F"
+            }
+            add(MetricDisplay("CVT TEMP", value, data.cvtTempC.source, NeonRed))
+        }
+        data.primaryPressureMpa.value?.let {
+            add(MetricDisplay("PRIMARY PRESSURE", "${"%.2f".format(it)} MPa", data.primaryPressureMpa.source, NeonPurple))
+        }
+        data.secondaryPressureMpa.value?.let {
+            add(MetricDisplay("SECONDARY PRESSURE", "${"%.2f".format(it)} MPa", data.secondaryPressureMpa.source, NeonCyan))
+        }
+        data.targetSecondaryPressureMpa.value?.let {
+            add(MetricDisplay("TARGET SECONDARY", "${"%.2f".format(it)} MPa", data.targetSecondaryPressureMpa.source, NeonYellow))
+        }
+        data.linePressureMpa.value?.let {
+            add(MetricDisplay("LINE PRESSURE", "${"%.2f".format(it)} MPa", data.linePressureMpa.source, NeonOrange))
         }
     }
-    val slipSign = data.slipRpm.value?.let { if (it >= 0) "+$it" else "$it" }
+
+    if (metrics.isEmpty()) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "No supported live CVT measurements are currently available.",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = TextSecondary,
+            )
+        }
+        return
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        MetricRow(
-            leftLabel  = "ENGINE RPM",
-            leftValue  = data.engineRpm.value?.let { "$it RPM" },
-            leftSource = data.engineRpm.source,
-            leftAccent = NeonCyan,
-            rightLabel  = "VEHICLE SPEED",
-            rightValue  = speedValue,
-            rightSource = data.speedKph.source,
-            rightAccent = NeonOrange,
-        )
-        MetricRow(
-            leftLabel  = "INPUT SHAFT",
-            leftValue  = data.inputShaftRpm.value?.let { "$it RPM" },
-            leftSource = data.inputShaftRpm.source,
-            leftAccent = NeonPurple,
-            rightLabel  = "SLIP RPM",
-            rightValue  = slipSign?.let { "$it RPM" },
-            rightSource = data.slipRpm.source,
-            rightAccent = if ((data.slipRpm.value ?: 0) > 100) NeonRed else NeonGreen,
-        )
-        MetricRow(
-            leftLabel  = "GEAR RATIO",
-            leftValue  = data.cvtRatio.value?.let { "%.2f".format(it) },
-            leftSource = data.cvtRatio.source,
-            leftAccent = NeonYellow,
-            rightLabel  = "CVT TEMP",
-            rightValue  = tempValue,
-            rightSource = data.cvtTempC.source,
-            rightAccent = NeonRed,
-        )
-        MetricRow(
-            leftLabel = "PRIMARY PRESSURE",
-            leftValue = data.primaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
-            leftSource = data.primaryPressureMpa.source,
-            leftAccent = NeonPurple,
-            rightLabel = "SECONDARY PRESSURE",
-            rightValue = data.secondaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
-            rightSource = data.secondaryPressureMpa.source,
-            rightAccent = NeonCyan,
-        )
-        MetricRow(
-            leftLabel = "TARGET SECONDARY",
-            leftValue = data.targetSecondaryPressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
-            leftSource = data.targetSecondaryPressureMpa.source,
-            leftAccent = NeonYellow,
-            rightLabel = "LINE PRESSURE",
-            rightValue = data.linePressureMpa.value?.let { "${"%.2f".format(it)} MPa" },
-            rightSource = data.linePressureMpa.source,
-            rightAccent = NeonOrange,
-        )
+        metrics.chunked(2).forEach { pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pair.forEach { metric ->
+                    MetricCard(
+                        metric.label,
+                        metric.value,
+                        metric.source,
+                        metric.accent,
+                        Modifier.weight(1f),
+                    )
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }
 
