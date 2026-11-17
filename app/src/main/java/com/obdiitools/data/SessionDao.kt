@@ -18,6 +18,63 @@ interface SessionDao {
     @Insert
     suspend fun insertDataPoint(point: SessionDataPoint)
 
+    @Query("""
+        SELECT * FROM session_data_points
+        WHERE sessionId = :sessionId
+          AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
+          AND (rpm IS NOT NULL OR speedKph IS NOT NULL OR coolantTempC IS NOT NULL
+               OR throttlePercent IS NOT NULL OR engineLoadPercent IS NOT NULL
+               OR mafGramsPerSec IS NOT NULL OR batteryVoltage IS NOT NULL)
+        ORDER BY ABS(timestampMs - :timestampMs) ASC
+        LIMIT 1
+    """)
+    suspend fun findNearbyObdPoint(sessionId: Long, timestampMs: Long, maxDeltaMs: Long): SessionDataPoint?
+
+    @Query("""
+        SELECT * FROM session_data_points
+        WHERE sessionId = :sessionId
+          AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
+          AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
+          AND throttlePercent IS NULL AND engineLoadPercent IS NULL
+          AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL
+          AND (cvtSpeedKph IS NOT NULL OR cvtEngineRpm IS NOT NULL OR cvtSlipRpm IS NOT NULL
+               OR cvtTempC IS NOT NULL OR cvtRatio IS NOT NULL
+               OR cvtPrimaryPressureMpa IS NOT NULL OR cvtSecondaryPressureMpa IS NOT NULL
+               OR cvtTargetSecondaryPressureMpa IS NOT NULL)
+        ORDER BY ABS(timestampMs - :timestampMs) ASC
+        LIMIT 1
+    """)
+    suspend fun findNearbyCvtOnlyPoint(sessionId: Long, timestampMs: Long, maxDeltaMs: Long): SessionDataPoint?
+
+    @Query("""
+        UPDATE session_data_points SET
+            rpm = :rpm, speedKph = :speedKph, coolantTempC = :coolantTempC,
+            throttlePercent = :throttlePercent, engineLoadPercent = :engineLoadPercent,
+            mafGramsPerSec = :mafGramsPerSec, batteryVoltage = :batteryVoltage,
+            latitude = :latitude, longitude = :longitude, accuracy = :accuracy
+        WHERE id = :id
+    """)
+    suspend fun updatePointWithObd(
+        id: Long, rpm: Int?, speedKph: Int?, coolantTempC: Int?,
+        throttlePercent: Float?, engineLoadPercent: Float?, mafGramsPerSec: Float?,
+        batteryVoltage: Float?, latitude: Double?, longitude: Double?, accuracy: Float?,
+    )
+
+    @Query("""
+        UPDATE session_data_points SET
+            cvtSpeedKph = :cvtSpeedKph, cvtEngineRpm = :cvtEngineRpm,
+            cvtSlipRpm = :cvtSlipRpm, cvtTempC = :cvtTempC, cvtRatio = :cvtRatio,
+            cvtPrimaryPressureMpa = :cvtPrimaryPressureMpa,
+            cvtSecondaryPressureMpa = :cvtSecondaryPressureMpa,
+            cvtTargetSecondaryPressureMpa = :cvtTargetSecondaryPressureMpa
+        WHERE id = :id
+    """)
+    suspend fun updatePointWithCvt(
+        id: Long, cvtSpeedKph: Int?, cvtEngineRpm: Int?, cvtSlipRpm: Int?,
+        cvtTempC: Int?, cvtRatio: Float?, cvtPrimaryPressureMpa: Float?,
+        cvtSecondaryPressureMpa: Float?, cvtTargetSecondaryPressureMpa: Float?,
+    )
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertImportedSession(session: SessionEntity): Long
 
