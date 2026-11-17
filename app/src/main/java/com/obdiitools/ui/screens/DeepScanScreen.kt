@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BluetoothDisabled
@@ -29,10 +30,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +68,9 @@ fun DeepScanScreen(
     val scanState by viewModel.scanState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val report = buildDeepScanReport(scanState)
 
     Scaffold(
         containerColor = BackgroundDeep,
@@ -161,14 +169,40 @@ fun DeepScanScreen(
             }
 
             // Bottom action bar
-            if (isConnected && (scanState.isScanning || scanState.results.isNotEmpty())) {
-                Row(
+            if (isConnected && (scanState.isScanning || scanState.results.isNotEmpty() || scanState.mazdaProbeStatus != null)) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(BackgroundCard)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    if (!scanState.isScanning && report.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            TextButton(onClick = { clipboardManager.setText(AnnotatedString(report)) }) {
+                                Text("COPY REPORT", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonCyan)
+                            }
+                            TextButton(
+                                onClick = {
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, "OBDII Tools Deep Scan Report")
+                                        putExtra(Intent.EXTRA_TEXT, report)
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share Deep Scan Report"))
+                                },
+                            ) {
+                                Text("SHARE REPORT", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonGreen)
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                     if (scanState.isScanning) {
                         OutlinedButton(
                             onClick = { viewModel.cancelScan() },
@@ -194,10 +228,45 @@ fun DeepScanScreen(
                             Text("SCAN AGAIN", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = BackgroundDeep)
                         }
                     }
+                    }
                 }
             }
         }
     }
+}
+
+private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
+    val lines = mutableListOf(
+        "OBDII TOOLS — DEEP SCAN REPORT",
+        "Status: ${state.phase.ifBlank { if (state.isScanning) "Scanning" else "No scan status" }}",
+        "ECUs reported: ${state.results.size}",
+        "Supported PID entries: ${state.results.sumOf { it.totalPids }}",
+        "",
+    )
+    state.mazdaProbeStatus?.let { status ->
+        lines += "MAZDA TCM PROBE — 0x7E1"
+        lines += status
+        state.mazdaTransmission?.let { data ->
+            data.gear?.let { lines += "Decoded gear: $it" }
+            data.transmissionTemperatureC?.let {
+                lines += "Transmission fluid temperature: %.2f °C / %.2f °F".format(it, it * 9.0 / 5.0 + 32.0)
+            }
+            data.rawGearResponse?.takeIf { it.isNotBlank() }?.let { lines += "DID 1E12 raw: $it" }
+            data.rawTemperatureResponse?.takeIf { it.isNotBlank() }?.let { lines += "DID 1E1C raw: $it" }
+        }
+        lines += ""
+    }
+    state.results.forEach { ecu ->
+        lines += "0x${ecu.address} — ${ecu.addressHint ?: "Unidentified ECU"}"
+        ecu.ecuVin?.let { lines += "VIN: $it" }
+        ecu.identityStatus?.let { lines += "Identity: $it" }
+        lines += "Mode 01 PIDs (${ecu.mode01Pids.size}):"
+        ecu.mode01Pids.forEach { lines += "  ${it.code} — ${it.name}" }
+        lines += "Mode 09 PIDs (${ecu.mode09Pids.size}):"
+        ecu.mode09Pids.forEach { lines += "  ${it.code} — ${it.name}" }
+        lines += ""
+    }
+    return lines.joinToString("\n").trim()
 }
 
 @Composable
