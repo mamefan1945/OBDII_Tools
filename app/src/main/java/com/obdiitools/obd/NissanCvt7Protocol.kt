@@ -49,14 +49,6 @@ object NissanCvt7Protocol {
     }
 
     /**
-     * Parses the CVT7 0x21/0x01 reply captured through the ELM327.
-     *
-     * CVTz50's CVT7 path expects the adapter framing prefix 07A, then numbered
-     * response fragments (0: through F:) which are concatenated in order. The
-     * resulting payload begins 61 01 and contains at least 83 bytes. Byte 22
-     * is the signed SLIP REV value displayed by the reference monitor.
-     */
-    /**
      * Parses the Nissan CVT7 read-DTC response to request 19 02 2F.
      *
      * CVTz50 sends 19022F to 7E1 and expects 5902. Its CVT7 parser skips the
@@ -111,6 +103,14 @@ object NissanCvt7Protocol {
         return "$family$digit${first.toString(16).uppercase().last()}$second"
     }
 
+    /**
+     * Parses the CVT7 0x21/0x01 reply captured through the ELM327.
+     *
+     * CVTz50's CVT7 path expects the adapter framing prefix 07A, then numbered
+     * response fragments (0: through F:) which are concatenated in order. The
+     * resulting payload begins 61 01 and contains at least 83 bytes. Byte 22
+     * is the signed SLIP REV value displayed by the reference monitor.
+     */
     fun parseLiveData(lines: List<String>): NissanCvt7LiveData? {
         if (lines.isEmpty()) return null
 
