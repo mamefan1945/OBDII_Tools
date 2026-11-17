@@ -95,7 +95,7 @@ class NissanCvt7ProtocolTest {
     @Test
     fun decodesAllStandardDtcFamiliesFromCvtResponse() {
         val codes = NissanCvt7Protocol.parseCvtDtcResponse(
-            listOf("5902FFC00000008000000040000000")
+            listOf("5902FFD00000008000000040000000")
         )
         assertEquals(listOf("U1000", "B0000", "C0000"), codes)
     }
