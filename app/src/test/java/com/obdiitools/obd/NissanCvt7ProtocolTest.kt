@@ -37,6 +37,7 @@ class NissanCvt7ProtocolTest {
 
         assertEquals(0, live?.vehicleSpeedKph)
         assertEquals(768, live?.engineRpm)
+        assertEquals(42, live?.slipRpm)
         assertEquals(56, live?.fluidTemperatureC)
         assertEquals(2.475f, live?.gearRatio ?: 0f, 0.0001f)
         assertEquals(0.25f, live?.primaryPressureMpa ?: 0f, 0.0001f)
@@ -67,6 +68,35 @@ class NissanCvt7ProtocolTest {
         val live = NissanCvt7Protocol.parseLiveData(invalid)
         assertTrue(live != null)
         assertEquals(768, live?.engineRpm)
+    }
+
+    @Test
+    fun decodesNegativeSignedSlipRpm() {
+        val payload = capturedResponse().drop(1)
+            .joinToString("") { it.substringAfter(':') }
+            .chunked(2)
+            .toMutableList()
+        payload[22] = "FE"
+        val response = listOf("07A") + payload.chunked(7).mapIndexed { index, bytes ->
+            "${index.toString(16).uppercase()}:${bytes.joinToString("")}"
+        }
+
+        assertEquals(-2, NissanCvt7Protocol.parseLiveData(response)?.slipRpm)
+    }
+
+    @Test
+    fun parsesNissanCvt7DtcRecordsFromIndexedElmResponse() {
+        val codes = NissanCvt7Protocol.parseCvtDtcResponse(
+            listOf("07A0:5902FF06150000", "1:07400000")
+        )
+        assertEquals(listOf("P0615", "P0740"), codes)
+    }
+
+    @Test
+    fun distinguishesNoCodesFromInvalidCvtDtcResponse() {
+        assertEquals(emptyList<String>(), NissanCvt7Protocol.parseCvtDtcResponse(listOf("5902FF")))
+        assertNull(NissanCvt7Protocol.parseCvtDtcResponse(listOf("7F1912")))
+        assertNull(NissanCvt7Protocol.parseCvtDtcResponse(listOf("5902FF061500")))
     }
 
     @Test

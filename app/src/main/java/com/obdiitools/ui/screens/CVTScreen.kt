@@ -52,8 +52,10 @@ import com.obdiitools.obd.CVTData
 import com.obdiitools.obd.CVTDataSource
 import com.obdiitools.obd.CVTReading
 import com.obdiitools.obd.ConnectionState
+import com.obdiitools.obd.DTC
 import com.obdiitools.obd.LockupState
 import com.obdiitools.ui.components.GlassCard
+import com.obdiitools.ui.components.DTCCard
 import com.obdiitools.ui.theme.BackgroundCard
 import com.obdiitools.ui.theme.BackgroundDeep
 import com.obdiitools.ui.theme.NeonCyan
@@ -80,6 +82,9 @@ fun CVTScreen(
     val sourceDesc      by viewModel.sourceDescription.collectAsState()
     val rawCapture      by viewModel.rawCapture.collectAsState()
     val isCapturing     by viewModel.isCapturing.collectAsState()
+    val cvtDtcs          by viewModel.cvtDtcs.collectAsState()
+    val isReadingCvtDtcs by viewModel.isReadingCvtDtcs.collectAsState()
+    val cvtDtcStatus     by viewModel.cvtDtcStatus.collectAsState()
 
     val isConnected     = connectionState is ConnectionState.Connected
 
@@ -181,6 +186,43 @@ fun CVTScreen(
                 }
                 LockupStateBanner(cvtData.lockupState)
                 MetricGrid(cvtData, prefs)
+
+                if (sourceDesc.contains("controller confirmed", ignoreCase = true)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "TRANSMISSION FAULT CODES",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = NeonCyan,
+                            letterSpacing = 1.sp,
+                        )
+                        Button(
+                            onClick = { viewModel.readCvtDTCs() },
+                            enabled = !isReadingCvtDtcs && !isCapturing,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonCyan.copy(alpha = 0.15f),
+                                disabledContainerColor = SurfaceElevated,
+                            ),
+                        ) {
+                            Text(
+                                if (isReadingCvtDtcs) "READING CVT CODES…" else "READ CVT CODES",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = if (isReadingCvtDtcs) TextSecondary else NeonCyan,
+                            )
+                        }
+                        Text(
+                            cvtDtcStatus,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = TextSecondary,
+                        )
+                        cvtDtcs.forEach { dtc -> DTCCard(dtc = dtc) }
+                    }
+                }
             }
         }
     }

@@ -14,13 +14,11 @@ A trailing `!` is a repeat marker. The queue logic retains the marked command an
 
 **Important edge case:** in the traced state-1000 path, after sending a command the worker checks whether the queue is empty. If empty, it shuts down immediately. Thus the last command in an ordinary batch is transmitted without the Java worker waiting for its response terminator. Earlier commands in a multi-command batch do wait before the next command is sent.
 
-The worker creates a 15-second timer and restarts it as response data arrives. The exact timeout-handler consequence has not yet been established.
+The worker creates a 15-second timer and restarts it as response data arrives. Message 110 reaches `gc.d()`: depending on state and the ELM327 v2.1.5 workaround preference, it either restarts the ATZ startup path, injects `TIMOUT>` into the response parser, or stops/disconnects the worker. This is not a general retry policy.
 
-## Unresolved behavior
+Wildcard expansion is performed by `Cvtz50Fragment.Z(String)` before the semicolon split: it recursively replaces each `*` with uppercase hexadecimal values 0–F, producing the Cartesian product for multiple wildcards.
 
-- The Special Commands help text documents `*` as a wildcard expanded through hexadecimal values 0–F. The traced Java input/queue/transmit methods contain no such expansion. The implementation layer remains unknown.
-- The custom-command state-1000 path does not invoke the Java helper used in adapter-initialization states to detect a response containing `?` without `OK`. Whether another layer reports these errors remains unknown.
-- The exact handling of the worker's 15-second timeout message remains under investigation.
+The custom-command state-1000 path does not invoke the Java helper used in adapter-initialization states to detect a response containing `?` without `OK`. Whether another layer reports these errors remains unknown.
 
 ## Relevance to OBDII_Tools
 
@@ -61,3 +59,12 @@ The reference app accumulates fragmented adapter input until its response termin
 - The optional byte-86 value populates a separate auxiliary status field; values above 4 invalidate that auxiliary field only. Its semantic name is still unknown.
 - The wildcard expansion and 15-second timeout findings apply to CVTz50's arbitrary-command UI. OBDII Tools has no equivalent arbitrary-command queue that needs those behaviors today, so they are documented but not added to custom PID execution.
 - No unidentified CVT7 bytes, hydraulic control commands, write services, or actuator routines have been implemented.
+
+
+## CVT7 slip and TCM DTC reads
+
+The CVT7 formatter `ic.f()` reads byte index 22 of the 83-byte `6101` response as a signed 8-bit value: values above 127 have 256 subtracted. CVTz50 assigns this value to its `SLIP REV` display field; the resource labels identify it as slip revolution in RPM and show a display range of ±127. OBDII Tools now exposes this as `slipRpm` with sensor provenance. This is a direct TCM value, not a subtraction of engine speed and an assumed input-shaft speed.
+
+The CVT7 DTC state machine sends request `19022F` to the TCM at `7E1` and expects positive response `5902`. Its response parser removes the first byte after `5902` (DTC status availability mask), then reads four-byte records: the first two bytes are converted to an SAE DTC code and the following two bytes are skipped as status data. Empty and `FFFF` codes are discarded. CVTz50 uses the same SAE family-bit conversion and has Nissan-specific descriptions for P0615, P0703, P0705, P0710, P0715, P0720, P0725, P0740, P0744, P0745, P0746, P0776, P0778, P0826, P0840, P0841, P0845, P0868, U1000, P1701, P1705, P1722, P1723, P1726, P1740, P1745, P1777, and P1778.
+
+OBDII Tools now implements the read-only `19022F` request after CVT7 identity confirmation, displays the returned CVT codes separately on the CVT Monitor screen, and does not add a TCM clear command. The parser treats `5902` with a status-availability byte and no records as a valid empty result; negative or malformed responses are reported as unreadable rather than as “no codes.”

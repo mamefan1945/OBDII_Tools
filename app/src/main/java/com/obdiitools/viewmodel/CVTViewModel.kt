@@ -10,6 +10,7 @@ import com.obdiitools.obd.CVTDataSource
 import com.obdiitools.obd.CVTReading
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.ELM327Protocol
+import com.obdiitools.obd.DTC
 import com.obdiitools.obd.LockupState
 import com.obdiitools.obd.NissanCvt7LiveData
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,6 +42,17 @@ class CVTViewModel @Inject constructor(
 
     private val _isCapturing = MutableStateFlow(false)
     val isCapturing: StateFlow<Boolean> = _isCapturing.asStateFlow()
+
+    private val _cvtDtcs = MutableStateFlow<List<DTC>>(emptyList())
+    val cvtDtcs: StateFlow<List<DTC>> = _cvtDtcs.asStateFlow()
+
+    private val _isReadingCvtDtcs = MutableStateFlow(false)
+    val isReadingCvtDtcs: StateFlow<Boolean> = _isReadingCvtDtcs.asStateFlow()
+
+    private val _cvtDtcStatus = MutableStateFlow("Not scanned yet.")
+    val cvtDtcStatus: StateFlow<String> = _cvtDtcStatus.asStateFlow()
+
+    private var cvtDtcJob: Job? = null
 
     val sourceDescription: StateFlow<String> = _sourceDescription.asStateFlow()
 
@@ -108,6 +120,11 @@ class CVTViewModel @Inject constructor(
     fun stop() {
         pollJob?.cancel()
         pollJob = null
+        cvtDtcJob?.cancel()
+        cvtDtcJob = null
+        _isReadingCvtDtcs.value = false
+        _cvtDtcs.value = emptyList()
+        _cvtDtcStatus.value = "Not scanned yet."
         probeComplete = false
         nissanCvt7Detected = false
         nissanCvt7EcuAddress = null
@@ -147,6 +164,33 @@ class CVTViewModel @Inject constructor(
         }
     }
 
+    fun readCvtDTCs() {
+        val address = nissanCvt7EcuAddress ?: return
+        if (_isReadingCvtDtcs.value || _isCapturing.value) return
+        cvtDtcJob?.cancel()
+        cvtDtcJob = viewModelScope.launch {
+            _isReadingCvtDtcs.value = true
+            _cvtDtcStatus.value = "Reading stored CVT fault codes…"
+            try {
+                val codes = repository.readNissanCvt7DTCs(address)
+                if (codes == null) {
+                    _cvtDtcStatus.value = "TCM did not return a valid 5902 response. Codes could not be read."
+                } else {
+                    _cvtDtcs.value = codes
+                    _cvtDtcStatus.value = if (codes.isEmpty()) {
+                        "No stored CVT fault codes reported by the TCM."
+                    } else {
+                        "${codes.size} stored CVT fault code${if (codes.size == 1) "" else "s"} reported by the TCM."
+                    }
+                }
+            } catch (error: Exception) {
+                _cvtDtcStatus.value = "CVT code read failed: ${error.message ?: "unknown error"}"
+            } finally {
+                _isReadingCvtDtcs.value = false
+            }
+        }
+    }
+
     private suspend fun probe() {
         _sourceDescription.value = "Searching for the Nissan CVT7 transmission controller…"
         val discovery = repository.discoverNissanCvt7 { progress ->
@@ -177,6 +221,10 @@ class CVTViewModel @Inject constructor(
             if (!nissanCvt7Detected) {
                 // Discovery failed: never fall through to generic OBD polling.
                 delay(1000)
+                continue
+            }
+            if (_isReadingCvtDtcs.value || _isCapturing.value) {
+                delay(100)
                 continue
             }
             if (nissanCvt7Detected) {
@@ -235,7 +283,7 @@ class CVTViewModel @Inject constructor(
             speedKph = cvtReading(sample.vehicleSpeedKph),
             engineRpm = cvtReading(sample.engineRpm),
             inputShaftRpm = CVTReading(null, CVTDataSource.UNAVAILABLE),
-            slipRpm = CVTReading(null, CVTDataSource.UNAVAILABLE),
+            slipRpm = CVTReading(sample.slipRpm, CVTDataSource.SENSOR),
             lockupState = CVTReading(LockupState.UNKNOWN, CVTDataSource.UNAVAILABLE),
             cvtTempC = cvtReading(sample.fluidTemperatureC),
             cvtRatio = measured(sample.gearRatio),

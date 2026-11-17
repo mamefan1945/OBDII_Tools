@@ -378,6 +378,43 @@ class OBDRepository @Inject constructor(
         }
     }
 
+    /** Reads Nissan CVT7 stored DTCs only after the TCM identity was confirmed. */
+    suspend fun readNissanCvt7DTCs(ecuAddress: String): List<DTC>? {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return null
+        val conn = connection ?: return null
+        return conn.withTransaction {
+            try {
+                query("ATE0", 300)
+                query("ATH0", 300)
+                query("ATS0", 300)
+                query("ATCAF1", 300)
+                query("ATSP6", 600)
+                query("ATSH ${ecuAddress.uppercase()}", 400)
+                query("ATFCSH ${ecuAddress.uppercase()}", 300)
+                query("ATFCSD 300000", 300)
+                query("ATFCSM1", 300)
+                query("ATCRA 7E9", 300)
+                query("ATST32", 300)
+                val response = queryLines("19022F", 4000)
+                val codes = com.obdiitools.obd.NissanCvt7Protocol.parseCvtDtcResponse(response)
+                    ?: return@withTransaction null
+                codes.map { code ->
+                    DTC(
+                        code = code,
+                        description = DTCDatabase.getNissanCvt7Description(code),
+                    )
+                }
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { query("ATCRA", 300) }
+                    runCatching { query("ATFCSM0", 300) }
+                    runCatching { query("ATSH 7DF", 400) }
+                    runCatching { query("ATSP0", 600) }
+                }
+            }
+        }
+    }
+
     // ── Per-ECU PID support discovery ────────────────────────────────────────
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.

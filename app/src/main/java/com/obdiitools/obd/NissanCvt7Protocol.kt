@@ -15,6 +15,7 @@ data class NissanCvt7DiscoveryResult(
 data class NissanCvt7LiveData(
     val vehicleSpeedKph: Int,
     val engineRpm: Int,
+    val slipRpm: Int,
     val fluidTemperatureC: Int,
     val gearRatio: Float,
     val primaryPressureMpa: Float,
@@ -52,10 +53,64 @@ object NissanCvt7Protocol {
      *
      * CVTz50's CVT7 path expects the adapter framing prefix 07A, then numbered
      * response fragments (0: through F:) which are concatenated in order. The
-     * resulting payload begins 61 01 and contains at least 83 bytes. If byte 86
-     * is present, its value must be <= 4, matching the reference decoder's
-     * additional response sanity check.
+     * resulting payload begins 61 01 and contains at least 83 bytes. Byte 22
+     * is the signed SLIP REV value displayed by the reference monitor.
      */
+    /**
+     * Parses the Nissan CVT7 read-DTC response to request 19 02 2F.
+     *
+     * CVTz50 sends 19022F to 7E1 and expects 5902. Its CVT7 parser skips the
+     * one-byte DTC status availability mask, then reads each four-byte record
+     * as a two-byte SAE DTC followed by two status bytes. The status bytes are
+     * not interpreted here; CVTz50 also ignores them when listing codes.
+     *
+     * Returns null for no/negative/malformed responses and an empty list for a
+     * valid response containing no stored codes.
+     */
+    fun parseCvtDtcResponse(lines: List<String>): List<String>? {
+        if (lines.isEmpty()) return null
+
+        val response = buildString {
+            lines.forEachIndexed { index, rawLine ->
+                var line = rawLine.filterNot(Char::isWhitespace).uppercase()
+                if (index == 0) line = line.removePrefix("07A")
+                line = line.replace(Regex("^[0-9A-F]:"), "")
+                if (line.isEmpty() || line == "19022F" ||
+                    line.contains("NODATA") || line.contains("NO DATA") ||
+                    line.contains("ERROR") || line.contains("?")) {
+                    return@forEachIndexed
+                }
+                if (line.all { it in "0123456789ABCDEF" }) append(line)
+            }
+        }
+
+        if (!response.startsWith("5902") || response.length % 2 != 0) return null
+        val data = response.substring(4)
+        if (data.length < 2) return null // status availability mask is required
+        val records = data.substring(2)
+        if (records.length % 8 != 0) return null
+
+        return records.chunked(8).mapNotNull { record ->
+            val dtcBytes = record.substring(0, 4)
+            if (dtcBytes == "0000" || dtcBytes == "FFFF") null
+            else decodeDtcBytes(dtcBytes)
+        }.distinct()
+    }
+
+    private fun decodeDtcBytes(hex: String): String {
+        if (hex.length != 4 || !hex.all { it in "0123456789ABCDEF" }) return ""
+        val first = hex.substring(0, 2).toInt(16)
+        val second = hex.substring(2, 4)
+        val family = when ((first shr 6) and 0x03) {
+            0 -> "P"
+            1 -> "C"
+            2 -> "B"
+            else -> "U"
+        }
+        val digit = (first shr 4) and 0x03
+        return "$family$digit${first.toString(16).uppercase().last()}$second"
+    }
+
     fun parseLiveData(lines: List<String>): NissanCvt7LiveData? {
         if (lines.isEmpty()) return null
 
@@ -87,6 +142,7 @@ object NissanCvt7Protocol {
         return NissanCvt7LiveData(
             vehicleSpeedKph = bytes[15],
             engineRpm = bytes[21] shl 5,
+            slipRpm = if (bytes[22] > 127) bytes[22] - 256 else bytes[22],
             fluidTemperatureC = bytes[37] - 40,
             gearRatio = bytes[24] * 0.045f,
             primaryPressureMpa = bytes[44] * 0.025f,

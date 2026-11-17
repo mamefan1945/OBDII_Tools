@@ -157,8 +157,42 @@ object DTCDatabase {
         "C0045" to "Left Rear Wheel Speed Sensor Circuit",
     )
 
+    private val nissanCvt7Descriptions = mapOf(
+        "P0615" to "Starter relay circuit",
+        "P0703" to "Brake switch circuit",
+        "P0705" to "Park/neutral position switch circuit",
+        "P0710" to "Transmission fluid temperature sensor circuit",
+        "P0715" to "Input speed sensor circuit",
+        "P0720" to "Vehicle speed sensor circuit (transmission)",
+        "P0725" to "Engine speed signal",
+        "P0740" to "Torque converter clutch solenoid circuit",
+        "P0744" to "Torque converter clutch function",
+        "P0745" to "Line pressure solenoid circuit",
+        "P0746" to "Pressure control solenoid A function",
+        "P0776" to "Pressure control solenoid B function",
+        "P0778" to "Pressure control solenoid B circuit",
+        "P0826" to "Manual mode switch",
+        "P0840" to "Transmission pressure sensor A circuit",
+        "P0841" to "Transmission pressure sensor function",
+        "P0845" to "Transmission pressure sensor B circuit",
+        "P0868" to "Secondary pressure low",
+        "U1000" to "CAN communication circuit",
+        "P1701" to "TCM power supply",
+        "P1705" to "Throttle position sensor circuit (transmission)",
+        "P1722" to "Estimated vehicle speed signal",
+        "P1723" to "CVT speed sensor function",
+        "P1726" to "Electric throttle control",
+        "P1740" to "Lock-up select solenoid circuit",
+        "P1745" to "Line pressure control",
+        "P1777" to "Step motor circuit",
+        "P1778" to "Step motor function",
+    )
+
     fun getDescription(code: String): String =
         descriptions[code.uppercase()] ?: "Unknown fault code"
+
+    fun getNissanCvt7Description(code: String): String =
+        nissanCvt7Descriptions[code.uppercase()] ?: getDescription(code)
 
     fun getSeverity(code: String): Severity {
         return when {
