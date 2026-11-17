@@ -6,7 +6,6 @@ import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.guessModuleName
-import com.obdiitools.obd.UdsResponse
 import com.obdiitools.obd.parseUdsVin
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -117,7 +116,7 @@ class DeepScanViewModel @Inject constructor(
                         _scanState.value = _scanState.value.copy(
                             phase = "UDS VIN (F190) — ECU 0x$addr",
                         )
-                        val response = UdsResponse.parse(addr, "F190", repository.queryUds(addr, "F190"))
+                        val response = repository.queryUds(addr, "F190")
                         response to parseUdsVin(response)
                     } else null
                     if (!isActive) return@forEachIndexed
