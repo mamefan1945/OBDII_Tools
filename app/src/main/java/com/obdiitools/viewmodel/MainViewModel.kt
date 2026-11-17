@@ -270,8 +270,11 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             _vinDiagnostic.value = null
             _vinDiagRunning.value = true
-            _vinDiagnostic.value = vinRepository.runDiagnostic()
-            _vinDiagRunning.value = false
+            try {
+                _vinDiagnostic.value = vinRepository.runDiagnostic(cachedVin = _vinInfo.value?.vin)
+            } finally {
+                _vinDiagRunning.value = false
+            }
         }
     }
 
