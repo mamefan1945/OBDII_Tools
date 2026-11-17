@@ -95,6 +95,13 @@ class CVTViewModel @Inject constructor(
     private var nissanCvt7Detected = false
     private var nissanCvt7EcuAddress: String? = null
 
+    private val _transmissionModel = MutableStateFlow("Not identified")
+    val detectedTransmissionModel: StateFlow<String> = _transmissionModel.asStateFlow()
+    private val _transmissionPartNumber = MutableStateFlow<String?>(null)
+    val transmissionPartNumber: StateFlow<String?> = _transmissionPartNumber.asStateFlow()
+    private val _transmissionEcuAddress = MutableStateFlow<String?>(null)
+    val transmissionEcuAddress: StateFlow<String?> = _transmissionEcuAddress.asStateFlow()
+
     // Lockup inference — rolling window of (rpm, speed) samples
     private data class Sample(val rpm: Int, val speed: Int)
     private val window = ArrayDeque<Sample>(WINDOW_SIZE + 1)
@@ -128,6 +135,9 @@ class CVTViewModel @Inject constructor(
         probeComplete = false
         nissanCvt7Detected = false
         nissanCvt7EcuAddress = null
+        _transmissionModel.value = "Not identified"
+        _transmissionPartNumber.value = null
+        _transmissionEcuAddress.value = null
         inputShaftPid = null
         cvtTempPid = null
         window.clear()
@@ -199,6 +209,9 @@ class CVTViewModel @Inject constructor(
         if (discovery != null) {
             nissanCvt7Detected = true
             nissanCvt7EcuAddress = discovery.ecuAddress
+            _transmissionModel.value = "Jatco CVT7"
+            _transmissionPartNumber.value = "31036-4AT0C"
+            _transmissionEcuAddress.value = discovery.ecuAddress
             _cvtData.value = discovery.liveData?.let(::toCvtData) ?: CVTData()
             _sourceDescription.value =
                 "Nissan CVT7 controller confirmed at ${discovery.ecuAddress}. Live values come directly from the transmission controller; hydraulic pressures are reported in MPa. Unverified measurements remain N/A rather than displaying guessed values."

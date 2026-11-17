@@ -23,6 +23,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -34,6 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +89,10 @@ fun CVTScreen(
     val cvtDtcs          by viewModel.cvtDtcs.collectAsState()
     val isReadingCvtDtcs by viewModel.isReadingCvtDtcs.collectAsState()
     val cvtDtcStatus     by viewModel.cvtDtcStatus.collectAsState()
+    val transmissionModel by viewModel.detectedTransmissionModel.collectAsState()
+    val transmissionPartNumber by viewModel.transmissionPartNumber.collectAsState()
+    val transmissionEcuAddress by viewModel.transmissionEcuAddress.collectAsState()
+    var showCvtInfo by remember { mutableStateOf(false) }
 
     val isConnected     = connectionState is ConnectionState.Connected
 
@@ -144,6 +153,26 @@ fun CVTScreen(
             ) {
                 // Keep discovery progress and TCM confirmation visible without
                 // requiring the user to scroll past the metric cards.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { showCvtInfo = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NeonCyan.copy(alpha = 0.15f),
+                        ),
+                    ) {
+                        Text(
+                            "CVT INFO",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = NeonCyan,
+                        )
+                    }
+                }
                 ConnectionStatusCard(sourceDesc)
                 if (sourceDesc.contains("controller confirmed", ignoreCase = true)) {
                     Button(
@@ -224,6 +253,66 @@ fun CVTScreen(
                 }
             }
         }
+    }
+
+    if (showCvtInfo) {
+        AlertDialog(
+            onDismissRequest = { showCvtInfo = false },
+            title = {
+                Text(
+                    "CVT INFORMATION",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = NeonCyan,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CvtInfoRow("IDENTIFICATION", if (transmissionEcuAddress != null) "CONFIRMED" else "NOT CONFIRMED")
+                    CvtInfoRow("TRANSMISSION", transmissionModel)
+                    CvtInfoRow("TCM PART NUMBER", transmissionPartNumber ?: "Not available")
+                    CvtInfoRow("ECU ADDRESS", transmissionEcuAddress ?: "Not detected")
+                    Text(
+                        if (transmissionEcuAddress != null)
+                            "Identification is based on the TCM identification response."
+                        else
+                            "The monitor has not yet confirmed a supported transmission controller. No model or part number is assumed.",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCvtInfo = false }) {
+                    Text("CLOSE", color = NeonCyan, fontFamily = FontFamily.Monospace)
+                }
+            },
+            containerColor = BackgroundCard,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary,
+        )
+    }
+}
+
+@Composable
+private fun CvtInfoRow(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            label,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 9.sp,
+            color = TextSecondary,
+            letterSpacing = 1.sp,
+        )
+        Text(
+            value,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = TextPrimary,
+        )
     }
 }
 
