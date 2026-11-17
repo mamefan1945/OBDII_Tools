@@ -95,7 +95,21 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
             Thread.sleep(50)
             drainInput()
             sendRaw("1001")
-            readResponseLines(timeoutMs = 600).firstOrNull() ?: ""
+            val udsLines = readResponseLines(timeoutMs = 600)
+            val udsResponse = udsLines.joinToString("\n")
+            val udsEvidence = udsLines.any { line ->
+                val frame = line.replace(Regex("(?i)^[0-9A-F]:"), "")
+                    .filterNot { it.isWhitespace() }.uppercase()
+                frame.startsWith("5001") || frame.startsWith("7F10")
+            }
+            if (udsEvidence) {
+                udsResponse
+            } else {
+                // Some legislated OBD ECUs answer PID support requests but do not
+                // implement UDS default-session control. Probe the standard OBD path.
+                sendRaw("0100")
+                readResponseLines(timeoutMs = 1000).joinToString("\n")
+            }
         } catch (e: Exception) {
             ""
         }
