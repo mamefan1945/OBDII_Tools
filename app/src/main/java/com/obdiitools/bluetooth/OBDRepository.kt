@@ -144,10 +144,9 @@ class OBDRepository @Inject constructor(
             try {
                 if (header != null) tx.query("ATSH $header", 400)
                 val lines = tx.queryLines(command, 3000)
-                lines.firstOrNull { line ->
-                    val cleaned = line.filterNot { it.isWhitespace() }.uppercase()
-                    cleaned.startsWith("62") || cleaned.startsWith("7F")
-                } ?: lines.firstOrNull().orEmpty()
+                // Keep the complete response. UdsResponse.parse handles ELM
+                // frame-index prefixes and validates the assembled DID payload.
+                lines.joinToString("\n")
             } finally {
                 if (header != null) withContext(NonCancellable) { runCatching { tx.query("ATSH 7DF", 300) } }
             }
