@@ -6,6 +6,8 @@ import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.guessModuleName
+import com.obdiitools.obd.UdsResponse
+import com.obdiitools.obd.parseUdsVin
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -33,6 +35,8 @@ class DeepScanViewModel @Inject constructor(
         val moduleName: String?,
         val mode01Pids: List<SupportedPid>,
         val mode09Pids: List<SupportedPid>,
+        val ecuVin: String? = null,
+        val identityStatus: String? = null,
     ) {
         val totalPids get() = mode01Pids.size + mode09Pids.size
     }
@@ -97,13 +101,26 @@ class DeepScanViewModel @Inject constructor(
                     val mode01 = repository.queryModeSupport(addr, "01")
                     if (!isActive) return@forEachIndexed
 
-                    // Mode 09 only makes sense on broadcast or the engine ECU
+                    // Mode 09 is queried on the broadcast address and conventional
+                    // engine request address. A response proves support, not ECU identity.
                     val mode09 = if (addr == "7DF" || addr.uppercase() == "7E0") {
                         _scanState.value = _scanState.value.copy(
                             phase = "Mode 09 (vehicle info) — ECU 0x$addr",
                         )
                         repository.queryModeSupport(addr, "09")
                     } else emptySet()
+                    if (!isActive) return@forEachIndexed
+
+                    // Read standardized UDS VIN DID F190 from each responding ECU.
+                    // Unsupported DIDs remain explicitly unavailable, never inferred.
+                    val identity = if (addr != "7DF") {
+                        _scanState.value = _scanState.value.copy(
+                            phase = "UDS VIN (F190) — ECU 0x$addr",
+                        )
+                        val response = UdsResponse.parse(addr, "F190", repository.queryUds(addr, "F190"))
+                        response to parseUdsVin(response)
+                    } else null
+                    if (!isActive) return@forEachIndexed
 
                     results.add(
                         EcuResult(
@@ -111,6 +128,18 @@ class DeepScanViewModel @Inject constructor(
                             moduleName = if (addr == "7DF") "OBD2 Broadcast" else guessModuleName(addr),
                             mode01Pids = mode01.sorted().map { SupportedPid(it, mode01PidName(it)) },
                             mode09Pids = mode09.sorted().map { SupportedPid(it, mode09PidName(it)) },
+                            ecuVin = identity?.second,
+                            identityStatus = identity?.let { (response, vin) ->
+                                when {
+                                    vin != null -> "VIN read from UDS DID F190"
+                                    response.errorCode == "11" || response.errorCode == "31" ->
+                                        "F190 unsupported (NRC ${response.errorCode})"
+                                    response.errorCode == "NC" || response.errorCode == "ND" ->
+                                        "No F190 response"
+                                    response.errorCode != null -> "F190 unavailable (${response.errorCode})"
+                                    else -> "F190 response was not a valid 17-character VIN"
+                                }
+                            },
                         )
                     )
                     // Emit partial results as we go so the UI updates live
