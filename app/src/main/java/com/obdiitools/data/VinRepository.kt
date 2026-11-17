@@ -100,7 +100,7 @@ class VinRepository @Inject constructor(
 
     fun clearCache() { cached = null }
 
-    suspend fun runDiagnostic(ecuAddress: String = "7E0"): VinDiagnostic = withContext(Dispatchers.IO) {
+    suspend fun runDiagnostic(ecuAddress: String = "7E0", cachedVin: String? = null): VinDiagnostic = withContext(Dispatchers.IO) {
         var diag = VinDiagnostic()
         obdRepository.pausePolling()
         try {
@@ -123,8 +123,17 @@ class VinRepository @Inject constructor(
             diag = diag.copy(udsRaw = udsRaw, udsParsedVin = udsVin)
 
             // ── Select VIN ────────────────────────────────────────────────────
-            val vin = diag.mode09ParsedVin ?: udsVin
-            diag = diag.copy(vinSelected = vin)
+            val liveVin = diag.mode09ParsedVin ?: udsVin
+            val fallbackVin = cachedVin?.takeIf { it.matches(Regex("^[A-HJ-NPR-Z0-9]{17}$")) }
+            val vin = liveVin ?: fallbackVin
+            diag = diag.copy(
+                vinSelected = vin,
+                vinSource = when {
+                    liveVin != null -> "Live OBD read"
+                    fallbackVin != null -> "Previously retrieved VIN (fallback)"
+                    else -> null
+                },
+            )
 
             // ── NHTSA VPIC ───────────────────────────────────────────────────
             if (vin != null) {
