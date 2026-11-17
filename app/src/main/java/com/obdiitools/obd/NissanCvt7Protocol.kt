@@ -1,8 +1,11 @@
 package com.obdiitools.obd
 
 /**
- * Decoded read-only live data for the Nissan CVT7 transmission controller.
- * Field decoding remains fail-closed until every offset and scale is verified.
+ * Read-only Nissan CVT7 response decoding.
+ *
+ * The byte map is transcribed from the reference application's CVT7 formatter.
+ * Offsets are zero-based from the first byte of the positive response, including
+ * the leading 0x61 0x01 service/local-identifier bytes.
  */
 data class NissanCvt7DiscoveryResult(
     val ecuAddress: String,
@@ -21,6 +24,10 @@ data class NissanCvt7LiveData(
 )
 
 object NissanCvt7Protocol {
+    private const val REQUIRED_RESPONSE_BYTES = 83
+    private const val OPTIONAL_STATUS_BYTE_INDEX = 86
+    private const val MAX_OPTIONAL_STATUS_VALUE = 4
+
     fun isExpectedTcmIdentity(lines: List<String>): Boolean {
         val hex = lines.joinToString("") { it.filterNot(Char::isWhitespace).uppercase() }
             .filter { it in "0123456789ABCDEF" }
@@ -43,12 +50,57 @@ object NissanCvt7Protocol {
     }
 
     /**
-     * The captured 0x21/0x01 reply is a 0x7A-byte multi-frame response. The
-     * previous 76-byte map demonstrably decoded unrelated bytes as live values.
-     * Do not publish telemetry until the complete response's field map is verified.
+     * Parses the CVT7 0x21/0x01 reply captured through the ELM327.
+     *
+     * CVTz50's CVT7 path expects the adapter framing prefix 07A, then numbered
+     * response fragments (0: through F:) which are concatenated in order. The
+     * resulting payload begins 61 01 and contains at least 83 bytes. If byte 86
+     * is present, its value must be <= 4, matching the reference decoder's
+     * additional response sanity check.
      */
     fun parseLiveData(lines: List<String>): NissanCvt7LiveData? {
-        if (!hasPositiveResponse(lines, "6101")) return null
-        return null
+        if (lines.isEmpty()) return null
+
+        val firstLine = lines.first().filterNot(Char::isWhitespace).uppercase()
+        if (!firstLine.startsWith("07A")) return null
+
+        val payload = buildString {
+            lines.forEachIndexed { index, rawLine ->
+                var line = rawLine.filterNot(Char::isWhitespace).uppercase()
+                if (index == 0) line = line.removePrefix("07A")
+                if (line.isEmpty()) return@forEachIndexed
+
+                // ELM response fragments are labelled with a single hex digit
+                // and a colon. Strip only that framing label, not payload bytes.
+                if (!line.matches(Regex("^(?:[0-9A-F]:)?[0-9A-F]+$"))) {
+                    return@forEachIndexed
+                }
+                append(line.replace(Regex("^[0-9A-F]:"), ""))
+            }
+        }
+
+        if (!payload.startsWith("6101") || payload.length % 2 != 0 ||
+            !payload.all { it in "0123456789ABCDEF" }) {
+            return null
+        }
+
+        val bytes = payload.chunked(2).map { it.toInt(16) }
+        if (bytes.size < REQUIRED_RESPONSE_BYTES) return null
+        if (bytes.size > OPTIONAL_STATUS_BYTE_INDEX &&
+            bytes[OPTIONAL_STATUS_BYTE_INDEX] > MAX_OPTIONAL_STATUS_VALUE) {
+            return null
+        }
+
+        return NissanCvt7LiveData(
+            vehicleSpeedKph = bytes[15],
+            engineRpm = bytes[21] shl 5,
+            fluidTemperatureC = bytes[37] - 40,
+            gearRatio = bytes[24] * 0.045f,
+            primaryPressureMpa = bytes[44] * 0.025f,
+            secondaryPressureMpa = bytes[36] * 0.025f,
+            targetSecondaryPressureMpa = bytes[43] * 0.025f,
+            // The reference formatter sources both displayed values from byte 43.
+            linePressureMpa = bytes[43] * 0.025f,
+        )
     }
 }

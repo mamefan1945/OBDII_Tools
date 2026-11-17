@@ -32,36 +32,67 @@ class NissanCvt7ProtocolTest {
     }
 
     @Test
-    fun refusesToDecodeCapturedResponseWithUnverifiedFieldOffsets() {
-        val response = listOf(
-            "07A",
-            "0:610100000000",
-            "1:00190500182E8A",
-            "2:82B30003161905",
-            "3:00182A5A370100",
-            "4:00000000000000",
-            "5:FD401760205A36",
-            "6:01CE140A0000FE",
-            "7:FEFE0000035203",
-            "8:5303E800000000",
-            "9:0351035403E700",
-            "A:00190081000000",
-            "B:80030006000004",
-            "C:006D8000B22D6F",
-            "D:00000000000000",
-            "E:58054E4E084E3C",
-            "F:1D000000000000",
-            "0:5A000006800D00",
-            "1:00400000AAAAAA",
-        )
-        assertTrue(NissanCvt7Protocol.hasPositiveResponse(response, "6101"))
-        assertNull(NissanCvt7Protocol.parseLiveData(response))
+    fun decodesVerifiedCvt7FieldsFromCapturedResponse() {
+        val live = NissanCvt7Protocol.parseLiveData(capturedResponse())
+
+        assertEquals(0, live?.vehicleSpeedKph)
+        assertEquals(768, live?.engineRpm)
+        assertEquals(56, live?.fluidTemperatureC)
+        assertEquals(2.475f, live?.gearRatio ?: 0f, 0.0001f)
+        assertEquals(0.25f, live?.primaryPressureMpa ?: 0f, 0.0001f)
+        assertEquals(0.575f, live?.secondaryPressureMpa ?: 0f, 0.0001f)
+        assertEquals(0.5f, live?.targetSecondaryPressureMpa ?: 0f, 0.0001f)
+        assertEquals(0.5f, live?.linePressureMpa ?: 0f, 0.0001f)
+    }
+
+    @Test
+    fun rejectsIncompleteOrUnframedCvt7Responses() {
+        val capture = capturedResponse()
+        assertNull(NissanCvt7Protocol.parseLiveData(capture.take(10)))
+        assertNull(NissanCvt7Protocol.parseLiveData(capture.drop(1)))
+        assertNull(NissanCvt7Protocol.parseLiveData(listOf("07A", "0:7F2131")))
+    }
+
+    @Test
+    fun rejectsResponseWhenOptionalStatusByteExceedsReferenceLimit() {
+        val payload = capturedResponse().drop(1)
+            .joinToString("") { it.substringAfter(':') }
+            .chunked(2)
+            .toMutableList()
+        payload[86] = "05"
+        val invalid = listOf("07A") + payload.chunked(7).mapIndexed { index, bytes ->
+            "${index.toString(16).uppercase()}:${bytes.joinToString("")}"
+        }
+
+        assertNull(NissanCvt7Protocol.parseLiveData(invalid))
     }
 
     @Test
     fun rejectsNegativeOrTruncatedResponses() {
         assertFalse(NissanCvt7Protocol.hasPositiveResponse(listOf("7F2131"), "6101"))
         assertNull(NissanCvt7Protocol.parseLiveData(listOf("7F2131")))
-        assertNull(NissanCvt7Protocol.parseLiveData(listOf("6101" + "00".repeat(20))))
+        assertNull(NissanCvt7Protocol.parseLiveData(listOf("07A", "0:6101" + "00".repeat(20))))
     }
+
+    private fun capturedResponse(): List<String> = listOf(
+        "07A",
+        "0:610100000000",
+        "1:00190500182E8A",
+        "2:82B30003161905",
+        "3:00182A5A370100",
+        "4:00000000000000",
+        "5:FD401760205A36",
+        "6:01CE140A0000FE",
+        "7:FEFE0000035203",
+        "8:5303E800000000",
+        "9:0351035403E700",
+        "A:00190081000000",
+        "B:80030006000004",
+        "C:006D8000B22D6F",
+        "D:00000000000000",
+        "E:58054E4E084E3C",
+        "F:1D000000000000",
+        "0:5A000006800D00",
+        "1:00400000AAAAAA",
+    )
 }
