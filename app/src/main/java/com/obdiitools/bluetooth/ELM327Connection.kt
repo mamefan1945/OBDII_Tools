@@ -69,10 +69,10 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
             val lines = readResponseLines(timeoutMs = 3000)
             // For multi-frame ISO-TP responses the ELM327 may emit the total-length
             // byte on the first line; search all lines for the UDS response prefix.
-            val response = lines.firstOrNull { l ->
-                val u = l.replace(" ", "").uppercase()
-                u.startsWith("62") || u.startsWith("7F")
-            } ?: lines.firstOrNull() ?: ""
+            // Preserve every adapter response line. Some ELM output formats
+            // index continuation lines; UdsResponse.parse removes those labels
+            // and validates the combined payload against the requested DID.
+            val response = lines.joinToString("\n")
             // Always restore broadcast address so normal polling is unaffected
             sendRaw("ATSH 7DF")
             Thread.sleep(100)
