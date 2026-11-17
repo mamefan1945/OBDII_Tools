@@ -145,9 +145,10 @@ fun DeepScanScreen(
                     }
                 }
 
-                if (scanState.mazdaProbeStatus != null) {
+                val mazdaProbeStatus = scanState.mazdaProbeStatus
+                if (mazdaProbeStatus != null) {
                     item {
-                        MazdaTransmissionProbeCard(scanState.mazdaProbeStatus, scanState.mazdaTransmission)
+                        MazdaTransmissionProbeCard(mazdaProbeStatus, scanState.mazdaTransmission)
                     }
                 }
 
