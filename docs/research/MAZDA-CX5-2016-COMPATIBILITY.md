@@ -39,7 +39,7 @@ No Mazda-specific value is decoded or presented until a real response has been c
 
 Deep Scan includes a user-invoked probe for the 2016 CX-5 automatic TCM at request ID 0x7E1. It reads two Mode 22 / UDS ReadDataByIdentifier values and performs no writes:
 
-- DID 1E12: selected transmission gear. The parameter catalogue lists the TCM request/response pair as 7E1 to 7E9 and marks 2016 supported. Values 1–6 represent forward gears; 50, 60, and 70 represent neutral, reverse, and park.
+- DID 1E12: selected transmission gear. The parameter catalogue lists the TCM request/response pair as 7E1 to 7E9 and marks 2016 supported. The catalogue's candidate values are 1–6 for forward gears; 50, 60, and 70 for neutral, reverse, and park. The value mapping still needs raw-response confirmation on this vehicle.
 - DID 1E1C: transmission-fluid temperature. The catalogue lists 7E1 to 7E9, a signed 16-bit value divided by 16 to obtain °C, and marks 2016–2026 confirmed.
 
 The decoder validates the positive response service and matching DID before displaying a value. Unsupported, malformed, or absent values remain unavailable. This probe is user-invoked rather than automatically sent to every vehicle.
@@ -48,15 +48,16 @@ Reference: https://pelican.clutch.engineering/cars/mazda/cx-5/parameters
 
 ## First real-vehicle validation (2026-11-17)
 
-The first on-vehicle test on the user's 2016 Mazda CX-5 automatic produced this Deep Scan result:
+Two on-vehicle tests on the user's 2016 Mazda CX-5 automatic have been reported:
 
-- TCM probe: read-only response received at request ID 0x7E1 (the app identifies the controller as the Mazda 6-speed automatic TCM).
-- Transmission-fluid temperature: 38.6 °C (101.4 °F), decoded from DID 1E1C.
-- This confirms that the app's 0x7E1 request path, positive response handling, and temperature conversion produced a plausible live value on this vehicle.
-- The reported screen did not include a selected-gear value. DID 1E12 / gear decoding is therefore not yet confirmed on this vehicle.
-- The raw CAN/ISO-TP response was not included in the user's report, so the raw payload and scaling have not been independently audited from a capture.
+- Both tests received a read-only response from the TCM probe at request ID 0x7E1 (the app identifies the controller as the Mazda 6-speed automatic TCM).
+- First test: transmission-fluid temperature 38.6 °C (101.4 °F), decoded from DID 1E1C.
+- Second test: transmission-fluid temperature 43.3 °C (109.9 °F), decoded from DID 1E1C.
+- These changing, plausible live readings support that the app's 0x7E1 request path, positive response handling, and temperature conversion work on this vehicle.
+- In the second test, with the selector in Drive, DID 1E12 was displayed as selected gear "1". The user reports that Park, Reverse, and Neutral produced no displayed gear value.
+- This does not yet establish whether the value "1" means actual first gear, a selector/range state, or another transmission state. Nor does it establish the catalogue's proposed encodings for P/R/N. Raw request/response bytes and ISO-TP framing have not yet been captured for independent verification.
 
-This is vehicle-specific confirmation of the temperature read only. It does not establish support for every 2016 CX-5 calibration, other Mazda model years, or other TCM data identifiers.
+Vehicle-specific confirmation currently covers the TCM response path and temperature display, plus a preliminary gear-DID response in Drive. It does not establish complete gear decoding, support for every 2016 CX-5 calibration, other Mazda model years, or other TCM data identifiers.
 
 ## Important limits
 
@@ -72,7 +73,7 @@ This is vehicle-specific confirmation of the temperature read only. It does not 
 A real scan on the 2016 CX-5 should capture:
 - Adapter make/model and supported CAN pins/network access.
 - Protocol selected by ELM auto-detection.
-- Raw request and response for the TCM temperature DID and gear DID, including ISO-TP framing.
+- Raw request and response for the TCM temperature DID and gear DID, including ISO-TP framing, especially for DID 1E12 in P, R, N and D.
 - VIN and any available ECU identification values.
 - Supported Mode 01 bitmasks and raw responses for candidate Mode 22 DIDs.
 
