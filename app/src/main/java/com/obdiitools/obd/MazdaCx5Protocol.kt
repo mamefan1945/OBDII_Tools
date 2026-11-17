@@ -10,6 +10,8 @@ package com.obdiitools.obd
 data class MazdaCx5TransmissionData(
     val gear: String?,
     val transmissionTemperatureC: Double?,
+    val rawGearResponse: String = "",
+    val rawTemperatureResponse: String = "",
 )
 
 object MazdaCx5Protocol {
@@ -43,8 +45,12 @@ object MazdaCx5Protocol {
     fun parseTransmissionData(
         gearResponse: UdsResponse,
         temperatureResponse: UdsResponse,
+        rawGearResponse: String = "",
+        rawTemperatureResponse: String = "",
     ): MazdaCx5TransmissionData = MazdaCx5TransmissionData(
         gear = parseGear(gearResponse),
         transmissionTemperatureC = parseTransmissionTemperatureC(temperatureResponse),
+        rawGearResponse = rawGearResponse,
+        rawTemperatureResponse = rawTemperatureResponse,
     )
 }
