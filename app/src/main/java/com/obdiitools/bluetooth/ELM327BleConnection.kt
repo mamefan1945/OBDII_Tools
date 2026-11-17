@@ -285,7 +285,20 @@ class ELM327BleConnection(
         Thread.sleep(50)
         drainRxChannel()
         sendRaw("1001")
-        readResponseLines(200).firstOrNull() ?: ""
+        val udsLines = readResponseLines(600)
+        val udsResponse = udsLines.joinToString("\n")
+        val udsEvidence = udsLines.any { line ->
+            val frame = line.replace(Regex("(?i)^[0-9A-F]:"), "")
+                .filterNot { it.isWhitespace() }.uppercase()
+            frame.startsWith("5001") || frame.startsWith("7F10")
+        }
+        if (udsEvidence) {
+            udsResponse
+        } else {
+            // Fallback for standard OBD ECUs that do not answer UDS session control.
+            sendRaw("0100")
+            readResponseLines(1000).joinToString("\n")
+        }
     }
 
     override suspend fun queryFreezeFrame(pid: String): String = withContext(Dispatchers.IO) {
