@@ -46,6 +46,18 @@ The decoder validates the positive response service and matching DID before disp
 
 Reference: https://pelican.clutch.engineering/cars/mazda/cx-5/parameters
 
+## First real-vehicle validation (2026-11-17)
+
+The first on-vehicle test on the user's 2016 Mazda CX-5 automatic produced this Deep Scan result:
+
+- TCM probe: read-only response received at request ID 0x7E1 (the app identifies the controller as the Mazda 6-speed automatic TCM).
+- Transmission-fluid temperature: 38.6 °C (101.4 °F), decoded from DID 1E1C.
+- This confirms that the app's 0x7E1 request path, positive response handling, and temperature conversion produced a plausible live value on this vehicle.
+- The reported screen did not include a selected-gear value. DID 1E12 / gear decoding is therefore not yet confirmed on this vehicle.
+- The raw CAN/ISO-TP response was not included in the user's report, so the raw payload and scaling have not been independently audited from a capture.
+
+This is vehicle-specific confirmation of the temperature read only. It does not establish support for every 2016 CX-5 calibration, other Mazda model years, or other TCM data identifiers.
+
 ## Important limits
 
 - This is not yet a complete Mazda M-MDS replacement or a guarantee of access to every module.
@@ -60,7 +72,7 @@ Reference: https://pelican.clutch.engineering/cars/mazda/cx-5/parameters
 A real scan on the 2016 CX-5 should capture:
 - Adapter make/model and supported CAN pins/network access.
 - Protocol selected by ELM auto-detection.
-- Raw request and response for each responding ECU.
+- Raw request and response for the TCM temperature DID and gear DID, including ISO-TP framing.
 - VIN and any available ECU identification values.
 - Supported Mode 01 bitmasks and raw responses for candidate Mode 22 DIDs.
 
