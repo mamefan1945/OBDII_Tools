@@ -397,7 +397,15 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
         }
         data.slipRpm.value?.let {
             val signed = if (it >= 0) "+$it" else "$it"
-            add(MetricDisplay("SLIP RPM", "$signed RPM", data.slipRpm.source, if (it > 100) NeonRed else NeonGreen))
+            val endpointCandidate = it == 127 || it == -128
+            add(
+                MetricDisplay(
+                    if (endpointCandidate) "SLIP RPM • BYTE LIMIT" else "SLIP RPM",
+                    "$signed RPM",
+                    data.slipRpm.source,
+                    if (endpointCandidate) NeonOrange else NeonGreen,
+                )
+            )
         }
         data.cvtRatio.value?.let {
             add(MetricDisplay("GEAR RATIO", "%.2f".format(it), data.cvtRatio.source, NeonYellow))
