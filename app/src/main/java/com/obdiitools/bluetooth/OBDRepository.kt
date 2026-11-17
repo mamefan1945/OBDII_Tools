@@ -868,14 +868,8 @@ class OBDRepository @Inject constructor(
                 withContext(Dispatchers.IO) {
                     for ((index, addr) in addresses.withIndex()) {
                         onProgress(index, total)
-                        val raw = tx.pingEcu(addr).replace(" ", "").uppercase().trim()
-                        val result = when {
-                            raw.startsWith("5001") ->
-                                com.obdiitools.obd.EcuScanResult(addr, hasPositiveResponse = true)
-                            raw.startsWith("7F") && raw.length >= 6 ->
-                                com.obdiitools.obd.EcuScanResult(addr, hasPositiveResponse = false, nrc = raw.substring(4, 6))
-                            else -> null
-                        }
+                        val raw = tx.pingEcu(addr)
+                        val result = com.obdiitools.obd.parseEcuScanResult(addr, raw)
                         if (result != null) onResult(result)
                     }
                 }
