@@ -110,6 +110,33 @@ data class UdsResponse(
     }
 }
 
+/**
+ * Interprets read-only ECU discovery probes. Accepts either a UDS default-session
+ * response (10 01 -> 50 01) or a legislated OBD PID-support response (01 00 -> 41 00).
+ * Negative responses are evidence of a responding ECU only when they identify
+ * one of those requested services.
+ */
+fun parseEcuScanResult(address: String, raw: String): EcuScanResult? {
+    val frames = raw.lineSequence().map { line ->
+        line.trim().replace(Regex("(?i)^[0-9A-F]:"), "")
+            .filterNot { it.isWhitespace() }.uppercase()
+    }.filter { it.isNotEmpty() }.toList()
+
+    if (frames.any { it.startsWith("5001") || it.startsWith("4100") }) {
+        return EcuScanResult(address, hasPositiveResponse = true)
+    }
+
+    val negative = frames.firstOrNull { it.startsWith("7F10") || it.startsWith("7F01") }
+    if (negative != null && negative.length >= 6) {
+        return EcuScanResult(
+            address,
+            hasPositiveResponse = false,
+            nrc = negative.substring(4, 6),
+        )
+    }
+    return null
+}
+
 data class EcuScanResult(
     val address: String,
     val hasPositiveResponse: Boolean,
