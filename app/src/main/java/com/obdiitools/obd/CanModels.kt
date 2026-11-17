@@ -58,7 +58,21 @@ data class UdsResponse(
 
     companion object {
         fun parse(ecuAddress: String, did: String, raw: String): UdsResponse {
-            val cleaned = raw.filterNot { it.isWhitespace() }.uppercase()
+            // ELM adapters may return one logical response over several indexed
+            // lines (for example, "0:62F190..." followed by "1:...").
+            // Remove only the single-hex-digit line index, retain each payload,
+            // and concatenate in adapter order before validating the response.
+            val rawLines = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+            val cleaned = rawLines.mapNotNull { line ->
+                val withoutIndex = line.replace(Regex("(?i)^[0-9A-F]:"), "")
+                val compact = withoutIndex.filterNot { it.isWhitespace() }.uppercase()
+                when {
+                    compact.isNotEmpty() && compact.all { it in '0'..'9' || it in 'A'..'F' } -> compact
+                    compact.contains("NODATA") || compact.contains("NO DATA") ||
+                        compact.contains("ERROR") || compact.contains("?") -> compact
+                    else -> null // Ignore adapter chatter such as SEARCHING...
+                }
+            }.joinToString("")
             val validHex = cleaned.isNotEmpty() && cleaned.length % 2 == 0 &&
                 cleaned.all { it in '0'..'9' || it in 'A'..'F' }
             val expectedPrefix = "62" + did.uppercase()
