@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.data.PreferencesRepository
+import com.obdiitools.data.SessionRepository
 import com.obdiitools.data.UserPreferences
 import com.obdiitools.obd.CVTData
 import com.obdiitools.obd.CVTDataSource
@@ -31,6 +32,7 @@ import kotlin.math.abs
 class CVTViewModel @Inject constructor(
     private val repository: OBDRepository,
     private val prefsRepository: PreferencesRepository,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     private val _cvtData = MutableStateFlow(CVTData())
@@ -242,7 +244,9 @@ class CVTViewModel @Inject constructor(
             }
             if (nissanCvt7Detected) {
                 nissanCvt7EcuAddress?.let { address -> repository.queryNissanCvt7LiveData(address) }?.let { sample ->
-                    _cvtData.value = toCvtData(sample)
+                    val decoded = toCvtData(sample)
+                    _cvtData.value = decoded
+                    sessionRepository.recordCvtData(decoded)
                 }
                 delay(300)
                 continue
