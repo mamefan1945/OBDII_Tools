@@ -164,3 +164,16 @@ val COMMON_DIDS = listOf(
     "F197" to "System Name / Engine Type",
     "F101" to "Software Fingerprint",
 )
+
+
+/**
+ * Returns a VIN only when a successful UDS F190 response contains a valid
+ * 17-character VIN. F190 is optional, so null means no verified VIN was read.
+ */
+fun parseUdsVin(response: UdsResponse): String? {
+    if (!response.isSuccess) return null
+    val vin = response.dataBytes.take(17).mapNotNull { byte ->
+        if (byte in 0x20..0x7E) byte.toChar() else null
+    }.joinToString("")
+    return vin.takeIf { it.matches(Regex("^[A-HJ-NPR-Z0-9]{17}$")) }
+}
