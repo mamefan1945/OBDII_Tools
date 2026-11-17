@@ -32,7 +32,7 @@ class DeepScanViewModel @Inject constructor(
 
     data class EcuResult(
         val address: String,
-        val moduleName: String?,
+        val addressHint: String?,
         val mode01Pids: List<SupportedPid>,
         val mode09Pids: List<SupportedPid>,
         val ecuVin: String? = null,
@@ -125,7 +125,7 @@ class DeepScanViewModel @Inject constructor(
                     results.add(
                         EcuResult(
                             address = addr,
-                            moduleName = if (addr == "7DF") "OBD2 Broadcast" else guessModuleName(addr),
+                            addressHint = if (addr == "7DF") "OBD2 Broadcast" else guessModuleName(addr),
                             mode01Pids = mode01.sorted().map { SupportedPid(it, mode01PidName(it)) },
                             mode09Pids = mode09.sorted().map { SupportedPid(it, mode09PidName(it)) },
                             ecuVin = identity?.second,
