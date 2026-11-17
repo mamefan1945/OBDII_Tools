@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
+import com.obdiitools.obd.MazdaCx5Protocol
+import com.obdiitools.obd.MazdaCx5TransmissionData
 import com.obdiitools.obd.guessModuleName
 import com.obdiitools.obd.parseUdsVin
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,6 +47,9 @@ class DeepScanViewModel @Inject constructor(
         val phase: String = "",
         val progress: Pair<Int, Int>? = null,
         val results: List<EcuResult> = emptyList(),
+        val isProbingMazda: Boolean = false,
+        val mazdaProbeStatus: String? = null,
+        val mazdaTransmission: MazdaCx5TransmissionData? = null,
     )
 
     private val _scanState = MutableStateFlow(ScanState())
@@ -158,6 +163,28 @@ class DeepScanViewModel @Inject constructor(
                 } finally {
                     repository.resumePolling()
                 }
+            }
+        }
+    }
+
+    /** Explicit, read-only Mode 22 probe for the 2016 CX-5 automatic TCM. */
+    fun probeMazdaCx5Transmission() {
+        if (scanJob?.isActive == true) return
+        viewModelScope.launch {
+            repository.pausePolling()
+            _scanState.value = _scanState.value.copy(isProbingMazda = true, mazdaProbeStatus = "Probing Mazda TCM at 0x7E1…", mazdaTransmission = null)
+            try {
+                val gear = repository.queryUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID)
+                val temp = repository.queryUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID)
+                val data = MazdaCx5Protocol.parseTransmissionData(gear, temp)
+                val found = data.gear != null || data.transmissionTemperatureC != null
+                _scanState.value = _scanState.value.copy(isProbingMazda = false, mazdaProbeStatus = if (found) "Read-only Mazda TCM response received" else "No recognized Mazda TCM data; values remain unavailable", mazdaTransmission = data)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _scanState.value = _scanState.value.copy(isProbingMazda = false, mazdaProbeStatus = "Mazda TCM probe failed: " + (error.message ?: "communication error"), mazdaTransmission = null)
+            } finally {
+                repository.resumePolling()
             }
         }
     }
