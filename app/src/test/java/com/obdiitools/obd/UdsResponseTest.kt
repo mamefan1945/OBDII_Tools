@@ -25,7 +25,7 @@ class UdsResponseTest {
 
     @Test
     fun assemblesIndexedElmContinuationLinesForLongDidResponses() {
-        val raw = "SEARCHING...\\n0:62F1903132333435\\n1:3637383941424344\\n2:45464748"
+        val raw = "SEARCHING...\n0:62F1903132333435\n1:3637383941424344\n2:45464748"
         val response = UdsResponse.parse("7E0", "F190", raw)
 
         assertTrue(response.isSuccess)
@@ -34,7 +34,7 @@ class UdsResponseTest {
 
     @Test
     fun assemblesIndexedNegativeResponseAndPreservesNrc() {
-        val response = UdsResponse.parse("7E1", "F190", "0:7F\\n1:2211")
+        val response = UdsResponse.parse("7E1", "F190", "0:7F\n1:2211")
 
         assertFalse(response.isSuccess)
         assertEquals("11", response.errorCode)
