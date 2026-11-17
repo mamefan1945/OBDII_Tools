@@ -139,7 +139,15 @@ fun DeepScanScreen(
                     item {
                         DeepScanInfoPanel(
                             onStart = { viewModel.startScan() },
+                            onProbeMazda = { viewModel.probeMazdaCx5Transmission() },
+                            isProbingMazda = scanState.isProbingMazda,
                         )
+                    }
+                }
+
+                if (scanState.mazdaProbeStatus != null) {
+                    item {
+                        MazdaTransmissionProbeCard(scanState.mazdaProbeStatus, scanState.mazdaTransmission)
                     }
                 }
 
@@ -184,7 +192,7 @@ fun DeepScanScreen(
 }
 
 @Composable
-private fun DeepScanInfoPanel(onStart: () -> Unit) {
+private fun DeepScanInfoPanel(onStart: () -> Unit, onProbeMazda: () -> Unit, isProbingMazda: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
@@ -205,6 +213,19 @@ private fun DeepScanInfoPanel(onStart: () -> Unit) {
                 color = TextSecondary.copy(alpha = 0.6f),
             )
         }
+        OutlinedButton(
+            onClick = onProbeMazda,
+            enabled = !isProbingMazda,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
+        ) {
+            Text(
+                if (isProbingMazda) "PROBING MAZDA TCM…" else "PROBE 2016 MAZDA CX-5 TCM",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+            )
+        }
         Button(
             onClick = onStart,
             modifier = Modifier.fillMaxWidth(),
@@ -218,6 +239,29 @@ private fun DeepScanInfoPanel(onStart: () -> Unit) {
                 color = BackgroundDeep,
                 letterSpacing = 1.sp,
             )
+        }
+    }
+}
+
+@Composable
+private fun MazdaTransmissionProbeCard(
+    status: String,
+    data: com.obdiitools.obd.MazdaCx5TransmissionData?,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .border(1.dp, NeonOrange.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .background(NeonOrange.copy(alpha = 0.06f)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("MAZDA 6-SPEED AUTOMATIC · TCM 0x7E1", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonOrange)
+        Text(status, fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
+        data?.gear?.let { Text("Selected gear: $it", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary) }
+        data?.transmissionTemperatureC?.let {
+            Text("Transmission fluid temperature: %.1f °C / %.1f °F".format(it, it * 9.0 / 5.0 + 32.0), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
+        }
+        if (data?.gear == null && data?.transmissionTemperatureC == null) {
+            Text("No decoded values. The TCM may not support these identifiers or may not be reachable through this adapter.", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
         }
     }
 }
