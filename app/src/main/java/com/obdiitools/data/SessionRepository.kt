@@ -30,6 +30,10 @@ class SessionRepository @Inject constructor(
     private var totalFuelLitres: Float = 0f
     private var lastCvtPointMs: Long = 0L
 
+    private companion object {
+        const val SESSION_POINT_MATCH_WINDOW_MS = 600L
+    }
+
     private val _sessionFuelLitres = MutableStateFlow(0f)
     val sessionFuelLitres: StateFlow<Float> = _sessionFuelLitres.asStateFlow()
 
@@ -90,10 +94,10 @@ class SessionRepository @Inject constructor(
         lastTimestampMs = now
 
         val loc = gpsRepository.location.value?.takeIf { it.accuracy <= 50f }
-        dao.insertDataPoint(
-            SessionDataPoint(
-                sessionId = sessionId,
-                timestampMs = now,
+        val nearbyCvtPoint = dao.findNearbyCvtOnlyPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
+        if (nearbyCvtPoint != null) {
+            dao.updatePointWithObd(
+                id = nearbyCvtPoint.id,
                 rpm = data.rpm,
                 speedKph = data.speedKph,
                 coolantTempC = data.coolantTempC,
@@ -105,7 +109,24 @@ class SessionRepository @Inject constructor(
                 longitude = loc?.longitude,
                 accuracy = loc?.accuracy,
             )
-        )
+        } else {
+            dao.insertDataPoint(
+                SessionDataPoint(
+                    sessionId = sessionId,
+                    timestampMs = now,
+                    rpm = data.rpm,
+                    speedKph = data.speedKph,
+                    coolantTempC = data.coolantTempC,
+                    throttlePercent = data.throttlePercent,
+                    engineLoadPercent = data.engineLoadPercent,
+                    mafGramsPerSec = data.mafGramsPerSec,
+                    batteryVoltage = data.batteryVoltage,
+                    latitude = loc?.latitude,
+                    longitude = loc?.longitude,
+                    accuracy = loc?.accuracy,
+                )
+            )
+        }
     }
 
     suspend fun recordCvtData(data: CVTData) = mutex.withLock {
@@ -118,10 +139,10 @@ class SessionRepository @Inject constructor(
             data.secondaryPressureMpa.value, data.targetSecondaryPressureMpa.value,
         )
         if (values.all { it == null }) return@withLock
-        dao.insertDataPoint(
-            SessionDataPoint(
-                sessionId = sessionId,
-                timestampMs = now,
+        val nearbyObdPoint = dao.findNearbyObdPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
+        if (nearbyObdPoint != null) {
+            dao.updatePointWithCvt(
+                id = nearbyObdPoint.id,
                 cvtSpeedKph = data.speedKph.value,
                 cvtEngineRpm = data.engineRpm.value,
                 cvtSlipRpm = data.slipRpm.value,
@@ -131,7 +152,22 @@ class SessionRepository @Inject constructor(
                 cvtSecondaryPressureMpa = data.secondaryPressureMpa.value,
                 cvtTargetSecondaryPressureMpa = data.targetSecondaryPressureMpa.value,
             )
-        )
+        } else {
+            dao.insertDataPoint(
+                SessionDataPoint(
+                    sessionId = sessionId,
+                    timestampMs = now,
+                    cvtSpeedKph = data.speedKph.value,
+                    cvtEngineRpm = data.engineRpm.value,
+                    cvtSlipRpm = data.slipRpm.value,
+                    cvtTempC = data.cvtTempC.value,
+                    cvtRatio = data.cvtRatio.value,
+                    cvtPrimaryPressureMpa = data.primaryPressureMpa.value,
+                    cvtSecondaryPressureMpa = data.secondaryPressureMpa.value,
+                    cvtTargetSecondaryPressureMpa = data.targetSecondaryPressureMpa.value,
+                )
+            )
+        }
         lastCvtPointMs = now
     }
 
