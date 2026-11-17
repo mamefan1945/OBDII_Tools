@@ -39,4 +39,25 @@ class UdsResponseTest {
         assertFalse(response.isSuccess)
         assertEquals("11", response.errorCode)
     }
+    @Test
+    fun parsesOnlyValidSeventeenCharacterVinFromF190() {
+        val vin = "1HGCM82633A004352"
+        val hex = vin.toByteArray(Charsets.US_ASCII).joinToString("") { "%02X".format(it) }
+        val response = UdsResponse.parse("7E0", "F190", "62F190$hex")
+
+        assertEquals(vin, parseUdsVin(response))
+    }
+
+    @Test
+    fun rejectsInvalidVinCharactersAndShortPayloads() {
+        val invalid = "1HGCM82633I004352"
+        val invalidHex = invalid.toByteArray(Charsets.US_ASCII).joinToString("") { "%02X".format(it) }
+        val shortHex = "1HGCM82633A".toByteArray(Charsets.US_ASCII)
+            .joinToString("") { "%02X".format(it) }
+
+        assertEquals(null, parseUdsVin(UdsResponse.parse("7E0", "F190", "62F190$invalidHex")))
+        assertEquals(null, parseUdsVin(UdsResponse.parse("7E0", "F190", "62F190$shortHex")))
+        assertEquals(null, parseUdsVin(UdsResponse.parse("7E0", "F190", "7F2211")))
+    }
+
 }
