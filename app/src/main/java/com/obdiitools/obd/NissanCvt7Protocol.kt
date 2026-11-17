@@ -100,7 +100,8 @@ object NissanCvt7Protocol {
             else -> "U"
         }
         val digit = (first shr 4) and 0x03
-        return "$family$digit${first.toString(16).uppercase().last()}$second"
+        val lowNibble = first and 0x0F
+        return "$family$digit${lowNibble.toString(16).uppercase()}$second"
     }
 
     /**
