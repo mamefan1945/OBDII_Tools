@@ -25,8 +25,6 @@ data class NissanCvt7LiveData(
 
 object NissanCvt7Protocol {
     private const val REQUIRED_RESPONSE_BYTES = 83
-    private const val OPTIONAL_STATUS_BYTE_INDEX = 86
-    private const val MAX_OPTIONAL_STATUS_VALUE = 4
 
     fun isExpectedTcmIdentity(lines: List<String>): Boolean {
         val hex = lines.joinToString("") { it.filterNot(Char::isWhitespace).uppercase() }
@@ -86,11 +84,6 @@ object NissanCvt7Protocol {
 
         val bytes = payload.chunked(2).map { it.toInt(16) }
         if (bytes.size < REQUIRED_RESPONSE_BYTES) return null
-        if (bytes.size > OPTIONAL_STATUS_BYTE_INDEX &&
-            bytes[OPTIONAL_STATUS_BYTE_INDEX] > MAX_OPTIONAL_STATUS_VALUE) {
-            return null
-        }
-
         return NissanCvt7LiveData(
             vehicleSpeedKph = bytes[15],
             engineRpm = bytes[21] shl 5,

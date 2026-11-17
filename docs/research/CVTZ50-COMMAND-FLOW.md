@@ -49,7 +49,7 @@ The directly decoded fields now implemented in `NissanCvt7Protocol.parseLiveData
 
 Both target-secondary and line-pressure display values are sourced from byte 43 in the reference formatter; OBDII Tools preserves that behavior rather than inventing a separate byte offset. Other extracted bytes and derived displays are not exposed as live fields yet.
 
-The decoder now requires the `07A` adapter prefix, a complete `6101` payload of at least 83 bytes, valid hexadecimal framing, and the optional byte-86 sanity limit when that byte is present. Tests cover the supplied captured response, decoded values, truncated/unframed/negative responses, and the byte-86 rejection condition.
+The decoder now requires the `07A` adapter prefix, a complete `6101` payload of at least 83 bytes, and valid hexadecimal framing. The reference reads byte index 86 into a separate auxiliary status value, but changes that auxiliary value to -1 when it exceeds 4; it does not reject the core 83-byte telemetry array. OBDII Tools leaves that unidentified auxiliary value unexposed and does not use it to reject the live measurements. Tests cover the supplied captured response, decoded values, truncated/unframed/negative responses, and the independent auxiliary-byte behavior.
 
 ## OBDII Tools transport improvement from the response-flow findings
 
@@ -58,6 +58,6 @@ The reference app accumulates fragmented adapter input until its response termin
 ## Remaining evidence boundaries
 
 - The CVT7 values above reproduce the reference app's implemented offsets and conversions; they are not an independent Nissan engineering specification. Validate units and behavior against a complete capture and service documentation before presenting the values as OEM-certified measurements.
-- The optional byte-86 value is checked for range by the reference app, but its semantic name is still unknown.
+- The optional byte-86 value populates a separate auxiliary status field; values above 4 invalidate that auxiliary field only. Its semantic name is still unknown.
 - The wildcard expansion and 15-second timeout findings apply to CVTz50's arbitrary-command UI. OBDII Tools has no equivalent arbitrary-command queue that needs those behaviors today, so they are documented but not added to custom PID execution.
 - No unidentified CVT7 bytes, hydraulic control commands, write services, or actuator routines have been implemented.

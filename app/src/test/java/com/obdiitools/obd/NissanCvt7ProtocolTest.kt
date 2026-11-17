@@ -54,7 +54,7 @@ class NissanCvt7ProtocolTest {
     }
 
     @Test
-    fun rejectsResponseWhenOptionalStatusByteExceedsReferenceLimit() {
+    fun auxiliaryByte86DoesNotInvalidateCoreTelemetry() {
         val payload = capturedResponse().drop(1)
             .joinToString("") { it.substringAfter(':') }
             .chunked(2)
@@ -64,7 +64,9 @@ class NissanCvt7ProtocolTest {
             "${index.toString(16).uppercase()}:${bytes.joinToString("")}"
         }
 
-        assertNull(NissanCvt7Protocol.parseLiveData(invalid))
+        val live = NissanCvt7Protocol.parseLiveData(invalid)
+        assertTrue(live != null)
+        assertEquals(768, live?.engineRpm)
     }
 
     @Test
