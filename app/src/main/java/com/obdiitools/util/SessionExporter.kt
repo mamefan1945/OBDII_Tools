@@ -53,7 +53,7 @@ object SessionExporter {
         session.maxSpeedKph?.let { sb.appendLine("# Max Speed,$it kph") }
         session.maxCoolantTempC?.let { sb.appendLine("# Max Coolant,$it C") }
         sb.appendLine("#")
-        sb.appendLine("timestamp_ms,elapsed_sec,rpm,speed_kph,coolant_c,throttle_pct,engine_load_pct,maf_g_s,battery_v")
+        sb.appendLine("timestamp_ms,elapsed_sec,rpm,speed_kph,coolant_c,throttle_pct,engine_load_pct,maf_g_s,battery_v,cvt_speed_kph,cvt_engine_rpm,cvt_slip_rpm,cvt_temp_c,cvt_ratio,cvt_primary_pressure_mpa,cvt_secondary_pressure_mpa,cvt_target_secondary_pressure_mpa")
         for (pt in points) {
             val elapsed = (pt.timestampMs - session.startTimeMs) / 1000f
             sb.append(pt.timestampMs).append(',')
@@ -64,7 +64,15 @@ object SessionExporter {
             sb.append(pt.throttlePercent?.let { "%.1f".format(Locale.US, it) } ?: "").append(',')
             sb.append(pt.engineLoadPercent?.let { "%.1f".format(Locale.US, it) } ?: "").append(',')
             sb.append(pt.mafGramsPerSec?.let { "%.2f".format(Locale.US, it) } ?: "").append(',')
-            sb.appendLine(pt.batteryVoltage?.let { "%.2f".format(Locale.US, it) } ?: "")
+            sb.append(pt.batteryVoltage?.let { "%.2f".format(Locale.US, it) } ?: "").append(',')
+            sb.append(pt.cvtSpeedKph ?: "").append(',')
+            sb.append(pt.cvtEngineRpm ?: "").append(',')
+            sb.append(pt.cvtSlipRpm ?: "").append(',')
+            sb.append(pt.cvtTempC ?: "").append(',')
+            sb.append(pt.cvtRatio?.let { "%.3f".format(Locale.US, it) } ?: "").append(',')
+            sb.append(pt.cvtPrimaryPressureMpa?.let { "%.3f".format(Locale.US, it) } ?: "").append(',')
+            sb.append(pt.cvtSecondaryPressureMpa?.let { "%.3f".format(Locale.US, it) } ?: "").append(',')
+            sb.appendLine(pt.cvtTargetSecondaryPressureMpa?.let { "%.3f".format(Locale.US, it) } ?: "")
         }
         return sb.toString()
     }
