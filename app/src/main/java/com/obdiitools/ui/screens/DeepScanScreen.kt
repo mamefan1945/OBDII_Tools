@@ -195,9 +195,9 @@ private fun DeepScanInfoPanel(onStart: () -> Unit) {
                 color = TextSecondary,
                 letterSpacing = 2.sp,
             )
-            InfoLine("1", "Scans all 128 addresses in the standard ECU range (0x700–0x77F) to find responding modules.")
+            InfoLine("1", "Scans 136 candidate 11-bit request addresses (0x700–0x77F and 0x7E0–0x7E7) for responding modules.")
             InfoLine("2", "Queries each responding ECU using the OBD-II PID support bitmask — no guessing, only confirmed-supported PIDs are listed.")
-            InfoLine("3", "Also checks Mode 09 (vehicle info) on the broadcast address to discover VIN, calibration IDs, and ECU names.")
+            InfoLine("3", "Checks Mode 09 support and attempts read-only UDS VIN DID F190 on each individually responding ECU. Unsupported identifiers are reported, not guessed.")
             Text(
                 "This takes 2–5 minutes depending on how many ECUs respond.",
                 fontFamily = FontFamily.Monospace,
@@ -264,11 +264,27 @@ private fun EcuResultCard(result: DeepScanViewModel.EcuResult) {
                     color = accentColor,
                 )
                 Text(
-                    result.moduleName ?: "Unknown Module",
+                    result.moduleName ?: "Unknown Module (address not mapped)",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = if (result.moduleName != null) TextPrimary else TextSecondary,
                 )
+                result.ecuVin?.let { vin ->
+                    Text(
+                        "VIN  $vin",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = NeonGreen,
+                    )
+                }
+                result.identityStatus?.let { status ->
+                    Text(
+                        status,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                        color = TextSecondary,
+                    )
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
