@@ -270,10 +270,9 @@ class ELM327BleConnection(
         drainRxChannel()
         sendRaw("22$did")
         val lines = readResponseLines(3000)
-        val response = lines.firstOrNull { l ->
-            val u = l.replace(" ", "").uppercase()
-            u.startsWith("62") || u.startsWith("7F")
-        } ?: lines.firstOrNull() ?: ""
+        // Preserve indexed continuation lines for the UDS parser rather than
+        // silently discarding all but the first positive-response line.
+        val response = lines.joinToString("\n")
         sendRaw("ATSH 7DF")
         Thread.sleep(100)
         drainRxChannel()
