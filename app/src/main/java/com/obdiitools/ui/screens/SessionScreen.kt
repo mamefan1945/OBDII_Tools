@@ -401,6 +401,14 @@ private enum class GraphSeries(val label: String, val color: Color) {
     COOLANT("Coolant", NeonRed),
     FUEL_ECONOMY("Economy", NeonGreen),
     BATTERY("Battery V", NeonYellow),
+    CVT_SPEED("CVT Speed", NeonOrange),
+    CVT_RPM("CVT Engine RPM", NeonCyan),
+    CVT_SLIP("CVT Slip", NeonRed),
+    CVT_TEMP("CVT Fluid Temp", NeonYellow),
+    CVT_RATIO("CVT Ratio", NeonGreen),
+    CVT_PRIMARY_PRESSURE("Primary Pressure", NeonCyan),
+    CVT_SECONDARY_PRESSURE("Secondary Pressure", NeonOrange),
+    CVT_TARGET_PRESSURE("Target Secondary", NeonGreen),
 }
 
 @Composable
@@ -476,9 +484,25 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
 
         Spacer(Modifier.height(12.dp))
 
+        // Show CVT-specific series only when that sensor was recorded in this session.
+        val availableSeries = GraphSeries.entries.filter { series ->
+            when (series) {
+                GraphSeries.CVT_SPEED -> points.any { it.cvtSpeedKph != null }
+                GraphSeries.CVT_RPM -> points.any { it.cvtEngineRpm != null }
+                GraphSeries.CVT_SLIP -> points.any { it.cvtSlipRpm != null }
+                GraphSeries.CVT_TEMP -> points.any { it.cvtTempC != null }
+                GraphSeries.CVT_RATIO -> points.any { it.cvtRatio != null }
+                GraphSeries.CVT_PRIMARY_PRESSURE -> points.any { it.cvtPrimaryPressureMpa != null }
+                GraphSeries.CVT_SECONDARY_PRESSURE -> points.any { it.cvtSecondaryPressureMpa != null }
+                GraphSeries.CVT_TARGET_PRESSURE -> points.any { it.cvtTargetSecondaryPressureMpa != null }
+                else -> true
+            }
+        }
+        if (selected !in availableSeries) selected = availableSeries.firstOrNull() ?: GraphSeries.RPM
+
         // Series selector
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(GraphSeries.entries) { series ->
+            items(availableSeries) { series ->
                 FilterChip(
                     selected = selected == series,
                     onClick = { selected = series },
@@ -523,6 +547,14 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                             }
                         }
                         GraphSeries.BATTERY      -> point.batteryVoltage ?: return@mapNotNull null
+                        GraphSeries.CVT_SPEED -> point.cvtSpeedKph?.let { UnitConverter.speed(it, prefs.speedUnit) } ?: return@mapNotNull null
+                        GraphSeries.CVT_RPM -> point.cvtEngineRpm?.toFloat() ?: return@mapNotNull null
+                        GraphSeries.CVT_SLIP -> point.cvtSlipRpm?.toFloat() ?: return@mapNotNull null
+                        GraphSeries.CVT_TEMP -> point.cvtTempC?.let { UnitConverter.temperature(it, prefs.temperatureUnit) } ?: return@mapNotNull null
+                        GraphSeries.CVT_RATIO -> point.cvtRatio ?: return@mapNotNull null
+                        GraphSeries.CVT_PRIMARY_PRESSURE -> point.cvtPrimaryPressureMpa ?: return@mapNotNull null
+                        GraphSeries.CVT_SECONDARY_PRESSURE -> point.cvtSecondaryPressureMpa ?: return@mapNotNull null
+                        GraphSeries.CVT_TARGET_PRESSURE -> point.cvtTargetSecondaryPressureMpa ?: return@mapNotNull null
                     }
                     point.timestampMs to v
                 }
@@ -534,6 +566,12 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                 GraphSeries.COOLANT      -> " ${prefs.temperatureUnit.symbol}"
                 GraphSeries.FUEL_ECONOMY -> " ${prefs.fuelEconomyUnit.symbol}"
                 GraphSeries.BATTERY      -> " V"
+                GraphSeries.CVT_SPEED -> " " + prefs.speedUnit.symbol
+                GraphSeries.CVT_RPM -> " rpm"
+                GraphSeries.CVT_SLIP -> " rpm"
+                GraphSeries.CVT_TEMP -> " " + prefs.temperatureUnit.symbol
+                GraphSeries.CVT_RATIO -> " ratio"
+                GraphSeries.CVT_PRIMARY_PRESSURE, GraphSeries.CVT_SECONDARY_PRESSURE, GraphSeries.CVT_TARGET_PRESSURE -> " MPa"
             }
 
             if (timedValues.size < 2) {
