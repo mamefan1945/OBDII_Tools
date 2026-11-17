@@ -269,6 +269,12 @@ private fun MazdaTransmissionProbeCard(
         data?.transmissionTemperatureC?.let {
             Text("Transmission fluid temperature: %.1f °C / %.1f °F".format(it, it * 9.0 / 5.0 + 32.0), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
         }
+        data?.rawGearResponse?.takeIf { it.isNotBlank() }?.let { raw ->
+            Text("DID 1E12 raw: " + raw.replace("\\n", " / ").take(180), fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
+        }
+        data?.rawTemperatureResponse?.takeIf { it.isNotBlank() }?.let { raw ->
+            Text("DID 1E1C raw: " + raw.replace("\\n", " / ").take(180), fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
+        }
         if (data?.gear == null && data?.transmissionTemperatureC == null) {
             Text("No decoded values. The TCM may not support these identifiers or may not be reachable through this adapter.", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
         }
