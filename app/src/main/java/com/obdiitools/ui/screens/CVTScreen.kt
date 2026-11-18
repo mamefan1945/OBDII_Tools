@@ -85,6 +85,7 @@ fun CVTScreen(
     val prefs           by viewModel.userPreferences.collectAsState()
     val sourceDesc      by viewModel.sourceDescription.collectAsState()
     val rawCapture      by viewModel.rawCapture.collectAsState()
+    val livePollDiagnostics by viewModel.livePollDiagnostics.collectAsState()
     val isCapturing     by viewModel.isCapturing.collectAsState()
     val cvtDtcs          by viewModel.cvtDtcs.collectAsState()
     val isReadingCvtDtcs by viewModel.isReadingCvtDtcs.collectAsState()
@@ -174,6 +175,7 @@ fun CVTScreen(
                     }
                 }
                 ConnectionStatusCard(sourceDesc)
+                if (transmissionEcuAddress != null) LivePollDiagnosticsCard(livePollDiagnostics)
                 if (sourceDesc.contains("controller confirmed", ignoreCase = true)) {
                     Button(
                         onClick = { viewModel.captureRawTransmissionData() },
@@ -297,6 +299,30 @@ fun CVTScreen(
             titleContentColor = TextPrimary,
             textContentColor = TextSecondary,
         )
+    }
+}
+
+@Composable
+private fun LivePollDiagnosticsCard(details: String) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "LIVE POLL DIAGNOSTICS",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                color = NeonCyan,
+            )
+            SelectionContainer {
+                Text(
+                    details,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = TextSecondary,
+                    lineHeight = 15.sp,
+                )
+            }
+        }
     }
 }
 
