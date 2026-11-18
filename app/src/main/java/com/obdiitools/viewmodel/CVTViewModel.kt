@@ -40,6 +40,9 @@ class CVTViewModel @Inject constructor(
 
     private val _sourceDescription = MutableStateFlow("Probing vehicle capabilities…")
     private val _rawCapture = MutableStateFlow("")
+    private val _livePollDiagnostics = MutableStateFlow("Waiting for first live poll…")
+    val livePollDiagnostics: StateFlow<String> = _livePollDiagnostics.asStateFlow()
+
     val rawCapture: StateFlow<String> = _rawCapture.asStateFlow()
 
     private val _isCapturing = MutableStateFlow(false)
@@ -151,6 +154,7 @@ class CVTViewModel @Inject constructor(
         cvtTempPid = null
         window.clear()
         _cvtData.value = CVTData()
+        _livePollDiagnostics.value = "Waiting for first live poll…"
         releaseActivePollingPause()
     }
 
@@ -257,11 +261,22 @@ class CVTViewModel @Inject constructor(
                 repository.pausePolling()
                 try {
                     nissanCvt7EcuAddress?.let { address ->
-                        repository.queryNissanCvt7LiveData(address)
-                    }?.let { sample ->
-                        val decoded = toCvtData(sample)
-                        _cvtData.value = decoded
-                        sessionRepository.recordCvtData(decoded)
+                        val result = repository.queryNissanCvt7LiveData(address)
+                        val sample = result.sample
+                        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                            .format(java.util.Date())
+                        _livePollDiagnostics.value = buildString {
+                            append("Last poll: $time — ")
+                            append(result.parseStatus)
+                            if (sample != null) append("  |  Last good sample: $time")
+                            append("\\nRaw 2101: ")
+                            append(result.rawResponse.ifBlank { "(empty)" })
+                        }
+                        if (sample != null) {
+                            val decoded = toCvtData(sample)
+                            _cvtData.value = decoded
+                            sessionRepository.recordCvtData(decoded)
+                        }
                     }
                 } finally {
                     repository.resumePolling()
