@@ -12,6 +12,12 @@ data class NissanCvt7DiscoveryResult(
     val liveData: NissanCvt7LiveData?,
 )
 
+data class NissanCvt7PollResult(
+    val sample: NissanCvt7LiveData?,
+    val rawResponse: String,
+    val parseStatus: String,
+)
+
 data class NissanCvt7LiveData(
     val vehicleSpeedKph: Int,
     val engineRpm: Int,
@@ -112,6 +118,34 @@ object NissanCvt7Protocol {
      * resulting payload begins 61 01 and contains at least 83 bytes. Byte 22
      * is the signed SLIP REV value displayed by the reference monitor.
      */
+    fun diagnoseLiveData(lines: List<String>): String {
+        if (lines.isEmpty()) return "No response lines (timeout/NODATA)."
+        val firstLine = lines.first().filterNot(Char::isWhitespace).uppercase()
+        if (!firstLine.startsWith("07A")) {
+            return "Framing mismatch: first line ${firstLine.take(80)}; expected 07A prefix."
+        }
+        val payload = buildString {
+            lines.forEachIndexed { index, rawLine ->
+                var line = rawLine.filterNot(Char::isWhitespace).uppercase()
+                if (index == 0) line = line.removePrefix("07A")
+                if (line.isEmpty()) return@forEachIndexed
+                if (!line.matches(Regex("^(?:[0-9A-F]:)?[0-9A-F]+$"))) return@forEachIndexed
+                append(line.replace(Regex("^[0-9A-F]:"), ""))
+            }
+        }
+        if (!payload.startsWith("6101")) {
+            return "Unexpected payload prefix: ${payload.take(24).ifBlank { "(empty)" }}; expected 6101."
+        }
+        if (payload.length % 2 != 0 || !payload.all { it in "0123456789ABCDEF" }) {
+            return "Malformed/non-hex payload (length ${payload.length} hex chars)."
+        }
+        val byteCount = payload.length / 2
+        if (byteCount < REQUIRED_RESPONSE_BYTES) {
+            return "Short response: $byteCount bytes; need at least $REQUIRED_RESPONSE_BYTES."
+        }
+        return "Response shape valid; decoder returned no sample (unexpected decode failure)."
+    }
+
     fun parseLiveData(lines: List<String>): NissanCvt7LiveData? {
         if (lines.isEmpty()) return null
 
