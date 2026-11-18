@@ -384,6 +384,12 @@ class OBDRepository @Inject constructor(
                     rawResponse = response.joinToString(" | ").take(900),
                     parseStatus = status,
                 )
+            } catch (error: Exception) {
+                com.obdiitools.obd.NissanCvt7PollResult(
+                    sample = null,
+                    rawResponse = response.joinToString(" | ").take(900),
+                    parseStatus = "Request exception: ${error.javaClass.simpleName}: ${error.message ?: "no detail"}",
+                )
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
                     runCatching { query("ATCRA", 300) }
