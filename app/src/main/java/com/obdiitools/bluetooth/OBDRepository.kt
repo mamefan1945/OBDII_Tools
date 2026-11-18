@@ -358,7 +358,18 @@ class OBDRepository @Inject constructor(
         val conn = connection ?: return null
         return conn.withTransaction {
             try {
+                // Standard OBD polling can change ELM display/protocol settings
+                // between CVT samples. Re-establish the exact framing used by
+                // discovery on every read so parseLiveData receives the same
+                // 07A-prefixed, compact, headerless response each time.
+                query("ATE0", 300)
+                query("ATAL", 300)
+                query("ATH0", 300)
+                query("ATS0", 300)
+                query("ATST32", 300)
+                query("ATSW00", 300)
                 query("ATSP6", 600)
+                query("ATCAF1", 300)
                 query("ATSH ${ecuAddress.uppercase()}", 400)
                 query("ATFCSH ${ecuAddress.uppercase()}", 300)
                 query("ATFCSD 300000", 300)
