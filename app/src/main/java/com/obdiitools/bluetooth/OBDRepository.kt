@@ -353,15 +353,14 @@ class OBDRepository @Inject constructor(
     /** Reads one sample from the already-discovered physical controller address. */
     suspend fun queryNissanCvt7LiveData(
         ecuAddress: String,
-    ): com.obdiitools.obd.NissanCvt7LiveData? {
-        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return null
-        val conn = connection ?: return null
+    ): com.obdiitools.obd.NissanCvt7PollResult {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) {
+            return com.obdiitools.obd.NissanCvt7PollResult(null, "", "Invalid TCM address.")
+        }
+        val conn = connection ?: return com.obdiitools.obd.NissanCvt7PollResult(null, "", "Adapter disconnected.")
         return conn.withTransaction {
+            var response = emptyList<String>()
             try {
-                // Standard OBD polling can change ELM display/protocol settings
-                // between CVT samples. Re-establish the exact framing used by
-                // discovery on every read so parseLiveData receives the same
-                // 07A-prefixed, compact, headerless response each time.
                 query("ATE0", 300)
                 query("ATAL", 300)
                 query("ATH0", 300)
@@ -376,8 +375,15 @@ class OBDRepository @Inject constructor(
                 query("ATFCSM1", 300)
                 query("ATCRA 7E9", 300)
                 query("ATST32", 300)
-                val response = queryLines("2101", 3000)
-                com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
+                response = queryLines("2101", 3000)
+                val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
+                val status = if (sample != null) "Decoded OK." else
+                    com.obdiitools.obd.NissanCvt7Protocol.diagnoseLiveData(response)
+                com.obdiitools.obd.NissanCvt7PollResult(
+                    sample = sample,
+                    rawResponse = response.joinToString(" | ").take(900),
+                    parseStatus = status,
+                )
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
                     runCatching { query("ATCRA", 300) }
