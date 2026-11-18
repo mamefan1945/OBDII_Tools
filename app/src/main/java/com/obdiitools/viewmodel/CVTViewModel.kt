@@ -250,10 +250,21 @@ class CVTViewModel @Inject constructor(
                 continue
             }
             if (nissanCvt7Detected) {
-                nissanCvt7EcuAddress?.let { address -> repository.queryNissanCvt7LiveData(address) }?.let { sample ->
-                    val decoded = toCvtData(sample)
-                    _cvtData.value = decoded
-                    sessionRepository.recordCvtData(decoded)
+                // The TCM request changes the ELM protocol, receive filter, and
+                // request header. Keep the ordinary poller out for this complete
+                // transaction, then let it resume between CVT samples. This
+                // preserves live TCM updates without starving standard OBD data.
+                repository.pausePolling()
+                try {
+                    nissanCvt7EcuAddress?.let { address ->
+                        repository.queryNissanCvt7LiveData(address)
+                    }?.let { sample ->
+                        val decoded = toCvtData(sample)
+                        _cvtData.value = decoded
+                        sessionRepository.recordCvtData(decoded)
+                    }
+                } finally {
+                    repository.resumePolling()
                 }
                 delay(300)
                 continue
