@@ -269,7 +269,7 @@ class CVTViewModel @Inject constructor(
                             append("Last poll: $time — ")
                             append(result.parseStatus)
                             if (sample != null) append("  |  Last good sample: $time")
-                            append("\\nRaw 2101: ")
+                            append("\nRaw 2101: ")
                             append(result.rawResponse.ifBlank { "(empty)" })
                         }
                         if (sample != null) {
