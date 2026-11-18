@@ -42,6 +42,7 @@ class CVTViewModel @Inject constructor(
     private val _rawCapture = MutableStateFlow("")
     private val _livePollDiagnostics = MutableStateFlow("Waiting for first live poll…")
     val livePollDiagnostics: StateFlow<String> = _livePollDiagnostics.asStateFlow()
+    private var lastSuccessfulSampleAt: String? = null
 
     val rawCapture: StateFlow<String> = _rawCapture.asStateFlow()
 
@@ -265,10 +266,11 @@ class CVTViewModel @Inject constructor(
                         val sample = result.sample
                         val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
                             .format(java.util.Date())
+                        if (sample != null) lastSuccessfulSampleAt = time
                         _livePollDiagnostics.value = buildString {
                             append("Last poll: $time — ")
                             append(result.parseStatus)
-                            if (sample != null) append("  |  Last good sample: $time")
+                            append("  |  Last good sample: ${lastSuccessfulSampleAt ?: "never"}")
                             append("\nRaw 2101: ")
                             append(result.rawResponse.ifBlank { "(empty)" })
                         }
