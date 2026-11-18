@@ -111,17 +111,24 @@ class CVTViewModel @Inject constructor(
     fun start() {
         if (!repository.isConnected || pollJob?.isActive == true) return
         pollJob?.cancel()
-        val pauseLease = acquirePollingPause()
         pollJob = viewModelScope.launch {
             try {
-                delay(350)  // let the main polling loop wind down
                 if (!probeComplete) {
-                    probe()
-                    probeComplete = true
+                    // Discovery changes ELM protocol/header settings. Pause ordinary
+                    // polling only for this one-time transaction, then let both
+                    // polling loops run; SerializedOBDConnection prevents I/O overlap.
+                    val pauseLease = acquirePollingPause()
+                    try {
+                        delay(350) // let the main polling loop wind down
+                        probe()
+                        probeComplete = true
+                    } finally {
+                        releasePollingPause(pauseLease)
+                    }
                 }
                 poll()
             } finally {
-                releasePollingPause(pauseLease)
+                releaseActivePollingPause()
             }
         }
     }
