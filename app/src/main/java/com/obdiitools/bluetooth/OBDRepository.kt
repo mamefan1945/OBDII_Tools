@@ -375,13 +375,31 @@ class OBDRepository @Inject constructor(
                 query("ATFCSM1", 300)
                 query("ATCRA 7E9", 300)
                 query("ATST32", 300)
+
+                // The controller's manufacturer-specific diagnostic session
+                // can time out while the monitor is open. Discovery explicitly
+                // enters session C0 before reading 2101; re-enter it for each
+                // sample and verify the positive 50C0 response.
+                val sessionResponse = queryLines("10C0", 1500)
+                val sessionOk = com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(
+                    sessionResponse, "50C0"
+                )
+                if (!sessionOk) {
+                    val sessionRaw = sessionResponse.joinToString(" | ").take(300)
+                    return@withTransaction com.obdiitools.obd.NissanCvt7PollResult(
+                        sample = null,
+                        rawResponse = "10C0: ${sessionRaw.ifBlank { "(empty)" }}",
+                        parseStatus = "Diagnostic session C0 was not accepted; skipped 2101 request.",
+                    )
+                }
+
                 response = queryLines("2101", 3000)
                 val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
-                val status = if (sample != null) "Decoded OK." else
+                val status = if (sample != null) "Session 50C0 confirmed; decoded OK." else
                     com.obdiitools.obd.NissanCvt7Protocol.diagnoseLiveData(response)
                 com.obdiitools.obd.NissanCvt7PollResult(
                     sample = sample,
-                    rawResponse = response.joinToString(" | ").take(900),
+                    rawResponse = "10C0: ${sessionResponse.joinToString(" | ").take(300)}  ||  2101: ${response.joinToString(" | ").take(600)}",
                     parseStatus = status,
                 )
             } catch (error: Exception) {
