@@ -385,6 +385,7 @@ class OBDRepository @Inject constructor(
                     parseStatus = status,
                 )
             } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 com.obdiitools.obd.NissanCvt7PollResult(
                     sample = null,
                     rawResponse = response.joinToString(" | ").take(900),
