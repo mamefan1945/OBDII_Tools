@@ -61,6 +61,30 @@ class NissanCvt7ProtocolTest {
     }
 
     @Test
+    fun decodesLowRangeFromObservedCvt7SelectorBit() {
+        fun selectorFor(rawSelector: String): String? {
+            val payload = capturedResponse().drop(1)
+                .joinToString("") { it.substringAfter(':') }
+                .chunked(2)
+                .toMutableList()
+            payload[70] = rawSelector
+            val response = listOf("07A") + payload.chunked(7).mapIndexed { index, bytes ->
+                "${index.toString(16).uppercase()}:${bytes.joinToString("")}"
+            }
+            return NissanCvt7Protocol.parseLiveData(response)?.selectorPosition
+        }
+
+        // L captures varied in other bits, but consistently included bit 0x04.
+        assertEquals("L", selectorFor("04"))
+        assertEquals("L", selectorFor("06"))
+        assertEquals("L", selectorFor("0F"))
+        assertEquals("D", selectorFor("82"))
+        assertEquals("P", selectorFor("19"))
+        assertEquals("R", selectorFor("2B"))
+        assertEquals("N", selectorFor("4B"))
+    }
+
+    @Test
     fun rejectsIncompleteOrUnframedCvt7Responses() {
         val capture = capturedResponse()
         assertNull(NissanCvt7Protocol.parseLiveData(capture.take(10)))
