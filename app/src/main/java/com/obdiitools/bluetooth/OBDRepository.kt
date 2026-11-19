@@ -420,10 +420,15 @@ class OBDRepository @Inject constructor(
                 )
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
+                    // Restore standard functional OBD-II adapter state before
+                    // the dashboard poller acquires the serialized connection.
                     runCatching { query("ATCRA", 300) }
                     runCatching { query("ATFCSM0", 300) }
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
+                    runCatching { query("ATCAF1", 300) }
+                    runCatching { query("ATH0", 300) }
+                    runCatching { query("ATS0", 300) }
                 }
             }
         }
