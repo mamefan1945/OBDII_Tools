@@ -28,6 +28,15 @@ data class NissanCvt7LiveData(
     val secondaryPressureMpa: Float,
     val targetSecondaryPressureMpa: Float,
     val linePressureMpa: Float,
+    val accelerator: Float,
+    val torqueConverterRatio: Float,
+    val cvtTemperatureCount: Int,
+    val batteryVoltage: Float,
+    val lockupCurrentAmps: Float,
+    val luPressureMpa: Float,
+    val selectorPosition: String,
+    val virtualGear: Int,
+    val dGearRatio: Float,
 )
 
 object NissanCvt7Protocol {
@@ -185,6 +194,28 @@ object NissanCvt7Protocol {
             targetSecondaryPressureMpa = bytes[43] * 0.025f,
             // The reference formatter sources both displayed values from byte 43.
             linePressureMpa = bytes[43] * 0.025f,
+            accelerator = bytes[27] / 32f,
+            torqueConverterRatio = bytes[35] / 64f,
+            cvtTemperatureCount = 255 - bytes[12],
+            batteryVoltage = bytes[14] * 20f / 255f,
+            lockupCurrentAmps = (bytes[50] * 255 + bytes[51]) / 1000f,
+            luPressureMpa = (if (bytes[42] > 127) bytes[42] - 256 else bytes[42]) * 0.01f,
+            selectorPosition = when {
+                bytes[70] and 0x80 != 0 -> "D"
+                bytes[70] and 0x40 != 0 -> "N"
+                bytes[70] and 0x20 != 0 -> "R"
+                bytes[70] and 0x10 != 0 -> "P"
+                else -> "Unknown"
+            },
+            virtualGear = when {
+                gearRatio <= 0.44f -> 6
+                gearRatio <= 0.69f -> 5
+                gearRatio <= 0.86f -> 4
+                gearRatio <= 1.11f -> 3
+                gearRatio <= 1.53f -> 2
+                else -> 1
+            },
+            dGearRatio = bytes[40] * 0.04f,
         )
     }
 }
