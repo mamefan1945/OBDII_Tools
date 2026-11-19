@@ -39,7 +39,12 @@ class OBDForegroundService : Service() {
         createNotificationChannel()
         val initial = buildNotification("Connecting…", null, UserPreferences())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, initial, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            startForeground(
+                NOTIFICATION_ID,
+                initial,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+            )
         } else {
             startForeground(NOTIFICATION_ID, initial)
         }
