@@ -255,33 +255,27 @@ class CVTViewModel @Inject constructor(
                 continue
             }
             if (nissanCvt7Detected) {
-                // The TCM request changes the ELM protocol, receive filter, and
-                // request header. Keep the ordinary poller out for this complete
-                // transaction, then let it resume between CVT samples. This
-                // preserves live TCM updates without starving standard OBD data.
-                repository.pausePolling()
-                try {
-                    nissanCvt7EcuAddress?.let { address ->
-                        val result = repository.queryNissanCvt7LiveData(address)
-                        val sample = result.sample
-                        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                            .format(java.util.Date())
-                        if (sample != null) lastSuccessfulSampleAt = time
-                        _livePollDiagnostics.value = buildString {
-                            append("Last poll: $time — ")
-                            append(result.parseStatus)
-                            append("  |  Last good sample: ${lastSuccessfulSampleAt ?: "never"}")
-                            append("\nRaw 2101: ")
-                            append(result.rawResponse.ifBlank { "(empty)" })
-                        }
-                        if (sample != null) {
-                            val decoded = toCvtData(sample)
-                            _cvtData.value = decoded
-                            sessionRepository.recordCvtData(decoded)
-                        }
+                // Both pollers use SerializedOBDConnection transactions. Do not
+                // pause standard OBD polling here: frequent CVT reads can otherwise
+                // starve the slow-PID cycle (including engine oil temperature PID 5C).
+                nissanCvt7EcuAddress?.let { address ->
+                    val result = repository.queryNissanCvt7LiveData(address)
+                    val sample = result.sample
+                    val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                        .format(java.util.Date())
+                    if (sample != null) lastSuccessfulSampleAt = time
+                    _livePollDiagnostics.value = buildString {
+                        append("Last poll: $time — ")
+                        append(result.parseStatus)
+                        append("  |  Last good sample: ${lastSuccessfulSampleAt ?: "never"}")
+                        append("\nRaw 2101: ")
+                        append(result.rawResponse.ifBlank { "(empty)" })
                     }
-                } finally {
-                    repository.resumePolling()
+                    if (sample != null) {
+                        val decoded = toCvtData(sample)
+                        _cvtData.value = decoded
+                        sessionRepository.recordCvtData(decoded)
+                    }
                 }
                 delay(300)
                 continue
