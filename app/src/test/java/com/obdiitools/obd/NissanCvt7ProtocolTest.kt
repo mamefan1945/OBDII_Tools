@@ -53,6 +53,11 @@ class NissanCvt7ProtocolTest {
         assertEquals("P", live?.selectorPosition)
         assertEquals(1, live?.virtualGear)
         assertEquals(2.16f, live?.dGearRatio ?: 0f, 0.0001f)
+        assertEquals(0.0f, live?.gForce ?: -1f, 0.0001f)
+        assertEquals(0.0f, live?.engineTorqueNm ?: -1f, 0.0001f)
+        assertEquals(0, live?.enginePowerHp)
+        assertEquals(0, live?.outputTorqueNm)
+        assertTrue(live?.selectorStatusFlag == true)
     }
 
     @Test
