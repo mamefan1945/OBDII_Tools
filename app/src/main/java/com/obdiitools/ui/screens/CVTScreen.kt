@@ -436,6 +436,33 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
         data.cvtRatio.value?.let {
             add(MetricDisplay("GEAR RATIO", "%.2f".format(it), data.cvtRatio.source, NeonYellow))
         }
+        data.accelerator.value?.let {
+            add(MetricDisplay("ACCELERATOR", "%.2f".format(it), data.accelerator.source, NeonCyan))
+        }
+        data.torqueConverterRatio.value?.let {
+            add(MetricDisplay("TORQUE RATIO", "%.2f".format(it), data.torqueConverterRatio.source, NeonYellow))
+        }
+        data.virtualGear.value?.let {
+            add(MetricDisplay("VIRTUAL GEAR", "$it", data.virtualGear.source, NeonPurple))
+        }
+        data.dGearRatio.value?.let {
+            add(MetricDisplay("D GEAR RATIO", "%.2f".format(it), data.dGearRatio.source, NeonYellow))
+        }
+        data.selectorPosition.value?.let {
+            add(MetricDisplay("SELECTOR", it, data.selectorPosition.source, NeonCyan))
+        }
+        data.cvtTemperatureCount.value?.let {
+            add(MetricDisplay("CVT TEMP COUNT", "$it", data.cvtTemperatureCount.source, NeonRed))
+        }
+        data.batteryVoltage.value?.let {
+            add(MetricDisplay("TCM BATTERY", "%.2f V".format(it), data.batteryVoltage.source, NeonGreen))
+        }
+        data.lockupCurrentAmps.value?.let {
+            add(MetricDisplay("LOCKUP CURRENT", "%.3f A".format(it), data.lockupCurrentAmps.source, NeonPurple))
+        }
+        data.luPressureMpa.value?.let {
+            add(MetricDisplay("LU PRESSURE", "%.2f MPa".format(it), data.luPressureMpa.source, NeonOrange))
+        }
         data.cvtTempC.value?.let {
             val value = when (prefs.temperatureUnit) {
                 TemperatureUnit.CELSIUS -> "$it °C"
