@@ -176,25 +176,33 @@ object SessionBackup {
         val headerIndex = lines.indexOfFirst { it.startsWith("timestamp_ms,") }
         val importedPoints = mutableListOf<SessionDataPoint>()
         if (headerIndex >= 0) {
+            val headers = lines[headerIndex].split(',').mapIndexed { index, name -> name to index }.toMap()
             lines.drop(headerIndex + 1).forEach { line ->
                 val c = line.split(',')
-                if (c.size >= 9) {
-                    val ts = c[0].toLongOrNull() ?: return@forEach
-                    importedPoints += SessionDataPoint(
-                        sessionId = sessionId, timestampMs = ts, rpm = c[2].toIntOrNull(),
-                        speedKph = c[3].toIntOrNull(), coolantTempC = c[4].toIntOrNull(),
-                        throttlePercent = c[5].toFloatOrNull(), engineLoadPercent = c[6].toFloatOrNull(),
-                        mafGramsPerSec = c[7].toFloatOrNull(), batteryVoltage = c[8].toFloatOrNull(),
-                        cvtSpeedKph = c.getOrNull(9)?.toIntOrNull(),
-                        cvtEngineRpm = c.getOrNull(10)?.toIntOrNull(),
-                        cvtSlipRpm = c.getOrNull(11)?.toIntOrNull(),
-                        cvtTempC = c.getOrNull(12)?.toIntOrNull(),
-                        cvtRatio = c.getOrNull(13)?.toFloatOrNull(),
-                        cvtPrimaryPressureMpa = c.getOrNull(14)?.toFloatOrNull(),
-                        cvtSecondaryPressureMpa = c.getOrNull(15)?.toFloatOrNull(),
-                        cvtTargetSecondaryPressureMpa = c.getOrNull(16)?.toFloatOrNull(),
-                    )
-                }
+                fun cell(name: String): String? = headers[name]?.let(c::getOrNull)?.takeIf { it.isNotBlank() }
+                val ts = cell("timestamp_ms")?.toLongOrNull() ?: return@forEach
+                importedPoints += SessionDataPoint(
+                    sessionId = sessionId,
+                    timestampMs = ts,
+                    rpm = cell("rpm")?.toIntOrNull(),
+                    speedKph = cell("speed_kph")?.toIntOrNull(),
+                    coolantTempC = cell("coolant_c")?.toIntOrNull(),
+                    throttlePercent = cell("throttle_pct")?.toFloatOrNull(),
+                    engineLoadPercent = cell("engine_load_pct")?.toFloatOrNull(),
+                    mafGramsPerSec = cell("maf_g_s")?.toFloatOrNull(),
+                    batteryVoltage = cell("battery_v")?.toFloatOrNull(),
+                    cvtSpeedKph = cell("cvt_speed_kph")?.toIntOrNull(),
+                    cvtEngineRpm = cell("cvt_engine_rpm")?.toIntOrNull(),
+                    cvtSlipRpm = cell("cvt_slip_rpm")?.toIntOrNull(),
+                    cvtTempC = cell("cvt_temp_c")?.toIntOrNull(),
+                    cvtRatio = cell("cvt_ratio")?.toFloatOrNull(),
+                    cvtPrimaryPressureMpa = cell("cvt_primary_pressure_mpa")?.toFloatOrNull(),
+                    cvtSecondaryPressureMpa = cell("cvt_secondary_pressure_mpa")?.toFloatOrNull(),
+                    cvtTargetSecondaryPressureMpa = cell("cvt_target_secondary_pressure_mpa")?.toFloatOrNull(),
+                    latitude = cell("latitude")?.toDoubleOrNull(),
+                    longitude = cell("longitude")?.toDoubleOrNull(),
+                    accuracy = cell("gps_accuracy_m")?.toFloatOrNull(),
+                )
             }
         }
         return ImportedSessionBackup(
