@@ -39,4 +39,9 @@ data class CVTData(
     val selectorPosition: CVTReading<String>    = CVTReading(null),
     val virtualGear: CVTReading<Int>            = CVTReading(null),
     val dGearRatio: CVTReading<Float>           = CVTReading(null),
+    val gForce: CVTReading<Float>                = CVTReading(null),
+    val engineTorqueNm: CVTReading<Float>        = CVTReading(null),
+    val enginePowerHp: CVTReading<Int>           = CVTReading(null),
+    val outputTorqueNm: CVTReading<Int>          = CVTReading(null),
+    val selectorStatusFlag: CVTReading<Boolean>  = CVTReading(null),
 )
