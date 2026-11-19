@@ -346,6 +346,11 @@ class CVTViewModel @Inject constructor(
             selectorPosition = cvtReading(sample.selectorPosition),
             virtualGear = cvtReading(sample.virtualGear),
             dGearRatio = measured(sample.dGearRatio),
+            gForce = measured(sample.gForce),
+            engineTorqueNm = measured(sample.engineTorqueNm),
+            enginePowerHp = cvtReading(sample.enginePowerHp),
+            outputTorqueNm = cvtReading(sample.outputTorqueNm),
+            selectorStatusFlag = cvtReading(sample.selectorStatusFlag),
         )
     }
 
