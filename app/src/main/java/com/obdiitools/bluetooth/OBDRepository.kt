@@ -249,10 +249,19 @@ class OBDRepository @Inject constructor(
                 null
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
+                    // Restore the standard functional OBD-II adapter state.
+                    // The CVT transaction temporarily selects ISO 15765-4 CAN 11-bit
+                    // (ATSP6), a physical TCM header, a response filter and manual
+                    // flow-control settings. Reset all of them before releasing the
+                    // serialized transaction so the dashboard poller sees a clean
+                    // standard OBD configuration.
                     runCatching { query("ATCRA", 300) }
                     runCatching { query("ATFCSM0", 300) }
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
+                    runCatching { query("ATCAF1", 300) }
+                    runCatching { query("ATH0", 300) }
+                    runCatching { query("ATS0", 300) }
                 }
             }
         }
