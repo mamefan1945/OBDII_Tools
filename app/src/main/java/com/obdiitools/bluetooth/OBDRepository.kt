@@ -762,7 +762,7 @@ class OBDRepository @Inject constructor(
                 ELM327Protocol.PID.O2_B1S2      -> current.copy(o2Bank1S2Volts = (value as? Float) ?: current.o2Bank1S2Volts)
                 ELM327Protocol.PID.O2_B2S1      -> current.copy(o2Bank2S1Volts = (value as? Float) ?: current.o2Bank2S1Volts)
                 ELM327Protocol.PID.O2_B2S2      -> current.copy(o2Bank2S2Volts = (value as? Float) ?: current.o2Bank2S2Volts)
-                ELM327Protocol.PID.OIL_TEMP      -> current.copy(oilTempC = (value as? Int) ?: current.oilTempC)
+                ELM327Protocol.PID.OIL_TEMP      -> current.copy(oilTempC = value as? Int)
                 ELM327Protocol.PID.BARO_PRESSURE -> current.copy(baroPressureKpa = (value as? Int) ?: current.baroPressureKpa)
                 ELM327Protocol.PID.FUEL_PRESSURE -> current.copy(fuelPressureKpa = (value as? Int) ?: current.fuelPressureKpa)
                 else -> current
