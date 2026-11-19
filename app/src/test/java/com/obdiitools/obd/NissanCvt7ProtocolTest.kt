@@ -44,6 +44,15 @@ class NissanCvt7ProtocolTest {
         assertEquals(0.575f, live?.secondaryPressureMpa ?: 0f, 0.0001f)
         assertEquals(0.5f, live?.targetSecondaryPressureMpa ?: 0f, 0.0001f)
         assertEquals(0.5f, live?.linePressureMpa ?: 0f, 0.0001f)
+        assertEquals(0.0f, live?.accelerator ?: -1f, 0.0001f)
+        assertEquals(3.0f, live?.torqueConverterRatio ?: -1f, 0.0001f)
+        assertEquals(237, live?.cvtTemperatureCount)
+        assertEquals(13.02f, live?.batteryVoltage ?: 0f, 0.01f)
+        assertEquals(0.0f, live?.lockupCurrentAmps ?: -1f, 0.001f)
+        assertEquals(-0.5f, live?.luPressureMpa ?: 0f, 0.0001f)
+        assertEquals("D", live?.selectorPosition)
+        assertEquals(1, live?.virtualGear)
+        assertEquals(2.20f, live?.dGearRatio ?: 0f, 0.0001f)
     }
 
     @Test
