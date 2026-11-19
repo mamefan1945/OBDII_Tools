@@ -74,6 +74,7 @@ import com.obdiitools.data.TemperatureUnit
 import com.obdiitools.data.UserPreferences
 import com.obdiitools.ui.theme.BackgroundDeep
 import com.obdiitools.util.SessionExporter
+import com.obdiitools.util.SessionShareOptions
 import com.obdiitools.util.SessionBackupOptions
 import com.obdiitools.util.getSessionTitle
 import com.obdiitools.util.UnitConverter
@@ -111,6 +112,12 @@ fun SessionScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showBackupDialog by remember { mutableStateOf(false) }
+    var showShareDialog by remember { mutableStateOf(false) }
+    var shareIncludeVehicle by remember { mutableStateOf(true) }
+    var shareIncludeStats by remember { mutableStateOf(true) }
+    var shareIncludeObd by remember { mutableStateOf(true) }
+    var shareIncludeCvt by remember { mutableStateOf(true) }
+    var shareIncludeGps by remember { mutableStateOf(true) }
     var includeVehicle by remember { mutableStateOf(true) }
     var includeStats by remember { mutableStateOf(true) }
     var includeTelemetry by remember { mutableStateOf(true) }
@@ -205,15 +212,7 @@ fun SessionScreen(
                     IconButton(onClick = { onNavigateToMap(selectedSession?.id ?: return@IconButton) }) {
                         Icon(Icons.Default.Map, contentDescription = "View trail on map", tint = NeonCyan)
                     }
-                    IconButton(onClick = {
-                        val session = selectedSession ?: return@IconButton
-                        scope.launch(Dispatchers.IO) {
-                            val intent = SessionExporter.buildShareIntent(context, session, dataPoints)
-                            withContext(Dispatchers.Main) {
-                                context.startActivity(android.content.Intent.createChooser(intent, "Share Session"))
-                            }
-                        }
-                    }) {
+                    IconButton(onClick = { showShareDialog = true }) {
                         Icon(Icons.Default.Share, contentDescription = null, tint = TextSecondary)
                     }
                 }
@@ -238,6 +237,59 @@ fun SessionScreen(
                 onDelete = { viewModel.deleteSession(it.id) },
             )
         }
+    }
+
+    if (showShareDialog) {
+        AlertDialog(
+            onDismissRequest = { showShareDialog = false },
+            title = { Text("Share session") },
+            text = {
+                Column {
+                    Text("Choose which fields to include in the CSV. Session start and end times are always included.")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = shareIncludeVehicle, onCheckedChange = { shareIncludeVehicle = it })
+                        Text("Vehicle details and VIN")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = shareIncludeStats, onCheckedChange = { shareIncludeStats = it })
+                        Text("Trip statistics")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = shareIncludeObd, onCheckedChange = { shareIncludeObd = it })
+                        Text("Standard OBD telemetry")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = shareIncludeCvt, onCheckedChange = { shareIncludeCvt = it })
+                        Text("CVT telemetry")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = shareIncludeGps, onCheckedChange = { shareIncludeGps = it })
+                        Text("GPS coordinates and accuracy")
+                    }
+                    Text("GPS data can reveal travel history and precise locations.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showShareDialog = false
+                    val session = selectedSession ?: return@TextButton
+                    val options = SessionShareOptions(
+                        includeVehicleDetails = shareIncludeVehicle,
+                        includeTripStatistics = shareIncludeStats,
+                        includeObdTelemetry = shareIncludeObd,
+                        includeCvtTelemetry = shareIncludeCvt,
+                        includeGps = shareIncludeGps,
+                    )
+                    scope.launch(Dispatchers.IO) {
+                        val intent = SessionExporter.buildShareIntent(context, session, dataPoints, options)
+                        withContext(Dispatchers.Main) {
+                            context.startActivity(android.content.Intent.createChooser(intent, "Share Session"))
+                        }
+                    }
+                }) { Text("Share") }
+            },
+            dismissButton = { TextButton(onClick = { showShareDialog = false }) { Text("Cancel") } },
+        )
     }
 
     if (showBackupDialog) {
