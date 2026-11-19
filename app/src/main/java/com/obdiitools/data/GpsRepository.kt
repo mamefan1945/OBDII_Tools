@@ -1,7 +1,9 @@
 package com.obdiitools.data
 
 import android.annotation.SuppressLint
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Looper
 import com.google.android.gms.location.LocationCallback
@@ -49,6 +51,12 @@ class GpsRepository @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun startUpdates() {
+        val hasFineLocation = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        val hasCoarseLocation = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!hasFineLocation && !hasCoarseLocation) return
+
         lastRecordedElapsedRealtimeNanos = 0L
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MS)
             .setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL_MS)
