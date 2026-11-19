@@ -37,6 +37,11 @@ data class NissanCvt7LiveData(
     val selectorPosition: String,
     val virtualGear: Int,
     val dGearRatio: Float,
+    val gForce: Float,
+    val engineTorqueNm: Float,
+    val enginePowerHp: Int,
+    val outputTorqueNm: Int,
+    val selectorStatusFlag: Boolean,
 )
 
 object NissanCvt7Protocol {
@@ -183,12 +188,29 @@ object NissanCvt7Protocol {
 
         val bytes = payload.chunked(2).map { it.toInt(16) }
         if (bytes.size < REQUIRED_RESPONSE_BYTES) return null
+        val selector = when {
+            bytes[70] and 0x10 != 0 -> "P"
+            bytes[70] and 0x20 != 0 -> "R"
+            bytes[70] and 0x40 != 0 -> "N"
+            bytes[70] and 0x80 != 0 -> "D"
+            else -> "Unknown"
+        }
+        val signedTorqueByte = if (bytes[33] > 127) bytes[33] - 256 else bytes[33]
+        val engineTorque = signedTorqueByte * 6.4f
+        val engineRpm = bytes[21] shl 5
+        val gearRatio = bytes[24] * 0.045f
+        val torqueMultiplier = when (selector) {
+            "P", "N" -> 0.0f
+            "R" -> 1.766f
+            "D" -> gearRatio
+            else -> 0.0f
+        }
         return NissanCvt7LiveData(
             vehicleSpeedKph = bytes[15],
-            engineRpm = bytes[21] shl 5,
+            engineRpm = engineRpm,
             slipRpm = if (bytes[22] > 127) bytes[22] - 256 else bytes[22],
             fluidTemperatureC = bytes[37] - 40,
-            gearRatio = bytes[24] * 0.045f,
+            gearRatio = gearRatio,
             primaryPressureMpa = bytes[44] * 0.025f,
             secondaryPressureMpa = bytes[36] * 0.025f,
             targetSecondaryPressureMpa = bytes[43] * 0.025f,
@@ -200,13 +222,7 @@ object NissanCvt7Protocol {
             batteryVoltage = bytes[14] * 20f / 255f,
             lockupCurrentAmps = (bytes[50] * 255 + bytes[51]) / 1000f,
             luPressureMpa = (if (bytes[42] > 127) bytes[42] - 256 else bytes[42]) * 0.01f,
-            selectorPosition = when {
-                bytes[70] and 0x80 != 0 -> "D"
-                bytes[70] and 0x40 != 0 -> "N"
-                bytes[70] and 0x20 != 0 -> "R"
-                bytes[70] and 0x10 != 0 -> "P"
-                else -> "Unknown"
-            },
+            selectorPosition = selector,
             virtualGear = when {
                 gearRatio <= 0.44f -> 6
                 gearRatio <= 0.69f -> 5
@@ -216,6 +232,11 @@ object NissanCvt7Protocol {
                 else -> 1
             },
             dGearRatio = bytes[40] * 0.04f,
+            gForce = (if (bytes[26] > 127) bytes[26] - 256 else bytes[26]) / 32f,
+            engineTorqueNm = engineTorque,
+            enginePowerHp = ((engineTorque * 1.3596f * engineRpm) / 9549f).toInt(),
+            outputTorqueNm = (engineTorque * (bytes[35] / 64f) * torqueMultiplier * 5.173f).toInt(),
+            selectorStatusFlag = bytes[70] and 0x08 != 0,
         )
     }
 }
