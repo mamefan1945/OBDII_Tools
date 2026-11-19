@@ -188,11 +188,15 @@ object NissanCvt7Protocol {
 
         val bytes = payload.chunked(2).map { it.toInt(16) }
         if (bytes.size < REQUIRED_RESPONSE_BYTES) return null
+        // CVT7 selector byte 70 uses the four documented range bits.
+        // Repeated Sentra captures show bit 0x04 asserted in L; the reference
+        // formatter does not name this bit, so retain the raw byte in diagnostics.
         val selector = when {
             bytes[70] and 0x10 != 0 -> "P"
             bytes[70] and 0x20 != 0 -> "R"
             bytes[70] and 0x40 != 0 -> "N"
             bytes[70] and 0x80 != 0 -> "D"
+            bytes[70] and 0x04 != 0 -> "L"
             else -> "Unknown"
         }
         val signedTorqueByte = if (bytes[33] > 127) bytes[33] - 256 else bytes[33]
