@@ -30,4 +30,13 @@ data class CVTData(
     val secondaryPressureMpa: CVTReading<Float> = CVTReading(null),
     val targetSecondaryPressureMpa: CVTReading<Float> = CVTReading(null),
     val linePressureMpa: CVTReading<Float>      = CVTReading(null),
+    val accelerator: CVTReading<Float>          = CVTReading(null),
+    val torqueConverterRatio: CVTReading<Float> = CVTReading(null),
+    val cvtTemperatureCount: CVTReading<Int>    = CVTReading(null),
+    val batteryVoltage: CVTReading<Float>       = CVTReading(null),
+    val lockupCurrentAmps: CVTReading<Float>    = CVTReading(null),
+    val luPressureMpa: CVTReading<Float>        = CVTReading(null),
+    val selectorPosition: CVTReading<String>    = CVTReading(null),
+    val virtualGear: CVTReading<Int>            = CVTReading(null),
+    val dGearRatio: CVTReading<Float>           = CVTReading(null),
 )
