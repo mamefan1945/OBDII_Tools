@@ -448,6 +448,21 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
         data.dGearRatio.value?.let {
             add(MetricDisplay("D GEAR RATIO", "%.2f".format(it), data.dGearRatio.source, NeonYellow))
         }
+        data.gForce.value?.let {
+            add(MetricDisplay("G-FORCE", "%.2f g".format(it), data.gForce.source, NeonCyan))
+        }
+        data.engineTorqueNm.value?.let {
+            add(MetricDisplay("ENGINE TORQUE", "%.1f N·m".format(it), data.engineTorqueNm.source, NeonOrange))
+        }
+        data.enginePowerHp.value?.let {
+            add(MetricDisplay("ENGINE POWER", "$it HP", data.enginePowerHp.source, NeonGreen))
+        }
+        data.outputTorqueNm.value?.let {
+            add(MetricDisplay("OUTPUT TORQUE", "$it N·m", data.outputTorqueNm.source, NeonPurple))
+        }
+        data.selectorStatusFlag.value?.let {
+            add(MetricDisplay("SELECTOR STATUS", if (it) "ON" else "OFF", data.selectorStatusFlag.source, NeonCyan))
+        }
         data.selectorPosition.value?.let {
             add(MetricDisplay("SELECTOR", it, data.selectorPosition.source, NeonCyan))
         }
