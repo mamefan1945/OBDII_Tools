@@ -3,6 +3,11 @@ package com.obdiitools.data
 import com.obdiitools.obd.OBDData
 import com.obdiitools.obd.CVTData
 import com.obdiitools.util.UnitConverter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +23,8 @@ class SessionRepository @Inject constructor(
     private val gpsRepository: GpsRepository,
 ) {
     private val mutex = Mutex()
+    private val gpsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var gpsCollectionJob: Job? = null
     private var currentSessionId: Long? = null
     private var sessionMaxRpm: Int? = null
     private var sessionMaxSpeed: Int? = null
@@ -57,6 +64,23 @@ class SessionRepository @Inject constructor(
         totalFuelLitres = 0f
         lastCvtPointMs = 0L
         _sessionFuelLitres.value = 0f
+        gpsCollectionJob?.cancel()
+        gpsCollectionJob = gpsScope.launch {
+            gpsRepository.locations.collect { location ->
+                mutex.withLock {
+                    val activeSessionId = currentSessionId ?: return@withLock
+                    dao.insertDataPoint(
+                        SessionDataPoint(
+                            sessionId = activeSessionId,
+                            timestampMs = location.time,
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            accuracy = location.accuracy,
+                        )
+                    )
+                }
+            }
+        }
         gpsRepository.startUpdates()
         return id
     }
@@ -93,7 +117,6 @@ class SessionRepository @Inject constructor(
         lastSpeedKph = data.speedKph
         lastTimestampMs = now
 
-        val loc = gpsRepository.location.value?.takeIf { it.accuracy <= 50f }
         val nearbyCvtPoint = dao.findNearbyCvtOnlyPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
         if (nearbyCvtPoint != null) {
             dao.updatePointWithObd(
@@ -105,9 +128,9 @@ class SessionRepository @Inject constructor(
                 engineLoadPercent = data.engineLoadPercent,
                 mafGramsPerSec = data.mafGramsPerSec,
                 batteryVoltage = data.batteryVoltage,
-                latitude = loc?.latitude,
-                longitude = loc?.longitude,
-                accuracy = loc?.accuracy,
+                latitude = null,
+                longitude = null,
+                accuracy = null,
             )
         } else {
             dao.insertDataPoint(
@@ -121,9 +144,9 @@ class SessionRepository @Inject constructor(
                     engineLoadPercent = data.engineLoadPercent,
                     mafGramsPerSec = data.mafGramsPerSec,
                     batteryVoltage = data.batteryVoltage,
-                    latitude = loc?.latitude,
-                    longitude = loc?.longitude,
-                    accuracy = loc?.accuracy,
+                    latitude = null,
+                    longitude = null,
+                    accuracy = null,
                 )
             )
         }
@@ -178,6 +201,8 @@ class SessionRepository @Inject constructor(
                         val distKm: Float?, val speedSum: Long, val speedCount: Int, val fuelLitres: Float?)
 
         gpsRepository.stopUpdates()
+        gpsCollectionJob?.cancelAndJoin()
+        gpsCollectionJob = null
 
         val snap = mutex.withLock {
             val id = currentSessionId ?: return@withLock null
