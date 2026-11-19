@@ -343,6 +343,15 @@ class CVTViewModel @Inject constructor(
             secondaryPressureMpa = measured(sample.secondaryPressureMpa),
             targetSecondaryPressureMpa = measured(sample.targetSecondaryPressureMpa),
             linePressureMpa = measured(sample.linePressureMpa),
+            accelerator = measured(sample.accelerator),
+            torqueConverterRatio = measured(sample.torqueConverterRatio),
+            cvtTemperatureCount = cvtReading(sample.cvtTemperatureCount),
+            batteryVoltage = measured(sample.batteryVoltage),
+            lockupCurrentAmps = measured(sample.lockupCurrentAmps),
+            luPressureMpa = measured(sample.luPressureMpa),
+            selectorPosition = cvtReading(sample.selectorPosition),
+            virtualGear = cvtReading(sample.virtualGear),
+            dGearRatio = measured(sample.dGearRatio),
         )
     }
 
