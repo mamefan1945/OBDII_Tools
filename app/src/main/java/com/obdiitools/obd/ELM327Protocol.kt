@@ -173,7 +173,8 @@ object ELM327Protocol {
                     val vStr = cleaned.replace("V", "").trim()
                     vStr.toFloatOrNull()
                 }
-                else -> null
+                else -> AllPidDefinitions.ALL.firstOrNull { it.command == pid.uppercase() }
+                    ?.parse(cleaned)
             }
         } catch (e: Exception) {
             null
