@@ -56,9 +56,15 @@ class VehicleCapabilityTracker(
         }
         val next = if (valid) {
             val successes = previous.successfulSamples + 1
+            val wasUsable = previous.status == CapabilityStatus.CONFIRMED ||
+                previous.status == CapabilityStatus.INTERMITTENT
             PidCapability(
                 pid = key,
-                status = if (successes >= samplesToConfirm) CapabilityStatus.CONFIRMED else CapabilityStatus.DISCOVERING,
+                status = when {
+                    successes >= samplesToConfirm -> CapabilityStatus.CONFIRMED
+                    wasUsable -> CapabilityStatus.INTERMITTENT
+                    else -> CapabilityStatus.DISCOVERING
+                },
                 successfulSamples = successes,
                 consecutiveFailures = 0,
             )
@@ -73,7 +79,7 @@ class VehicleCapabilityTracker(
                     wasUsable -> CapabilityStatus.INTERMITTENT
                     else -> CapabilityStatus.DISCOVERING
                 },
-                successfulSamples = previous.successfulSamples,
+                successfulSamples = 0,
                 consecutiveFailures = failures,
             )
         }
