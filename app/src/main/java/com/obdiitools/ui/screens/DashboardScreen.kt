@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.OBDData
 import com.obdiitools.ui.components.CircularGauge
@@ -56,6 +57,7 @@ import com.obdiitools.viewmodel.MainViewModel
 fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit = {}) {
     val connectionState by viewModel.connectionState.collectAsState()
     val data by viewModel.obdData.collectAsState()
+    val livePidValues by viewModel.livePidValues.collectAsState()
     val confirmedPids by viewModel.confirmedPids.collectAsState()
     val previouslyKnownPids by viewModel.previouslyKnownPids.collectAsState()
     val prefs by viewModel.userPreferences.collectAsState()
@@ -72,6 +74,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
         } else {
             DashboardContent(
                 data = data,
+                livePidValues = livePidValues,
                 confirmedPids = confirmedPids,
                 previouslyKnownPids = previouslyKnownPids,
                 connectionState = connectionState,
@@ -115,6 +118,7 @@ private fun DisconnectedState() {
 @Composable
 private fun DashboardContent(
     data: OBDData,
+    livePidValues: Map<String, Float>,
     confirmedPids: Set<String>,
     previouslyKnownPids: Set<String>,
     connectionState: ConnectionState,
@@ -355,6 +359,47 @@ private fun DashboardContent(
                     value = data.baroPressureKpa?.let { UnitConverter.formatPressure(it, prefs.pressureUnit) + " " + prefs.pressureUnit.symbol } ?: "--",
                     color = NeonPurple,
                 )
+            }
+        }
+
+        // Additional verified Mode 01 readings are generated from the PID catalogue.
+        val dashboardCorePids = setOf(
+            "010C", "010D", "0105", "0111", "0104", "012F",
+            "010F", "010E", "0110", "015C", "0146", "0133",
+        )
+        val additionalReadings = AllPidDefinitions.ALL.filter { definition ->
+            definition.command in confirmedPids &&
+                definition.command !in dashboardCorePids &&
+                livePidValues.containsKey(definition.command)
+        }
+        if (additionalReadings.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                accentColor = NeonPurple,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        text = "ADAPTIVE SENSORS",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = TextSecondary,
+                        letterSpacing = 2.sp,
+                    )
+                    additionalReadings.forEach { definition ->
+                        LinearGauge(
+                            value = livePidValues[definition.command],
+                            minValue = definition.minValue,
+                            maxValue = definition.maxValue,
+                            label = definition.shortName,
+                            unit = definition.unit,
+                            accentColor = NeonPurple,
+                        )
+                    }
+                }
             }
         }
 
