@@ -578,13 +578,15 @@ class OBDRepository @Inject constructor(
                 val first = ELM327Protocol.parseResponse(command, query(command, 1200))
                 delay(80)
                 val second = ELM327Protocol.parseResponse(command, query(command, 1200))
+                val firstValid = isPlausibleMode01Value(command, first)
+                val secondValid = isPlausibleMode01Value(command, second)
                 if (address == "7DF") {
-                    capabilityTracker.record(command, first)
-                    capabilityTracker.record(command, second)
+                    capabilityTracker.record(command, first.takeIf { firstValid })
+                    capabilityTracker.record(command, second.takeIf { secondValid })
                     _confirmedPids.value = capabilityTracker.confirmedPids
                     persistCapabilityProfile()
                 }
-                first != null && second != null
+                firstValid && secondValid
             } finally {
                 withContext(NonCancellable) { runCatching { query("ATSH 7DF", 300) } }
             }
@@ -882,14 +884,23 @@ class OBDRepository @Inject constructor(
         _customPidValues.value = results
     }
 
+    private fun isPlausibleMode01Value(pid: String, value: Any?): Boolean {
+        val number = (value as? Number)?.toFloat() ?: return false
+        if (!number.isFinite()) return false
+        val definition = com.obdiitools.obd.AllPidDefinitions.ALL
+            .firstOrNull { it.command == pid.uppercase() } ?: return true
+        return number in definition.minValue..definition.maxValue
+    }
+
     private fun applyPidValues(values: Map<String, Any?>) {
         var current = _obdData.value
         val genericValues = _livePidValues.value.toMutableMap()
         for ((pid, value) in values) {
-            capabilityTracker.record(pid, value)
             val normalizedPid = pid.uppercase()
+            val plausible = isPlausibleMode01Value(normalizedPid, value)
+            capabilityTracker.record(normalizedPid, value.takeIf { plausible })
             val numericValue = (value as? Number)?.toFloat()
-            if (numericValue == null || !numericValue.isFinite()) genericValues.remove(normalizedPid)
+            if (!plausible || numericValue == null) genericValues.remove(normalizedPid)
             else genericValues[normalizedPid] = numericValue
             // A present PID with a null parse result means the adapter returned
             // NO DATA or malformed bytes. Clear the old value instead of
