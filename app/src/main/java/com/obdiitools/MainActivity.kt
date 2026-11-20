@@ -221,12 +221,29 @@ fun OBDIIApp(viewModel: MainViewModel) {
                 )
             }
             composable(
+                route     = "session_detail/{sessionId}",
+                arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                SessionScreen(
+                    sessionId = backStackEntry.arguments!!.getLong("sessionId"),
+                    onBack = { navController.navigateUp() },
+                    onNavigateToMap = { id -> navController.navigate("session_map/$id") },
+                )
+            }
+            composable(
                 route     = "session_map/{sessionId}",
                 arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
             ) { backStackEntry ->
+                val sessionId = backStackEntry.arguments!!.getLong("sessionId")
                 SessionMapScreen(
-                    sessionId = backStackEntry.arguments!!.getLong("sessionId"),
-                    onBack    = { navController.navigateUp() },
+                    sessionId = sessionId,
+                    onBack = {
+                        if (!navController.popBackStack("session_detail/{sessionId}", false)) {
+                            navController.navigate("session_detail/$sessionId") {
+                                popUpTo("session_map/{sessionId}") { inclusive = true }
+                            }
+                        }
+                    },
                 )
             }
             composable("custom_pids") {
