@@ -274,8 +274,10 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
         lines += "0x${ecu.address} — ${ecu.addressHint ?: "Unidentified ECU"}"
         ecu.ecuVin?.let { lines += "VIN: $it" }
         ecu.identityStatus?.let { lines += "Identity: $it" }
-        lines += "Mode 01 PIDs (${ecu.mode01Pids.size}):"
+        lines += "Mode 01 advertised PIDs (${ecu.mode01Pids.size}):"
         ecu.mode01Pids.forEach { lines += "  ${it.code} — ${it.name}" }
+        lines += "Mode 01 verified decodable (two reads): ${ecu.validatedCount}"
+        ecu.validatedMode01Pids.forEach { lines += "  ${it.code} — ${it.name}" }
         lines += "Mode 09 PIDs (${ecu.mode09Pids.size}):"
         ecu.mode09Pids.forEach { lines += "  ${it.code} — ${it.name}" }
         lines += ""
@@ -302,7 +304,7 @@ private fun DeepScanInfoPanel(
                 letterSpacing = 2.sp,
             )
             InfoLine("1", "Scans 136 candidate 11-bit request addresses (0x700–0x77F and 0x7E0–0x7E7) for responding modules.")
-            InfoLine("2", "Queries each responding ECU using the OBD-II PID support bitmask — no guessing, only confirmed-supported PIDs are listed.")
+            InfoLine("2", "Reads each ECU’s Mode 01 support bitmask, then validates advertised PIDs with two real responses and successful decoding. The report separates advertised from verified readings.")
             InfoLine("3", "Checks Mode 09 support and attempts read-only UDS VIN DID F190 on each individually responding ECU. Unsupported identifiers are reported, not guessed.")
             Text(
                 "This takes 2–5 minutes depending on how many ECUs respond.",
@@ -496,9 +498,21 @@ private fun EcuResultCard(result: DeepScanViewModel.EcuResult) {
             }
         }
 
-        // Mode 01 PIDs
+        // The support bitmap is an advertisement; the verified list is based
+        // on two successful decoded reads from this ECU.
         if (result.mode01Pids.isNotEmpty()) {
-            ModeSection("MODE 01 — LIVE DATA", result.mode01Pids, accentColor)
+            Text(
+                "VERIFIED LIVE READS: ${result.validatedCount} / ${result.mode01Pids.size}",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (result.validatedCount > 0) NeonGreen else NeonOrange,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+            )
+            ModeSection("MODE 01 — ADVERTISED SUPPORT", result.mode01Pids, accentColor)
+            if (result.validatedMode01Pids.isNotEmpty()) {
+                ModeSection("MODE 01 — VERIFIED DECODABLE", result.validatedMode01Pids, NeonGreen)
+            }
         }
 
         // Mode 09 PIDs
