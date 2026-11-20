@@ -118,8 +118,8 @@ class DeepScanViewModel @Inject constructor(
                     // Bitmaps are only advertised capability. Validate every
                     // advertised Mode 01 PID with two decoded reads from this ECU.
                     val validatedMode01 = mutableListOf<SupportedPid>()
-                    mode01.sorted().forEachIndexed { pidIndex, pid ->
-                        if (!isActive) return@forEachIndexed
+                    mode01.sorted().forEachIndexed pidLoop@ { pidIndex, pid ->
+                        if (!isActive) return@pidLoop
                         _scanState.value = _scanState.value.copy(
                             phase = "Validating 0x$addr — $pid (" + (pidIndex + 1) + "/" + mode01.size + ")",
                         )
