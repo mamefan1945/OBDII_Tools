@@ -193,9 +193,12 @@ class SessionRepository @Inject constructor(
         lastCvtPointMs = now
     }
 
-    suspend fun endSession(): TripSummary? = lifecycleMutex.withLock { endSessionLocked() }
+    suspend fun endSession(expectedSessionId: Long? = null): TripSummary? =
+        lifecycleMutex.withLock { endSessionLocked(expectedSessionId) }
 
-    private suspend fun endSessionLocked(): TripSummary? {
+    private suspend fun endSessionLocked(expectedSessionId: Long? = null): TripSummary? {
+        // A delayed disconnect callback must never end a newer trip session.
+        if (expectedSessionId != null && currentSessionId != expectedSessionId) return null
         // Atomically snapshot accumulated stats and mark session ended so no
         // further recordDataPoint() calls can modify them.
         data class Snap(val id: Long, val maxRpm: Int?, val maxSpeed: Int?, val maxCoolant: Int?,
