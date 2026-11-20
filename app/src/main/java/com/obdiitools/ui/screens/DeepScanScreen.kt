@@ -175,7 +175,7 @@ fun DeepScanScreen(
             }
 
             // Bottom action bar
-            if (isConnected && (scanState.isScanning || scanState.results.isNotEmpty() || scanState.mazdaProbeStatus != null)) {
+            if (isConnected && (scanState.isScanning || scanState.results.isNotEmpty() || scanState.mazdaProbeStatus != null || scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -220,11 +220,19 @@ fun DeepScanScreen(
                     } else {
                         OutlinedButton(
                             onClick = { viewModel.probeMazdaCx5Transmission() },
-                            enabled = !scanState.isProbingMazda,
+                            enabled = !scanState.isProbingMazda && !scanState.isDiscoveringMazdaDids,
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
                         ) {
-                            Text("MAZDA TCM", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                            Text("MAZDA TCM", fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.discoverMazdaTcmDids() },
+                            enabled = !scanState.isDiscoveringMazdaDids && !scanState.isProbingMazda,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonYellow),
+                        ) {
+                            Text("DID DISCOVERY", fontFamily = FontFamily.Monospace, fontSize = 9.sp)
                         }
                         Button(
                             onClick = { viewModel.startScan() },
