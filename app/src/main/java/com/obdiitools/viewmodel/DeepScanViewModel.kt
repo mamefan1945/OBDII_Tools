@@ -43,6 +43,8 @@ class DeepScanViewModel @Inject constructor(
         val totalPids get() = mode01Pids.size + mode09Pids.size
     }
 
+    data class MazdaDidResult(val did: String, val description: String, val status: String, val rawResponse: String)
+
     data class ScanState(
         val isScanning: Boolean = false,
         val phase: String = "",
@@ -51,6 +53,9 @@ class DeepScanViewModel @Inject constructor(
         val isProbingMazda: Boolean = false,
         val mazdaProbeStatus: String? = null,
         val mazdaTransmission: MazdaCx5TransmissionData? = null,
+        val isDiscoveringMazdaDids: Boolean = false,
+        val mazdaDidProgress: Pair<Int, Int>? = null,
+        val mazdaDidResults: List<MazdaDidResult> = emptyList(),
     )
 
     private val _scanState = MutableStateFlow(ScanState())
@@ -192,6 +197,56 @@ class DeepScanViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Bounded, read-only Mode 22 discovery against the confirmed 2016 CX-5 TCM.
+     * Candidate identifiers come from the CX-5 parameter catalogue; positive
+     * replies are reported as raw data only until their layouts are independently
+     * validated on this vehicle. No writes, session changes, or actuator commands.
+     */
+    fun discoverMazdaTcmDids() {
+        if (scanJob?.isActive == true) return
+        viewModelScope.launch {
+            repository.pausePolling()
+            _scanState.value = _scanState.value.copy(
+                isDiscoveringMazdaDids = true,
+                mazdaDidProgress = 0 to MAZDA_TCM_DID_CANDIDATES.size,
+                mazdaDidResults = emptyList(),
+            )
+            val results = mutableListOf<MazdaDidResult>()
+            try {
+                MAZDA_TCM_DID_CANDIDATES.forEachIndexed { index, candidate ->
+                    val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.first)
+                    val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.first, raw)
+                    val status = when {
+                        parsed.isSuccess -> "POSITIVE RESPONSE — raw only"
+                        parsed.errorCode != null && parsed.errorCode !in setOf("NC", "ND", "ERR", "UNK") ->
+                            "NEGATIVE RESPONSE — NRC 0x${parsed.errorCode}"
+                        parsed.errorCode == "ND" -> "NO DATA"
+                        parsed.errorCode == "ERR" -> "ADAPTER ERROR"
+                        parsed.errorCode == "UNK" -> "MALFORMED RESPONSE"
+                        else -> "NO RESPONSE"
+                    }
+                    results += MazdaDidResult(candidate.first, candidate.second, status, raw.ifBlank { "(no response)" })
+                    _scanState.value = _scanState.value.copy(
+                        mazdaDidProgress = (index + 1) to MAZDA_TCM_DID_CANDIDATES.size,
+                        mazdaDidResults = results.toList(),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                results += MazdaDidResult("----", "Discovery error", error.message ?: "Communication error", "")
+                _scanState.value = _scanState.value.copy(mazdaDidResults = results.toList())
+            } finally {
+                _scanState.value = _scanState.value.copy(
+                    isDiscoveringMazdaDids = false,
+                    mazdaDidProgress = null,
+                )
+                repository.resumePolling()
+            }
+        }
+    }
+
     fun cancelScan() {
         scanJob?.cancel()
         _scanState.value = _scanState.value.copy(isScanning = false, progress = null, phase = "Cancelled")
@@ -207,6 +262,17 @@ class DeepScanViewModel @Inject constructor(
     private fun mode09PidName(code: String) = MODE09_NAMES[code.uppercase()] ?: "Info ${code.takeLast(2)}"
 
     companion object {
+        private val MAZDA_TCM_DID_CANDIDATES = listOf(
+            "1E12" to "Selected transmission gear (known baseline)",
+            "1E1C" to "Transmission fluid temperature (known baseline)",
+            "1674" to "Transmission temperature alternate", 
+            "1E3F" to "Transmission temperature alternate",
+            "11B3" to "Transmission gear alternate",
+            "11BD" to "Transmission temperature alternate",
+            "163A" to "Torque converter input torque",
+            "DD01" to "Transmission odometer",
+        )
+
         private val MODE09_NAMES = mapOf(
             "0901" to "VIN Message Count",
             "0902" to "Vehicle Identification Number (VIN)",
