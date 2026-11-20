@@ -78,4 +78,19 @@ class CanDecoderTest {
         assertEquals(-1.0, result.single().value, 0.0)
     }
 
+    @Test
+    fun decodesOnlyMatchingMultiplexedSignal() {
+        val message = DbcMessage(0x123, "TEST", 2)
+        val mux = signal(0, 4, false).copy(name = "MUX", isMultiplexer = true)
+        val caseOne = signal(4, 8, false).copy(name = "CASE_ONE", multiplexerValue = 1)
+        val caseTwo = signal(4, 8, false).copy(name = "CASE_TWO", multiplexerValue = 2)
+        val result = CanDecoder.decode(
+            "123",
+            listOf(0xA1, 0x00),
+            mapOf(0x123L to (message to listOf(mux, caseOne, caseTwo))),
+        )
+        assertEquals(setOf("MUX", "CASE_ONE"), result.map { it.signalName }.toSet())
+        assertEquals(10.0, result.single { it.signalName == "CASE_ONE" }.value, 0.0)
+    }
 }
+
