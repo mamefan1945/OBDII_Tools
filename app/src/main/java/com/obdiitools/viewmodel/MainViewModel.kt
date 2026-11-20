@@ -60,6 +60,9 @@ class MainViewModel @Inject constructor(
     val obdData: StateFlow<OBDData> = repository.obdData
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OBDData())
 
+    val livePidValues: StateFlow<Map<String, Float>> = repository.livePidValues
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val confirmedPids: StateFlow<Set<String>> = repository.confirmedPids
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
