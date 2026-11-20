@@ -2,7 +2,9 @@ package com.obdiitools.bluetooth
 
 import android.bluetooth.BluetoothSocket
 import com.obdiitools.obd.ELM327Protocol
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -59,32 +61,29 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
     }
 
     override suspend fun queryUds(ecuAddress: String, did: String): String = withContext(Dispatchers.IO) {
+        var headerChanged = false
         try {
-            // Point at the target ECU
             sendRaw("ATSH $ecuAddress")
+            headerChanged = true
             Thread.sleep(150)
             drainInput()
-            // UDS Mode 22: ReadDataByIdentifier — 3000 ms allows multi-frame reassembly
+            // UDS Mode 22: ReadDataByIdentifier — 3000 ms allows multi-frame reassembly.
             sendRaw("22$did")
-            val lines = readResponseLines(timeoutMs = 3000)
-            // For multi-frame ISO-TP responses the ELM327 may emit the total-length
-            // byte on the first line; search all lines for the UDS response prefix.
-            // Preserve every adapter response line. Some ELM output formats
-            // index continuation lines; UdsResponse.parse removes those labels
-            // and validates the combined payload against the requested DID.
-            val response = lines.joinToString("\n")
-            // Always restore broadcast address so normal polling is unaffected
-            sendRaw("ATSH 7DF")
-            Thread.sleep(100)
-            drainInput()
-            response
-        } catch (e: Exception) {
-            runCatching {
-                sendRaw("ATSH 7DF")
-                Thread.sleep(100)
-                drainInput()
-            }
+            readResponseLines(timeoutMs = 3000).joinToString("\\n")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: java.io.IOException) {
+            throw e
+        } catch (_: Exception) {
             ""
+        } finally {
+            if (headerChanged) withContext(NonCancellable) {
+                runCatching {
+                    sendRaw("ATSH 7DF")
+                    Thread.sleep(100)
+                    drainInput()
+                }
+            }
         }
     }
 
