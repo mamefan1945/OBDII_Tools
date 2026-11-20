@@ -531,7 +531,12 @@ class OBDRepository @Inject constructor(
                         ELM327BleConnection(context, device)
                     } else {
                         val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                        socket.connect()
+                        try {
+                            socket.connect()
+                        } catch (error: Exception) {
+                            runCatching { socket.close() }
+                            throw error
+                        }
                         ELM327Connection(socket)
                     }
                 )
