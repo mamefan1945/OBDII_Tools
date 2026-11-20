@@ -31,4 +31,20 @@ BO_ 2 VALID: 1 ECU
         assertEquals(setOf(2L), parsed.keys)
         assertTrue(parsed.getValue(2L).second.isEmpty())
     }
+    @Test
+    fun parsesExtendedIdsAndMultiplexorMarkers() {
+        val dbc = """
+BO_ 2147483939 TEST_EXT: 8 ECU
+ SG_ MUX M : 0|4@1+ (1,0) [0|15] "" ECU
+ SG_ SPEED_A m1 : 4|8@1+ (0.1,0) [0|25.5] "km/h" ECU
+ SG_ SPEED_B m2 : 12|8@1+ (0.1,0) [0|25.5] "km/h" ECU
+""".trimIndent()
+        val parsed = DbcParser.parse(dbc)
+        assertTrue(parsed.containsKey(0x123L))
+        val signals = parsed.getValue(0x123L).second
+        assertEquals(true, signals.single { it.name == "MUX" }.isMultiplexer)
+        assertEquals(1, signals.single { it.name == "SPEED_A" }.multiplexerValue)
+        assertEquals(2, signals.single { it.name == "SPEED_B" }.multiplexerValue)
+    }
 }
+
