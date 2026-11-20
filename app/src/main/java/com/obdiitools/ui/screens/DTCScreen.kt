@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.ui.components.ConnectionStatusBar
+import com.obdiitools.ui.components.ConnectDevicePrompt
 import com.obdiitools.ui.theme.NeonGreen
 import com.obdiitools.ui.theme.NeonOrange
 import com.obdiitools.ui.components.DTCCard
@@ -65,10 +66,22 @@ fun DTCScreen(
     viewModel: MainViewModel,
     onNavigateToFreezeFrame: () -> Unit = {},
     onNavigateToReadiness: () -> Unit = {},
+    onNavigateToBluetooth: () -> Unit = {},
 ) {
     val connectionState by viewModel.connectionState.collectAsState()
     val dtcList by viewModel.dtcList.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
+
+    if (!isConnected) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundDeep),
+        ) {
+            ConnectDevicePrompt(onClick = onNavigateToBluetooth)
+        }
+        return
+    }
 
     val scope = rememberCoroutineScope()
     var isScanning by remember { mutableStateOf(false) }
