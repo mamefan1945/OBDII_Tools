@@ -46,4 +46,36 @@ class CanDecoderTest {
         assertTrue(CanDecoder.decode("123", listOf(0x00), mapOf(0x123L to (message to listOf(invalid)))).isEmpty())
         assertTrue(CanDecoder.decode("123", listOf(0x00, 0x00), mapOf(0x123L to (message to listOf(invalid)))).isEmpty())
     }
+    @Test
+    fun decodesUnsignedAndSignedSixtyFourBitSignals() {
+        val message = DbcMessage(0x123, "TEST", 8)
+        val unsigned = signal(0, 64, false)
+        val unsignedResult = CanDecoder.decode(
+            "123",
+            List(8) { 0xFF },
+            mapOf(0x123L to (message to listOf(unsigned))),
+        )
+        assertEquals(18446744073709551615.0, unsignedResult.single().value, 4096.0)
+
+        val signed = signal(0, 64, false).copy(isSigned = true)
+        val signedResult = CanDecoder.decode(
+            "123",
+            listOf(0x80, 0, 0, 0, 0, 0, 0, 0),
+            mapOf(0x123L to (message to listOf(signed))),
+        )
+        assertEquals(-9223372036854775808.0, signedResult.single().value, 0.0)
+    }
+
+    @Test
+    fun signExtendsSignedSixtyThreeBitSignalWithoutOverflow() {
+        val message = DbcMessage(0x123, "TEST", 8)
+        val signed63 = signal(0, 63, false).copy(isSigned = true)
+        val result = CanDecoder.decode(
+            "123",
+            listOf(0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF),
+            mapOf(0x123L to (message to listOf(signed63))),
+        )
+        assertEquals(-1.0, result.single().value, 0.0)
+    }
+
 }
