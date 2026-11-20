@@ -17,16 +17,19 @@ object CanDecoder {
         if (message.lengthBytes !in 1..8 || data.size != message.lengthBytes ||
             data.any { it !in 0..255 }) return emptyList()
 
+        val multiplexerValue = signals.firstOrNull { it.isMultiplexer }?.let { mux ->
+            runCatching { extractSignalRaw(data, mux) }.getOrNull()
+        }
+
         return signals.mapNotNull { signal ->
             if (signal.lengthBits !in 1..64 || signal.startBit < 0 ||
                 !signal.scale.isFinite() || !signal.offset.isFinite()) return@mapNotNull null
+            // A multiplexed signal is valid only for the selector value that
+            // activates it. If the selector is missing or malformed, fail closed.
+            if (signal.multiplexerValue != null &&
+                multiplexerValue != signal.multiplexerValue.toLong()) return@mapNotNull null
             try {
-                val raw = if (signal.isBigEndian) {
-                    extractMotorola(data, signal.startBit, signal.lengthBits)
-                } else {
-                    if (signal.startBit + signal.lengthBits > data.size * 8) return@mapNotNull null
-                    extractIntel(data, signal.startBit, signal.lengthBits)
-                }
+                val raw = extractSignalRaw(data, signal)
                 val numericRaw = when {
                     signal.isSigned -> applySign(raw, signal.lengthBits).toDouble()
                     signal.lengthBits == 64 -> unsignedLongToDouble(raw)
@@ -41,6 +44,14 @@ object CanDecoder {
                 null
             }
         }
+    }
+
+    private fun extractSignalRaw(data: List<Int>, signal: DbcSignal): Long {
+        if (signal.isBigEndian) {
+            return extractMotorola(data, signal.startBit, signal.lengthBits)
+        }
+        require(signal.startBit + signal.lengthBits <= data.size * 8)
+        return extractIntel(data, signal.startBit, signal.lengthBits)
     }
 
     // Intel (little-endian, @1): startBit is the LSB position.
