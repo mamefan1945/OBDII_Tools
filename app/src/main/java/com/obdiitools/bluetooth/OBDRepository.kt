@@ -25,6 +25,7 @@ import com.obdiitools.obd.DTCDatabase
 import com.obdiitools.obd.ELM327Protocol
 import com.obdiitools.obd.FreezeFrame
 import com.obdiitools.obd.OBDData
+import com.obdiitools.obd.ObdexDtcDatabase
 import com.obdiitools.obd.ReadinessStatus
 import com.obdiitools.obd.UdsResponse
 import com.obdiitools.obd.parseReadinessStatus

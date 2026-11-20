@@ -98,7 +98,7 @@ fun DTCCard(dtc: DTC, modifier: Modifier = Modifier) {
                     fontSize = 11.sp,
                     color = TextSecondary,
                 )
-                if (details?.commonCauses?.isNotEmpty() == true) {
+                if (details != null && details.commonCauses.isNotEmpty()) {
                     Text(
                         "POSSIBLE CAUSES — NOT A CONFIRMED DIAGNOSIS",
                         fontFamily = FontFamily.Monospace,
@@ -114,7 +114,7 @@ fun DTCCard(dtc: DTC, modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                if (details?.symptoms?.isNotEmpty() == true) {
+                if (details != null && details.symptoms.isNotEmpty()) {
                     Text(
                         "COMMON SYMPTOMS",
                         fontFamily = FontFamily.Monospace,
@@ -126,14 +126,14 @@ fun DTCCard(dtc: DTC, modifier: Modifier = Modifier) {
                         Text("• $symptom", fontSize = 12.sp, color = TextPrimary)
                     }
                 }
-                if (details?.repairDifficulty != null || details?.diyPossible != null) {
+                if (details != null && (details.repairDifficulty != null || details.diyPossible != null)) {
                     val repairText = listOfNotNull(
                         details.repairDifficulty?.let { "Repair difficulty: $it" },
                         details.diyPossible?.let { if (it) "DIY may be possible" else "Professional service may be required" },
                     ).joinToString(" · ")
                     Text(repairText, fontSize = 11.sp, color = TextSecondary)
                 }
-                if (details?.reviewed != null) {
+                if (details != null && details.reviewed != null) {
                     Text("Reference reviewed: ${details.reviewed}", fontSize = 10.sp, color = TextSecondary)
                 }
                 if (details != null) {
