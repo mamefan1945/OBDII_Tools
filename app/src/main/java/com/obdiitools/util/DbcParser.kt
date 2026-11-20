@@ -18,10 +18,17 @@ object DbcParser {
         for (line in text.lineSequence()) {
             val messageMatch = msgRegex.find(line)
             if (messageMatch != null) {
-                val id = messageMatch.groupValues[1].toLongOrNull()
+                val encodedId = messageMatch.groupValues[1].toLongOrNull()
                 val name = messageMatch.groupValues[2]
                 val length = messageMatch.groupValues[3].toIntOrNull()
-                if (id == null || length == null || id !in 0..0x1FFFFFFF || length !in 1..8) {
+                if (encodedId == null || length == null || encodedId !in 0..0xFFFFFFFFL || length !in 1..8) {
+                    currentId = null
+                    continue
+                }
+                // DBC marks extended CAN identifiers with bit 31. The actual
+                // 29-bit arbitration ID is stored in the lower 29 bits.
+                val id = if ((encodedId and 0x80000000L) != 0L) encodedId and 0x1FFFFFFFL else encodedId
+                if (id !in 0..0x1FFFFFFF) {
                     currentId = null
                     continue
                 }
@@ -36,14 +43,14 @@ object DbcParser {
             val signalMatch = sigRegex.find(line) ?: continue
             val groups = signalMatch.groupValues
             val signal = runCatching {
-                val startBit = groups[2].toInt()
-                val lengthBits = groups[3].toInt()
-                val scale = groups[6].toDouble()
-                val offset = groups[7].toDouble()
+                val startBit = groups[4].toInt()
+                val lengthBits = groups[5].toInt()
+                val scale = groups[8].toDouble()
+                val offset = groups[9].toDouble()
                 require(startBit >= 0 && lengthBits in 1..64)
                 require(scale.isFinite() && offset.isFinite())
                 require(startBit < message.lengthBytes * 8)
-                val bigEndian = groups[4] == "0"
+                val bigEndian = groups[6] == "0"
                 if (!bigEndian) require(startBit + lengthBits <= message.lengthBytes * 8)
                 else require(motorolaSignalFits(startBit, lengthBits, message.lengthBytes))
                 DbcSignal(
@@ -53,10 +60,12 @@ object DbcParser {
                     startBit = startBit,
                     lengthBits = lengthBits,
                     isBigEndian = bigEndian,
-                    isSigned = groups[5] == "-",
+                    isSigned = groups[7] == "-",
                     scale = scale,
                     offset = offset,
-                    unit = groups[10],
+                    unit = groups[12],
+                    isMultiplexer = groups[2] == "M",
+                    multiplexerValue = groups[3].takeIf { it.isNotBlank() }?.toIntOrNull(),
                 )
             }.getOrNull()
             if (signal != null) signals.getValue(id).add(signal)
