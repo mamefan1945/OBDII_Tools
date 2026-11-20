@@ -67,19 +67,38 @@ object ELM327Protocol {
     fun parseMultiPidResponse(lines: List<String>): Map<String, Any?> {
         val result = mutableMapOf<String, Any?>()
         for (rawLine in lines) {
-            // ELM adapters vary: ATS0 may still be overridden by a user profile,
-            // and some return indexed multi-line responses. Normalize both forms
-            // before looking for the standard 41 <PID> response prefix.
+            // ELM adapters may return one PID per line OR concatenate several
+            // positive responses into one line (e.g. 410C1AF8410D32...). Walk
+            // the known response lengths so every requested PID is decoded.
             val line = rawLine.trim()
                 .replace(Regex("(?i)^[0-9A-F]:"), "")
                 .filterNot { it.isWhitespace() }
                 .uppercase()
-            if (line.length < 4 || !line.startsWith("41")) continue
-            val pidByte = line.substring(2, 4)
-            val fullPid = PID_BYTE_TO_FULL[pidByte] ?: continue
-            result[fullPid] = parseResponse(fullPid, line)
+            var offset = 0
+            while (offset + 4 <= line.length) {
+                if (line.regionMatches(offset, "41", 0, 2, ignoreCase = true)) {
+                    val pidByte = line.substring(offset + 2, offset + 4)
+                    val fullPid = PID_BYTE_TO_FULL[pidByte]
+                    if (fullPid != null) {
+                        val payloadBytes = responsePayloadBytes(fullPid)
+                        val end = offset + 4 + payloadBytes * 2
+                        val response = line.substring(offset, minOf(end, line.length))
+                        result[fullPid] = parseResponse(fullPid, response)
+                        // A truncated response is retained as null, but cannot
+                        // be allowed to consume a later response marker.
+                        offset = if (end <= line.length) end else line.length
+                        continue
+                    }
+                }
+                offset++
+            }
         }
         return result
+    }
+
+    private fun responsePayloadBytes(pid: String): Int = when (pid) {
+        PID.RPM, PID.MAF, PID.O2_B1S1, PID.O2_B1S2, PID.O2_B2S1, PID.O2_B2S2 -> 2
+        else -> 1
     }
 
     fun parseResponse(pid: String, rawResponse: String): Any? {
