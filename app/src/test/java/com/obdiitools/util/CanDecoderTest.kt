@@ -60,7 +60,7 @@ class CanDecoderTest {
         val signed = signal(0, 64, false).copy(isSigned = true)
         val signedResult = CanDecoder.decode(
             "123",
-            listOf(0x80, 0, 0, 0, 0, 0, 0, 0),
+            listOf(0, 0, 0, 0, 0, 0, 0, 0x80),
             mapOf(0x123L to (message to listOf(signed))),
         )
         assertEquals(-9223372036854775808.0, signedResult.single().value, 0.0)
