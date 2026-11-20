@@ -60,6 +60,11 @@ class MainViewModel @Inject constructor(
     val obdData: StateFlow<OBDData> = repository.obdData
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OBDData())
 
+    val confirmedPids: StateFlow<Set<String>> = repository.confirmedPids
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val vehicleCapabilities = repository.vehicleCapabilities
+
     val dtcList: StateFlow<List<DTC>> = repository.dtcList
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
