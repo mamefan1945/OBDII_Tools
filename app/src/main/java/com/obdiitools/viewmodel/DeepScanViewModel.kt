@@ -176,23 +176,39 @@ class DeepScanViewModel @Inject constructor(
     /** Explicit, read-only Mode 22 probe for the 2016 CX-5 automatic TCM. */
     fun probeMazdaCx5Transmission() {
         if (scanJob?.isActive == true) return
-        viewModelScope.launch {
-            repository.pausePolling()
-            _scanState.value = _scanState.value.copy(isProbingMazda = true, mazdaProbeStatus = "Probing Mazda TCM at 0x7E1…", mazdaTransmission = null)
-            try {
-                val rawGear = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID)
-                val rawTemp = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID)
-                val gear = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID, rawGear)
-                val temp = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID, rawTemp)
-                val data = MazdaCx5Protocol.parseTransmissionData(gear, temp, rawGear, rawTemp)
-                val found = data.gear != null || data.transmissionTemperatureC != null
-                _scanState.value = _scanState.value.copy(isProbingMazda = false, mazdaProbeStatus = if (found) "Read-only Mazda TCM response received" else "No recognized Mazda TCM data; values remain unavailable", mazdaTransmission = data)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                _scanState.value = _scanState.value.copy(isProbingMazda = false, mazdaProbeStatus = "Mazda TCM probe failed: " + (error.message ?: "communication error"), mazdaTransmission = null)
-            } finally {
-                repository.resumePolling()
+        scanJob = viewModelScope.launch {
+            scanMutex.withLock {
+                repository.pausePolling()
+                _scanState.value = _scanState.value.copy(
+                    isProbingMazda = true,
+                    mazdaProbeStatus = "Probing Mazda TCM at 0x7E1…",
+                    mazdaTransmission = null,
+                )
+                try {
+                    val rawGear = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID)
+                    val rawTemp = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID)
+                    val gear = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID, rawGear)
+                    val temp = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID, rawTemp)
+                    val data = MazdaCx5Protocol.parseTransmissionData(gear, temp, rawGear, rawTemp)
+                    val found = data.gear != null || data.transmissionTemperatureC != null
+                    _scanState.value = _scanState.value.copy(
+                        isProbingMazda = false,
+                        mazdaProbeStatus = if (found) "Read-only Mazda TCM response received" else
+                            "No recognized Mazda TCM data; values remain unavailable",
+                        mazdaTransmission = data,
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    _scanState.value = _scanState.value.copy(
+                        isProbingMazda = false,
+                        mazdaProbeStatus = "Mazda TCM probe failed: " + (error.message ?: "communication error"),
+                        mazdaTransmission = null,
+                    )
+                } finally {
+                    _scanState.value = _scanState.value.copy(isProbingMazda = false)
+                    repository.resumePolling()
+                }
             }
         }
     }
@@ -205,51 +221,53 @@ class DeepScanViewModel @Inject constructor(
      */
     fun discoverMazdaTcmDids() {
         if (scanJob?.isActive == true) return
-        viewModelScope.launch {
-            repository.pausePolling()
-            _scanState.value = _scanState.value.copy(
-                isDiscoveringMazdaDids = true,
-                mazdaDidProgress = 0 to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
-                mazdaDidResults = emptyList(),
-            )
-            val results = mutableListOf<MazdaDidResult>()
-            try {
-                MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.forEachIndexed { index, candidate ->
-                    val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did)
-                    val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did, raw)
-                    val status = when {
-                        parsed.isSuccess -> "POSITIVE RESPONSE — raw only"
-                        parsed.errorCode != null && parsed.errorCode !in setOf("NC", "ND", "ERR", "UNK") ->
-                            "NEGATIVE RESPONSE — NRC 0x${parsed.errorCode}"
-                        parsed.errorCode == "ND" -> "NO DATA"
-                        parsed.errorCode == "ERR" -> "ADAPTER ERROR"
-                        parsed.errorCode == "UNK" -> "MALFORMED RESPONSE"
-                        else -> "NO RESPONSE"
-                    }
-                    results += MazdaDidResult(candidate.did, candidate.description, status, raw.ifBlank { "(no response)" })
-                    _scanState.value = _scanState.value.copy(
-                        mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
-                        mazdaDidResults = results.toList(),
-                    )
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                results += MazdaDidResult("----", "Discovery error", error.message ?: "Communication error", "")
-                _scanState.value = _scanState.value.copy(mazdaDidResults = results.toList())
-            } finally {
+        scanJob = viewModelScope.launch {
+            scanMutex.withLock {
+                repository.pausePolling()
                 _scanState.value = _scanState.value.copy(
-                    isDiscoveringMazdaDids = false,
-                    mazdaDidProgress = null,
+                    isDiscoveringMazdaDids = true,
+                    mazdaDidProgress = 0 to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
+                    mazdaDidResults = emptyList(),
                 )
-                repository.resumePolling()
+                val results = mutableListOf<MazdaDidResult>()
+                try {
+                    MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.forEachIndexed { index, candidate ->
+                        val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did)
+                        val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did, raw)
+                        val status = when {
+                            parsed.isSuccess -> "POSITIVE RESPONSE — raw only"
+                            parsed.errorCode != null && parsed.errorCode !in setOf("NC", "ND", "ERR", "UNK") ->
+                                "NEGATIVE RESPONSE — NRC 0x${parsed.errorCode}"
+                            parsed.errorCode == "ND" -> "NO DATA"
+                            parsed.errorCode == "ERR" -> "ADAPTER ERROR"
+                            parsed.errorCode == "UNK" -> "MALFORMED RESPONSE"
+                            else -> "NO RESPONSE"
+                        }
+                        results += MazdaDidResult(candidate.did, candidate.description, status, raw.ifBlank { "(no response)" })
+                        _scanState.value = _scanState.value.copy(
+                            mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
+                            mazdaDidResults = results.toList(),
+                        )
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    results += MazdaDidResult("----", "Discovery error", error.message ?: "Communication error", "")
+                    _scanState.value = _scanState.value.copy(mazdaDidResults = results.toList())
+                } finally {
+                    _scanState.value = _scanState.value.copy(
+                        isDiscoveringMazdaDids = false,
+                        mazdaDidProgress = null,
+                    )
+                    repository.resumePolling()
+                }
             }
         }
     }
 
     fun cancelScan() {
         scanJob?.cancel()
-        _scanState.value = _scanState.value.copy(isScanning = false, progress = null, phase = "Cancelled")
+        _scanState.value = _scanState.value.copy(isScanning = false, isProbingMazda = false, isDiscoveringMazdaDids = false, progress = null, mazdaDidProgress = null, phase = "Cancelled")
     }
 
     override fun onCleared() {
