@@ -74,6 +74,8 @@ object SessionBackup {
                         .put("cvtPrimaryPressureMpa", p.cvtPrimaryPressureMpa ?: JSONObject.NULL)
                         .put("cvtSecondaryPressureMpa", p.cvtSecondaryPressureMpa ?: JSONObject.NULL)
                         .put("cvtTargetSecondaryPressureMpa", p.cvtTargetSecondaryPressureMpa ?: JSONObject.NULL)
+                        .put("mazdaSelectedGear", p.mazdaSelectedGear ?: JSONObject.NULL)
+                        .put("mazdaTransmissionTempC", p.mazdaTransmissionTempC ?: JSONObject.NULL)
                 }
                 if (options.includeGps) {
                     point.put("latitude", p.latitude ?: JSONObject.NULL)
@@ -153,6 +155,8 @@ object SessionBackup {
                 cvtPrimaryPressureMpa = o.nullableFloat("cvtPrimaryPressureMpa"),
                 cvtSecondaryPressureMpa = o.nullableFloat("cvtSecondaryPressureMpa"),
                 cvtTargetSecondaryPressureMpa = o.nullableFloat("cvtTargetSecondaryPressureMpa"),
+                mazdaSelectedGear = if (o.isNull("mazdaSelectedGear")) null else o.optString("mazdaSelectedGear"),
+                mazdaTransmissionTempC = o.nullableDouble("mazdaTransmissionTempC"),
                 latitude = o.nullableDouble("latitude"), longitude = o.nullableDouble("longitude"),
                 accuracy = o.nullableFloat("accuracy"),
             )
@@ -199,6 +203,8 @@ object SessionBackup {
                     cvtPrimaryPressureMpa = cell("cvt_primary_pressure_mpa")?.toFloatOrNull(),
                     cvtSecondaryPressureMpa = cell("cvt_secondary_pressure_mpa")?.toFloatOrNull(),
                     cvtTargetSecondaryPressureMpa = cell("cvt_target_secondary_pressure_mpa")?.toFloatOrNull(),
+                    mazdaSelectedGear = cell("mazda_selected_gear"),
+                    mazdaTransmissionTempC = cell("mazda_transmission_temp_c")?.toDoubleOrNull(),
                     latitude = cell("latitude")?.toDoubleOrNull(),
                     longitude = cell("longitude")?.toDoubleOrNull(),
                     accuracy = cell("gps_accuracy_m")?.toFloatOrNull(),
