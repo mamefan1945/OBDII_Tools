@@ -36,7 +36,8 @@ class ELM327ProtocolTest {
         val values = ELM327Protocol.parseMultiPidResponse(
             listOf("NO DATA", "7E8 04 41 0C 1A F8", "41FF00")
         )
-        assertEquals(emptyMap<String, Any?>(), values)
+        assertEquals(1726, values["010C"])
+        assertEquals(false, values.containsKey("01FF"))
     }
 
     @Test
