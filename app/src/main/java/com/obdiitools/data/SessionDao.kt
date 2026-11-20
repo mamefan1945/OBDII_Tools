@@ -74,6 +74,9 @@ interface SessionDao {
         cvtSecondaryPressureMpa: Float?, cvtTargetSecondaryPressureMpa: Float?,
     )
 
+    @Query("UPDATE session_data_points SET mazdaSelectedGear = :gear, mazdaTransmissionTempC = :temperatureC WHERE id = :id")
+    suspend fun updatePointWithMazdaTcm(id: Long, gear: String?, temperatureC: Double?)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertImportedSession(session: SessionEntity): Long
 
