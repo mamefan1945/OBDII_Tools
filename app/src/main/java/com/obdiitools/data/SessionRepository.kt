@@ -155,6 +155,25 @@ class SessionRepository @Inject constructor(
         }
     }
 
+    suspend fun recordMazdaTcmData(gear: String?, transmissionTemperatureC: Double?) = mutex.withLock {
+        val sessionId = currentSessionId ?: return@withLock
+        if (gear == null && transmissionTemperatureC == null) return@withLock
+        val now = System.currentTimeMillis()
+        val nearbyObdPoint = dao.findNearbyObdPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
+        if (nearbyObdPoint != null) {
+            dao.updatePointWithMazdaTcm(nearbyObdPoint.id, gear, transmissionTemperatureC)
+        } else {
+            dao.insertDataPoint(
+                SessionDataPoint(
+                    sessionId = sessionId,
+                    timestampMs = now,
+                    mazdaSelectedGear = gear,
+                    mazdaTransmissionTempC = transmissionTemperatureC,
+                )
+            )
+        }
+    }
+
     suspend fun recordCvtData(data: CVTData) = mutex.withLock {
         val sessionId = currentSessionId ?: return@withLock
         val now = System.currentTimeMillis()
