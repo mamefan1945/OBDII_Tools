@@ -40,7 +40,7 @@ class SessionRepository @Inject constructor(
     private var lastCvtPointMs: Long = 0L
 
     private companion object {
-        const val SESSION_POINT_MATCH_WINDOW_MS = 600L
+        const val SESSION_POINT_MATCH_WINDOW_MS = 750L
         const val MAX_TRIP_GPS_ACCURACY_METERS = 50f
         const val MAX_TRIP_GPS_GAP_MS = 5_000L
         const val MAX_TRIP_GPS_SEGMENT_METERS = 50.0
@@ -75,15 +75,24 @@ class SessionRepository @Inject constructor(
             gpsRepository.locations.collect { location ->
                 mutex.withLock {
                     val activeSessionId = currentSessionId ?: return@withLock
-                    dao.insertDataPoint(
-                        SessionDataPoint(
-                            sessionId = activeSessionId,
-                            timestampMs = location.time,
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            accuracy = location.accuracy,
-                        )
+                    val nearbyObdPoint = dao.findNearbyObdPoint(
+                        activeSessionId, location.time, SESSION_POINT_MATCH_WINDOW_MS
                     )
+                    if (nearbyObdPoint != null) {
+                        dao.updatePointWithGps(
+                            nearbyObdPoint.id, location.latitude, location.longitude, location.accuracy
+                        )
+                    } else {
+                        dao.insertDataPoint(
+                            SessionDataPoint(
+                                sessionId = activeSessionId,
+                                timestampMs = location.time,
+                                latitude = location.latitude,
+                                longitude = location.longitude,
+                                accuracy = location.accuracy,
+                            )
+                        )
+                    }
                 }
             }
         }
