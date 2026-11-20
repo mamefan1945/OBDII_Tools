@@ -27,12 +27,13 @@ object DbcParser {
                 }
                 // DBC marks extended CAN identifiers with bit 31. The actual
                 // 29-bit arbitration ID is stored in the lower 29 bits.
-                val id = if ((encodedId and 0x80000000L) != 0L) encodedId and 0x1FFFFFFFL else encodedId
+                val isExtended = (encodedId and 0x80000000L) != 0L
+                val id = if (isExtended) encodedId and 0x1FFFFFFFL else encodedId
                 if (id !in 0..0x1FFFFFFF) {
                     currentId = null
                     continue
                 }
-                messages[id] = DbcMessage(id, name, length)
+                messages[id] = DbcMessage(id, name, length, isExtended)
                 signals[id] = mutableListOf()
                 currentId = id
                 continue
