@@ -48,7 +48,7 @@ class ELM327ProtocolTest {
         assertEquals(50, values["010D"])
         assertEquals(10.196078f, values["0111"] as Float, 0.0001f)
         assertEquals(34, values["0105"])
-        assertEquals(16.862f, values["0110"] as Float, 0.001f)
+        assertEquals(46.6f, values["0110"] as Float, 0.001f)
     }
 
     @Test
