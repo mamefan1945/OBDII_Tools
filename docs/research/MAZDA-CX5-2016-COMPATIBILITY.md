@@ -59,6 +59,22 @@ On-vehicle tests on the user's 2016 Mazda CX-5 automatic have established:
 
 Vehicle-specific confirmation currently covers the TCM response path, temperature display/conversion, and selected forward gears 1 and 2. It does not establish P/R/N decoding, gears 3–6, support for every 2016 CX-5 calibration, other Mazda model years, or other TCM data identifiers.
 
+
+## Bounded TCM DID discovery
+
+Deep Scan now offers a separate, user-invoked read-only Mode 22 discovery pass against request address 0x7E1. It probes a short, explicit catalogue-derived candidate list rather than sweeping the 16-bit DID space. Every candidate is reported as a positive response (raw bytes only), a negative response with NRC, no data, adapter error, malformed response, or no response. No candidate other than the two vehicle-verified baseline DIDs is decoded automatically.
+
+Candidates:
+- 1E12 and 1E1C: already confirmed on this vehicle.
+- DD01: transmission odometer; catalogue marks 2013–2025 as tester-needed and 2026 as supported, so 2016 remains unverified.
+- 1674, 1E3F, 11B3, 11BD, and 163A: cross-year catalogue leads, not established as supported on the 2016 calibration. They are exploratory probes only.
+
+The Mazda service manual documents useful TCM DataLogger signals including GEAR_RA, TSS, OSS, LOCK_UP, LINEDES, OP_SW1–OP_SW4, SS1–SS4, SSLU and SSP. These names are not DID assignments. The app must not infer a UDS DID from a service-manual PID name. A positive raw DID response must be captured and independently correlated before a decoder is added.
+
+References:
+- Mazda CX-5 TCM PID/Data Monitor Inspection: https://www.mcx5.org/on_board_diagnostic_system_pid_data_monitor_inspection_fw6_a_el_fw6_ax_el_-1171.html
+- Mazda CX-5 parameter catalogue (per-DID module, year applicability and response layout): https://pelican.clutch.engineering/cars/mazda/cx-5/parameters
+
 ## Important limits
 
 - This is not yet a complete Mazda M-MDS replacement or a guarantee of access to every module.
