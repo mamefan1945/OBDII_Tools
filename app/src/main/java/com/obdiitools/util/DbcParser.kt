@@ -33,9 +33,10 @@ object DbcParser {
                     currentId = null
                     continue
                 }
-                messages[id] = DbcMessage(id, name, length, isExtended)
-                signals[id] = mutableListOf()
-                currentId = id
+                val messageKey = if (isExtended) id or 0x80000000L else id
+                messages[messageKey] = DbcMessage(id, name, length, isExtended)
+                signals[messageKey] = mutableListOf()
+                currentId = messageKey
                 continue
             }
 
@@ -55,7 +56,7 @@ object DbcParser {
                 if (!bigEndian) require(startBit + lengthBits <= message.lengthBytes * 8)
                 else require(motorolaSignalFits(startBit, lengthBits, message.lengthBytes))
                 DbcSignal(
-                    messageId = id,
+                    messageId = message.id,
                     messageName = message.name,
                     name = groups[1],
                     startBit = startBit,
