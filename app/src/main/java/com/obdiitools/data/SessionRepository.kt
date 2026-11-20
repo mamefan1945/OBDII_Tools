@@ -41,6 +41,10 @@ class SessionRepository @Inject constructor(
 
     private companion object {
         const val SESSION_POINT_MATCH_WINDOW_MS = 600L
+        const val MAX_TRIP_GPS_ACCURACY_METERS = 50f
+        const val MAX_TRIP_GPS_GAP_MS = 5_000L
+        const val MAX_TRIP_GPS_SEGMENT_METERS = 50.0
+        const val EARTH_RADIUS_METERS = 6_371_000.0
     }
 
     private val _sessionFuelLitres = MutableStateFlow(0f)
@@ -315,10 +319,4 @@ class SessionRepository @Inject constructor(
         return (distanceMeters / 1000.0).toFloat().takeIf { it > 0f }
     }
 
-    private companion object {
-        const val MAX_TRIP_GPS_ACCURACY_METERS = 50f
-        const val MAX_TRIP_GPS_GAP_MS = 5_000L
-        const val MAX_TRIP_GPS_SEGMENT_METERS = 50.0
-        const val EARTH_RADIUS_METERS = 6_371_000.0
-    }
 }
