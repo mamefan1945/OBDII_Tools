@@ -835,10 +835,13 @@ class OBDRepository @Inject constructor(
 
     private suspend fun pollAdaptivePids(conn: OBDConnection, supported: Set<String>) {
         val now = SystemClock.elapsedRealtime()
+        val standardPids = (ELM327Protocol.FAST_PIDS + ELM327Protocol.SLOW_PIDS).toSet()
+        val adaptiveSupported = supported.map { it.uppercase() }.toSet() - standardPids
+        if (adaptiveSupported.isEmpty()) return
         val confirmed = _confirmedPids.value
         val capabilities = capabilityTracker.capabilities.value
         val due = adaptivePidScheduler.selectDue(
-            supportedPids = supported,
+            supportedPids = adaptiveSupported,
             confirmedPids = confirmed,
             capabilities = capabilities,
             lastPolledAtMs = lastAdaptivePollAtMs,
