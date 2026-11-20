@@ -37,10 +37,13 @@ interface SessionDao {
           AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
           AND throttlePercent IS NULL AND engineLoadPercent IS NULL
           AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL
-          AND (cvtSpeedKph IS NOT NULL OR cvtEngineRpm IS NOT NULL OR cvtSlipRpm IS NOT NULL
+          AND (
+               latitude IS NOT NULL AND longitude IS NOT NULL
+               OR cvtSpeedKph IS NOT NULL OR cvtEngineRpm IS NOT NULL OR cvtSlipRpm IS NOT NULL
                OR cvtTempC IS NOT NULL OR cvtRatio IS NOT NULL
                OR cvtPrimaryPressureMpa IS NOT NULL OR cvtSecondaryPressureMpa IS NOT NULL
-               OR cvtTargetSecondaryPressureMpa IS NOT NULL)
+               OR cvtTargetSecondaryPressureMpa IS NOT NULL
+          )
         ORDER BY ABS(timestampMs - :timestampMs) ASC
         LIMIT 1
     """)
@@ -73,6 +76,9 @@ interface SessionDao {
         cvtTempC: Int?, cvtRatio: Float?, cvtPrimaryPressureMpa: Float?,
         cvtSecondaryPressureMpa: Float?, cvtTargetSecondaryPressureMpa: Float?,
     )
+
+    @Query("UPDATE session_data_points SET latitude = :latitude, longitude = :longitude, accuracy = :accuracy WHERE id = :id")
+    suspend fun updatePointWithGps(id: Long, latitude: Double, longitude: Double, accuracy: Float)
 
     @Query("UPDATE session_data_points SET mazdaSelectedGear = :gear, mazdaTransmissionTempC = :temperatureC WHERE id = :id")
     suspend fun updatePointWithMazdaTcm(id: Long, gear: String?, temperatureC: Double?)
