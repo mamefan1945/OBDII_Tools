@@ -131,9 +131,4 @@ jobs:
           mkdir -p release-assets
           cp "$APK" "release-assets/$ASSET_NAME"
           cp "$APK" "release-assets/OBDII_Tools-latest.apk"
-          gh release create "$TAG" \\
-            "release-assets/$ASSET_NAME" \\
-            "release-assets/OBDII_Tools-latest.apk" \\
-            --title "OBDII Tools v${VERSION_NAME} — build ${BUILD_NUMBER}" \\
-            --notes "Automated, signed debug/test APK.\n\nCommit: ${COMMIT_SHA}\nBuild: ${BUILD_NUMBER}\nBuilt: ${BUILD_TIMESTAMP}" \\
-            --target "$COMMIT_SHA"
+          gh release create "$TAG" "release-assets/$ASSET_NAME" "release-assets/OBDII_Tools-latest.apk" --title "OBDII Tools v${VERSION_NAME} - build ${BUILD_NUMBER}" --notes "Automated signed debug/test APK. Commit: ${COMMIT_SHA}. Build: ${BUILD_NUMBER}. Built: ${BUILD_TIMESTAMP}." --target "$COMMIT_SHA"
