@@ -14,6 +14,8 @@ object CanDecoder {
         if (frameIdHex.isEmpty() || !frameIdHex.all { it in '0'..'9' || it.uppercaseChar() in 'A'..'F' }) return emptyList()
         val frameId = frameIdHex.toLongOrNull(16) ?: return emptyList()
         val (message, signals) = signalMap[frameId] ?: return emptyList()
+        val frameIsExtended = frameIdHex.length > 3 || frameId > 0x7FF
+        if (message.isExtended != frameIsExtended) return emptyList()
         if (message.lengthBytes !in 1..8 || data.size != message.lengthBytes ||
             data.any { it !in 0..255 }) return emptyList()
 
