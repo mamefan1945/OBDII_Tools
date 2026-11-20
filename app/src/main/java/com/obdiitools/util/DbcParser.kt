@@ -40,7 +40,7 @@ object DbcParser {
                 val lengthBits = groups[3].toInt()
                 val scale = groups[6].toDouble()
                 val offset = groups[7].toDouble()
-                require(startBit >= 0 && lengthBits in 1..63)
+                require(startBit >= 0 && lengthBits in 1..64)
                 require(scale.isFinite() && offset.isFinite())
                 require(startBit < message.lengthBytes * 8)
                 val bigEndian = groups[4] == "0"
