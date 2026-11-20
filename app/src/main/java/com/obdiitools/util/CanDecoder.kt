@@ -18,7 +18,7 @@ object CanDecoder {
             data.any { it !in 0..255 }) return emptyList()
 
         return signals.mapNotNull { signal ->
-            if (signal.lengthBits !in 1..63 || signal.startBit < 0 ||
+            if (signal.lengthBits !in 1..64 || signal.startBit < 0 ||
                 !signal.scale.isFinite() || !signal.offset.isFinite()) return@mapNotNull null
             try {
                 val raw = if (signal.isBigEndian) {
@@ -27,8 +27,12 @@ object CanDecoder {
                     if (signal.startBit + signal.lengthBits > data.size * 8) return@mapNotNull null
                     extractIntel(data, signal.startBit, signal.lengthBits)
                 }
-                val signed = if (signal.isSigned) applySign(raw, signal.lengthBits) else raw
-                val value = signed.toDouble() * signal.scale + signal.offset
+                val numericRaw = when {
+                    signal.isSigned -> applySign(raw, signal.lengthBits).toDouble()
+                    signal.lengthBits == 64 -> unsignedLongToDouble(raw)
+                    else -> raw.toDouble()
+                }
+                val value = numericRaw * signal.scale + signal.offset
                 if (!value.isFinite()) null
                 else DecodedSignal(signal.name, signal.messageName, frameId, value, signal.unit, signal.scale)
             } catch (_: IllegalArgumentException) {
@@ -69,7 +73,15 @@ object CanDecoder {
     }
 
     private fun applySign(raw: Long, length: Int): Long {
+        if (length == 64) return raw // already represented as a signed two's-complement Long
         val msb = 1L shl (length - 1)
-        return if (raw and msb != 0L) raw - (1L shl length) else raw
+        return if (raw and msb != 0L) raw or (-1L shl length) else raw
+    }
+
+    private fun unsignedLongToDouble(raw: Long): Double {
+        val bytes = ByteArray(8) { index ->
+            (raw ushr (56 - index * 8)).toByte()
+        }
+        return java.math.BigInteger(1, bytes).toDouble()
     }
 }
