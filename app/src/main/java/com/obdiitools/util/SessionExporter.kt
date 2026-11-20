@@ -16,6 +16,7 @@ data class SessionShareOptions(
     val includeObdTelemetry: Boolean = true,
     val includeCvtTelemetry: Boolean = true,
     val includeGps: Boolean = true,
+    val includeMazdaTcmTelemetry: Boolean = true,
 )
 
 object SessionExporter {
@@ -94,6 +95,7 @@ object SessionExporter {
             "cvt_primary_pressure_mpa", "cvt_secondary_pressure_mpa",
             "cvt_target_secondary_pressure_mpa",
         )
+        if (options.includeMazdaTcmTelemetry) columns += listOf("mazda_selected_gear", "mazda_transmission_temp_c")
         if (options.includeGps) columns += listOf("latitude", "longitude", "gps_accuracy_m")
         sb.appendLine(columns.joinToString(","))
 
@@ -121,6 +123,10 @@ object SessionExporter {
                 pt.cvtPrimaryPressureMpa?.let { "%.3f".format(Locale.US, it) }.orEmpty(),
                 pt.cvtSecondaryPressureMpa?.let { "%.3f".format(Locale.US, it) }.orEmpty(),
                 pt.cvtTargetSecondaryPressureMpa?.let { "%.3f".format(Locale.US, it) }.orEmpty(),
+            )
+            if (options.includeMazdaTcmTelemetry) row += listOf(
+                pt.mazdaSelectedGear.orEmpty(),
+                pt.mazdaTransmissionTempC?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
             )
             if (options.includeGps) row += listOf(
                 pt.latitude?.let { "%.7f".format(Locale.US, it) }.orEmpty(),
