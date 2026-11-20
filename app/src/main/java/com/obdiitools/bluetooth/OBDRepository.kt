@@ -94,6 +94,7 @@ class OBDRepository @Inject constructor(
     fun clearTripSummary() { _lastTripSummary.value = null }
 
     private var connection: OBDConnection? = null
+    @Volatile private var activeSessionId: Long? = null
     private var pollingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val notifId = AtomicInteger(2000)
@@ -565,7 +566,7 @@ class OBDRepository @Inject constructor(
                 connection = conn
                 _connectionState.value = ConnectionState.Connected(deviceInfo.name, deviceInfo.address)
                 _lastTripSummary.value = null
-                sessionRepository.startSession(deviceInfo.name)
+                activeSessionId = sessionRepository.startSession(deviceInfo.name)
                 startPolling()
                 candidateConnection = null
             } catch (cancelled: CancellationException) {
@@ -600,7 +601,11 @@ class OBDRepository @Inject constructor(
         _freezeFrames.value = emptyList()
         _activeAlerts.value = emptySet()
         _customPidValues.value = emptyMap()
-        scope.launch { _lastTripSummary.value = sessionRepository.endSession() }
+        val endingSessionId = activeSessionId
+        activeSessionId = null
+        if (endingSessionId != null) {
+            scope.launch { _lastTripSummary.value = sessionRepository.endSession(endingSessionId) }
+        }
     }
 
     private fun startPolling() {
