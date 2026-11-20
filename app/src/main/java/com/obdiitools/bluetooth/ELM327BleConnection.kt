@@ -256,7 +256,7 @@ class ELM327BleConnection(
     override suspend fun query(command: String, timeoutMs: Long): String = withContext(Dispatchers.IO) {
         drainRxChannel()
         sendRaw(command)
-        readResponseLines(timeoutMs).firstOrNull() ?: ""
+        firstUsefulResponse(readResponseLines(timeoutMs))
     }
 
     override suspend fun queryLines(command: String, timeoutMs: Long): List<String> = withContext(Dispatchers.IO) {
@@ -398,6 +398,16 @@ class ELM327BleConnection(
         connected = false
         rxChannel.close()
     }
+
+
+    private fun firstUsefulResponse(lines: List<String>): String =
+        lines.firstOrNull { line ->
+            val normalized = line.filterNot { it.isWhitespace() }.uppercase()
+            normalized.isNotEmpty() &&
+                !normalized.startsWith("SEARCHING") &&
+                !normalized.startsWith("BUSINIT") &&
+                normalized != "OK"
+        } ?: ""
 
     private fun sendRaw(command: String) {
         val char = txChar ?: throw java.io.IOException("BLE transmit characteristic is unavailable")
