@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -253,7 +252,7 @@ fun SessionMapScreen(sessionId: Long, onBack: () -> Unit) {
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    Icon(Icons.Default.Close, contentDescription = "Close map", tint = TextPrimary)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundDeep.copy(alpha = 0.85f)),
