@@ -3,6 +3,7 @@ package com.obdiitools.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
+import com.obdiitools.data.SessionRepository
 import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.MazdaCx5Protocol
@@ -28,6 +29,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DeepScanViewModel @Inject constructor(
     private val repository: OBDRepository,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     data class SupportedPid(val code: String, val name: String)
@@ -191,6 +193,9 @@ class DeepScanViewModel @Inject constructor(
                     val temp = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID, rawTemp)
                     val data = MazdaCx5Protocol.parseTransmissionData(gear, temp, rawGear, rawTemp)
                     val found = data.gear != null || data.transmissionTemperatureC != null
+                    if (found) {
+                        sessionRepository.recordMazdaTcmData(data.gear, data.transmissionTemperatureC)
+                    }
                     _scanState.value = _scanState.value.copy(
                         isProbingMazda = false,
                         mazdaProbeStatus = if (found) "Read-only Mazda TCM response received" else
