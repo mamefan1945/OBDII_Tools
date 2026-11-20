@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.obdiitools.data.AlertThresholds
 import com.obdiitools.data.AlertType
@@ -139,7 +140,8 @@ class OBDRepository @Inject constructor(
     private var connection: OBDConnection? = null
     @Volatile private var activeSessionId: Long? = null
     private var pollingJob: Job? = null
-    private var dynamicPidCursor = 0
+    private val adaptivePidScheduler = com.obdiitools.obd.AdaptivePidPollingScheduler(maxRequestsPerPass = 4)
+    private val lastAdaptivePollAtMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val notifId = AtomicInteger(2000)
 
@@ -667,7 +669,7 @@ class OBDRepository @Inject constructor(
         pollingJob?.cancel()
         pollingJob = null
         pollCycleCount = 0
-        dynamicPidCursor = 0
+        lastAdaptivePollAtMs.clear()
         multiPidCapable = null
         pollingPaused = pollingPauseCount.get() > 0  // outstanding operations retain their pause ownership
         connection?.close()
@@ -795,20 +797,11 @@ class OBDRepository @Inject constructor(
                 }
             }
 
-            // Rotate through other advertised Mode 01 PIDs in small batches.
-            // This keeps the extended dashboard fresh without adding dozens of
-            // sequential requests to every poll cycle.
-            val standardPids = (ELM327Protocol.FAST_PIDS + ELM327Protocol.SLOW_PIDS).toSet()
-            val additionalPids = if (supported.isEmpty()) emptyList() else
-                com.obdiitools.obd.AllPidDefinitions.ALL.map { it.command }
-                    .filter { it in supported && it !in standardPids }
-            if (additionalPids.isNotEmpty() && !pollingPaused) {
-                val count = minOf(4, additionalPids.size)
-                val selected = (0 until count).map { offset ->
-                    additionalPids[(dynamicPidCursor + offset) % additionalPids.size]
-                }
-                dynamicPidCursor = (dynamicPidCursor + count) % additionalPids.size
-                pollSequential(conn, selected)
+            // Poll additional sensors from the learned capability set. The
+            // scheduler bounds work per pass, prioritizes responsive groups, and
+            // uses overdue-time fairness so low-priority sensors cannot starve.
+            if (supported.isNotEmpty() && !pollingPaused) {
+                pollAdaptivePids(conn, supported)
             }
 
             // Poll custom PIDs
@@ -838,6 +831,28 @@ class OBDRepository @Inject constructor(
         }
 
         pollCycleCount = (pollCycleCount + 1) % 150
+    }
+
+    private suspend fun pollAdaptivePids(conn: OBDConnection, supported: Set<String>) {
+        val now = SystemClock.elapsedRealtime()
+        val confirmed = _confirmedPids.value
+        val capabilities = capabilityTracker.capabilities.value
+        val due = adaptivePidScheduler.selectDue(
+            supportedPids = supported,
+            confirmedPids = confirmed,
+            capabilities = capabilities,
+            lastPolledAtMs = lastAdaptivePollAtMs,
+            nowMs = now,
+        )
+        for (pid in due) {
+            if (pollingPaused) return
+            // Stamp before the request to prevent a slow/no-response PID from
+            // being retried repeatedly in the same connection window.
+            lastAdaptivePollAtMs[pid] = SystemClock.elapsedRealtime()
+            val raw = conn.query(pid, 700)
+            val value = ELM327Protocol.parseResponse(pid, raw)
+            applyPidValues(mapOf(pid to value))
+        }
     }
 
     /**
