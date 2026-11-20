@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-${{ github.workflow }}-${{ github.ref }}
@@ -105,10 +105,35 @@ jobs:
             exit 1
           }
 
-      - name: Upload debug APK
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: OBDII_Tools-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish directly installable APK release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          VERSION_NAME=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n1)
+          VERSION_NAME="${VERSION_NAME:-unknown}"
+          BUILD_TIMESTAMP=$(date -u +'%Y%m%d-%H%M%S-UTC')
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          ASSET_NAME="OBDII_Tools-v${VERSION_NAME}-build${BUILD_NUMBER}-${BUILD_TIMESTAMP}-${SHORT_SHA}.apk"
+          TAG="test-build-${BUILD_NUMBER}-${BUILD_TIMESTAMP}"
+          mkdir -p release-assets
+          cp "$APK" "release-assets/$ASSET_NAME"
+          cp "$APK" "release-assets/OBDII_Tools-latest.apk"
+          gh release create "$TAG" \\
+            "release-assets/$ASSET_NAME" \\
+            "release-assets/OBDII_Tools-latest.apk" \\
+            --title "OBDII Tools v${VERSION_NAME} — build ${BUILD_NUMBER}" \\
+            --notes "Automated, signed debug/test APK.\n\nCommit: ${COMMIT_SHA}\nBuild: ${BUILD_NUMBER}\nBuilt: ${BUILD_TIMESTAMP}" \\
+            --target "$COMMIT_SHA"
