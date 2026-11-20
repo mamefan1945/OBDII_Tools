@@ -4,6 +4,7 @@ data class DbcMessage(
     val id: Long,
     val name: String,
     val lengthBytes: Int,
+    val isExtended: Boolean = false,
 )
 
 data class DbcSignal(
