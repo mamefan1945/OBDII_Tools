@@ -12,7 +12,9 @@ import android.content.Context
 import android.os.Build
 import com.obdiitools.util.AppLogger
 import com.obdiitools.obd.ELM327Protocol
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
@@ -264,19 +266,29 @@ class ELM327BleConnection(
     }
 
     override suspend fun queryUds(ecuAddress: String, did: String): String = withContext(Dispatchers.IO) {
-        drainRxChannel()
-        sendRaw("ATSH $ecuAddress")
-        Thread.sleep(150)
-        drainRxChannel()
-        sendRaw("22$did")
-        val lines = readResponseLines(3000)
-        // Preserve indexed continuation lines for the UDS parser rather than
-        // silently discarding all but the first positive-response line.
-        val response = lines.joinToString("\n")
-        sendRaw("ATSH 7DF")
-        Thread.sleep(100)
-        drainRxChannel()
-        response
+        var headerChanged = false
+        try {
+            drainRxChannel()
+            sendRaw("ATSH $ecuAddress")
+            headerChanged = true
+            Thread.sleep(150)
+            drainRxChannel()
+            sendRaw("22$did")
+            // Preserve indexed continuation lines for the UDS parser.
+            readResponseLines(3000).joinToString("\\n")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } finally {
+            if (headerChanged) withContext(NonCancellable) {
+                runCatching {
+                    if (isConnected) {
+                        sendRaw("ATSH 7DF")
+                        Thread.sleep(100)
+                        drainRxChannel()
+                    }
+                }
+            }
+        }
     }
 
     override suspend fun pingEcu(address: String): String = withContext(Dispatchers.IO) {
