@@ -55,4 +55,58 @@ class VehicleCapabilityTrackerTest {
         assertTrue(tracker.confirmedPids.isEmpty())
         assertTrue(tracker.capabilities.value.isEmpty())
     }
+
+    @Test
+    fun adaptiveSchedulerPollsAllVerifiedSensorsFairly() {
+        val scheduler = AdaptivePidPollingScheduler(maxRequestsPerPass = 2)
+        val supported = setOf("010C", "0105", "0110", "0106")
+        val confirmed = supported
+        val capabilities = supported.associateWith {
+            PidCapability(it, CapabilityStatus.CONFIRMED, successfulSamples = 2)
+        }
+
+        val first = scheduler.selectDue(
+            supported, confirmed, capabilities, emptyMap(), nowMs = 10_000L
+        )
+        assertEquals(2, first.size)
+
+        val lastPolled = first.associateWith { 10_000L }
+        val second = scheduler.selectDue(
+            supported, confirmed, capabilities, lastPolled, nowMs = 10_000L
+        )
+        assertEquals(2, second.size)
+        assertTrue("a later pass must select the remaining due sensors", second.none { it in first })
+    }
+
+    @Test
+    fun adaptiveSchedulerRetriesUnavailableSensorsButRespectsRetryDelay() {
+        val scheduler = AdaptivePidPollingScheduler()
+        val pid = "010C"
+        val capabilities = mapOf(
+            pid to PidCapability(pid, CapabilityStatus.UNAVAILABLE, consecutiveFailures = 3)
+        )
+        val supported = setOf(pid)
+
+        assertTrue(
+            scheduler.selectDue(supported, emptySet(), capabilities, mapOf(pid to 1_000L), 20_000L).isEmpty()
+        )
+        assertEquals(
+            listOf(pid),
+            scheduler.selectDue(supported, emptySet(), capabilities, mapOf(pid to 1_000L), 31_000L)
+        )
+    }
+
+    @Test
+    fun adaptiveSchedulerSamplesAdvertisedSensorsWhileTheyAreLearning() {
+        val scheduler = AdaptivePidPollingScheduler()
+        val supported = setOf("010C")
+        assertEquals(
+            listOf("010C"),
+            scheduler.selectDue(supported, emptySet(), emptyMap(), emptyMap(), nowMs = 1_000L)
+        )
+        assertTrue(
+            scheduler.selectDue(supported, emptySet(), emptyMap(), mapOf("010C" to 1_000L), nowMs = 2_000L).isEmpty()
+        )
+    }
+
 }
