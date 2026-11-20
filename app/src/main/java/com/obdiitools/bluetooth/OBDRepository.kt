@@ -107,8 +107,12 @@ class OBDRepository @Inject constructor(
 
     private fun persistCapabilityProfile() {
         val key = activeVehicleProfileKey ?: return
+        val confirmed = _confirmedPids.value
+        // Do not replace a useful prior profile with an empty set while a
+        // newly connected vehicle is still being sampled.
+        if (confirmed.isEmpty()) return
         capabilityProfilePreferences.edit()
-            .putStringSet(key, _confirmedPids.value.toSet())
+            .putStringSet(key, confirmed.toSet())
             .apply()
     }
 
