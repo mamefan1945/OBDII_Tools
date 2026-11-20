@@ -684,7 +684,7 @@ class OBDRepository @Inject constructor(
                 val values = ELM327Protocol.parseMultiPidResponse(lines)
                 if (values.isNotEmpty()) {
                     multiPidCapable = true
-                    applyPidValues(values)
+                    pollMissingPidsIndividually(conn, fastPids, values)
                 } else {
                     multiPidCapable = false
                     pollSequential(conn, fastPids)
@@ -702,7 +702,12 @@ class OBDRepository @Inject constructor(
                 if (pollingPaused) return
                 if (multiPidCapable == true) {
                     val lines = conn.queryLines(ELM327Protocol.buildMultiPidCommand(chunk))
-                    applyPidValues(ELM327Protocol.parseMultiPidResponse(lines))
+                    val values = ELM327Protocol.parseMultiPidResponse(lines)
+                    if (values.isEmpty()) {
+                        pollSequential(conn, chunk)
+                    } else {
+                        pollMissingPidsIndividually(conn, chunk, values)
+                    }
                 } else {
                     pollSequential(conn, chunk)
                 }
@@ -735,6 +740,29 @@ class OBDRepository @Inject constructor(
         }
 
         pollCycleCount = (pollCycleCount + 1) % 150
+    }
+
+    /**
+     * Multi-PID replies are not guaranteed to contain every requested PID.
+     * Some ELM adapters/ECUs silently omit unsupported or delayed responses
+     * while returning the rest of the batch. Retry every missing or malformed
+     * item individually so one good PID cannot mask several dead dashboard
+     * fields, and so a failed individual read clears any stale value.
+     */
+    private suspend fun pollMissingPidsIndividually(
+        conn: OBDConnection,
+        requestedPids: List<String>,
+        batchValues: Map<String, Any?>,
+    ) {
+        val resolved = batchValues.toMutableMap()
+        val missingOrMalformed = requestedPids.filter { pid ->
+            !batchValues.containsKey(pid) || batchValues[pid] == null
+        }
+        for (pid in missingOrMalformed) {
+            if (pollingPaused) return
+            resolved[pid] = ELM327Protocol.parseResponse(pid, conn.query(pid))
+        }
+        applyPidValues(resolved)
     }
 
     private suspend fun pollSequential(conn: OBDConnection, pids: List<String>) {
