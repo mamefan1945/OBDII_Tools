@@ -24,6 +24,7 @@ class SessionRepository @Inject constructor(
     private val gpsRepository: GpsRepository,
 ) {
     private val mutex = Mutex()
+    private val lifecycleMutex = Mutex()
     private val gpsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var gpsCollectionJob: Job? = null
     private var currentSessionId: Long? = null
@@ -47,8 +48,8 @@ class SessionRepository @Inject constructor(
 
     val allSessions: Flow<List<SessionEntity>> = dao.getAllSessions()
 
-    suspend fun startSession(deviceName: String): Long {
-        if (currentSessionId != null) endSession()
+    suspend fun startSession(deviceName: String): Long = lifecycleMutex.withLock {
+        if (currentSessionId != null) endSessionLocked()
         val now = System.currentTimeMillis()
         dao.getOpenSessions().forEach { orphan -> dao.updateSession(orphan.copy(endTimeMs = now)) }
         val session = SessionEntity(startTimeMs = System.currentTimeMillis(), deviceName = deviceName)
@@ -83,7 +84,7 @@ class SessionRepository @Inject constructor(
             }
         }
         gpsRepository.startUpdates()
-        return id
+        id
     }
 
     suspend fun recordDataPoint(data: OBDData) = mutex.withLock {
@@ -192,7 +193,9 @@ class SessionRepository @Inject constructor(
         lastCvtPointMs = now
     }
 
-    suspend fun endSession(): TripSummary? {
+    suspend fun endSession(): TripSummary? = lifecycleMutex.withLock { endSessionLocked() }
+
+    private suspend fun endSessionLocked(): TripSummary? {
         // Atomically snapshot accumulated stats and mark session ended so no
         // further recordDataPoint() calls can modify them.
         data class Snap(val id: Long, val maxRpm: Int?, val maxSpeed: Int?, val maxCoolant: Int?,
