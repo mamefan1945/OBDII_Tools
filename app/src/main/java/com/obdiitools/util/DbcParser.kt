@@ -7,7 +7,7 @@ object DbcParser {
 
     private val msgRegex = Regex("""^BO_\s+(\d+)\s+(\w+)\s*:\s*(\d+)""")
     private val sigRegex = Regex(
-        """^\\s+SG_\\s+(\\w+)\\s+(?:(M|m(\\d+))\\s+)?:\\s*(\\d+)\\|(\\d+)@([01])([+-])\\s+\\(([^,]+),([^)]+)\\)\\s+\\[([^|]+)\\|([^\\]]+)\\]\\s+"([^"]*)"""
+        """^\s+SG_\s+(\w+)\s+(?:(M|m(\d+))\s+)?:\s*(\d+)\|(\d+)@([01])([+-])\s+\(([^,]+),([^)]+)\)\s+\[([^|]+)\|([^\]]+)\]\s+"([^"]*)"""
     )
 
     fun parse(text: String): Map<Long, Pair<DbcMessage, List<DbcSignal>>> {
