@@ -149,6 +149,8 @@ fun DeepScanScreen(
                             onStart = { viewModel.startScan() },
                             onProbeMazda = { viewModel.probeMazdaCx5Transmission() },
                             isProbingMazda = scanState.isProbingMazda,
+                            onDiscoverMazdaDids = { viewModel.discoverMazdaTcmDids() },
+                            isDiscoveringMazdaDids = scanState.isDiscoveringMazdaDids,
                         )
                     }
                 }
@@ -158,6 +160,10 @@ fun DeepScanScreen(
                     item {
                         MazdaTransmissionProbeCard(mazdaProbeStatus, scanState.mazdaTransmission)
                     }
+                }
+
+                if (scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids) {
+                    item { MazdaDidDiscoveryCard(scanState.mazdaDidResults, scanState.mazdaDidProgress) }
                 }
 
                 // ECU result cards
@@ -270,7 +276,13 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
 }
 
 @Composable
-private fun DeepScanInfoPanel(onStart: () -> Unit, onProbeMazda: () -> Unit, isProbingMazda: Boolean) {
+private fun DeepScanInfoPanel(
+    onStart: () -> Unit,
+    onProbeMazda: () -> Unit,
+    isProbingMazda: Boolean,
+    onDiscoverMazdaDids: () -> Unit,
+    isDiscoveringMazdaDids: Boolean,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
@@ -304,6 +316,19 @@ private fun DeepScanInfoPanel(onStart: () -> Unit, onProbeMazda: () -> Unit, isP
                 fontSize = 12.sp,
             )
         }
+        OutlinedButton(
+            onClick = onDiscoverMazdaDids,
+            enabled = !isDiscoveringMazdaDids,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonYellow),
+        ) {
+            Text(
+                if (isDiscoveringMazdaDids) "DISCOVERING MAZDA TCM DIDs…" else "DISCOVER MAZDA TCM DATA IDs",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+            )
+        }
         Button(
             onClick = onStart,
             modifier = Modifier.fillMaxWidth(),
@@ -318,6 +343,36 @@ private fun DeepScanInfoPanel(onStart: () -> Unit, onProbeMazda: () -> Unit, isP
                 letterSpacing = 1.sp,
             )
         }
+    }
+}
+
+@Composable
+private fun MazdaDidDiscoveryCard(
+    results: List<DeepScanViewModel.MazdaDidResult>,
+    progress: Pair<Int, Int>?,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .border(1.dp, NeonYellow.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .background(NeonYellow.copy(alpha = 0.05f)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("MAZDA TCM DID DISCOVERY · 0x7E1", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonYellow)
+        progress?.let { (done, total) ->
+            Text("PROBING $done / $total", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonCyan)
+            LinearProgressIndicator(
+                progress = { if (total > 0) done.toFloat() / total else 0f },
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = NeonCyan,
+                trackColor = SurfaceBorder,
+            )
+        }
+        results.forEach { result ->
+            Text("DID ${result.did} · ${result.description}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = TextPrimary)
+            Text(result.status, fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = if (result.status.startsWith("POSITIVE")) NeonGreen else TextSecondary)
+            Text("RAW: ${result.rawResponse}", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
+        }
+        Text("Positive responses are preserved as raw bytes. No value is decoded until its layout and scaling are verified.", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
     }
 }
 
