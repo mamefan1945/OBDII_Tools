@@ -67,6 +67,9 @@ class OBDRepository @Inject constructor(
     private val _obdData = MutableStateFlow(OBDData())
     val obdData: StateFlow<OBDData> = _obdData.asStateFlow()
 
+    private val _livePidValues = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val livePidValues: StateFlow<Map<String, Float>> = _livePidValues.asStateFlow()
+
     private val _dtcList = MutableStateFlow<List<DTC>>(emptyList())
     val dtcList: StateFlow<List<DTC>> = _dtcList.asStateFlow()
 
@@ -136,6 +139,7 @@ class OBDRepository @Inject constructor(
     private var connection: OBDConnection? = null
     @Volatile private var activeSessionId: Long? = null
     private var pollingJob: Job? = null
+    private var dynamicPidCursor = 0
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val notifId = AtomicInteger(2000)
 
@@ -661,12 +665,14 @@ class OBDRepository @Inject constructor(
         pollingJob?.cancel()
         pollingJob = null
         pollCycleCount = 0
+        dynamicPidCursor = 0
         multiPidCapable = null
         pollingPaused = pollingPauseCount.get() > 0  // outstanding operations retain their pause ownership
         connection?.close()
         connection = null
         _connectionState.value = ConnectionState.Disconnected
         _obdData.value = OBDData()
+        _livePidValues.value = emptyMap()
         _lowVoltageWarning.value = false
         _supportedPids.value = emptySet()
         capabilityTracker.reset()
@@ -787,6 +793,22 @@ class OBDRepository @Inject constructor(
                 }
             }
 
+            // Rotate through other advertised Mode 01 PIDs in small batches.
+            // This keeps the extended dashboard fresh without adding dozens of
+            // sequential requests to every poll cycle.
+            val standardPids = (ELM327Protocol.FAST_PIDS + ELM327Protocol.SLOW_PIDS).toSet()
+            val additionalPids = if (supported.isEmpty()) emptyList() else
+                com.obdiitools.obd.AllPidDefinitions.ALL.map { it.command }
+                    .filter { it in supported && it !in standardPids }
+            if (additionalPids.isNotEmpty() && !pollingPaused) {
+                val count = minOf(4, additionalPids.size)
+                val selected = (0 until count).map { offset ->
+                    additionalPids[(dynamicPidCursor + offset) % additionalPids.size]
+                }
+                dynamicPidCursor = (dynamicPidCursor + count) % additionalPids.size
+                pollSequential(conn, selected)
+            }
+
             // Poll custom PIDs
             val customPids = customPidRepository.customPids.first()
             if (customPids.isNotEmpty() && !pollingPaused) {
@@ -862,8 +884,13 @@ class OBDRepository @Inject constructor(
 
     private fun applyPidValues(values: Map<String, Any?>) {
         var current = _obdData.value
+        val genericValues = _livePidValues.value.toMutableMap()
         for ((pid, value) in values) {
             capabilityTracker.record(pid, value)
+            val normalizedPid = pid.uppercase()
+            val numericValue = (value as? Number)?.toFloat()
+            if (numericValue == null || !numericValue.isFinite()) genericValues.remove(normalizedPid)
+            else genericValues[normalizedPid] = numericValue
             // A present PID with a null parse result means the adapter returned
             // NO DATA or malformed bytes. Clear the old value instead of
             // retaining a stale dashboard reading indefinitely.
@@ -893,6 +920,7 @@ class OBDRepository @Inject constructor(
             }
         }
         _obdData.value = current
+        _livePidValues.value = genericValues
         _confirmedPids.value = capabilityTracker.confirmedPids
         persistCapabilityProfile()
     }
