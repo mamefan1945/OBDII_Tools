@@ -66,10 +66,16 @@ object ELM327Protocol {
 
     fun parseMultiPidResponse(lines: List<String>): Map<String, Any?> {
         val result = mutableMapOf<String, Any?>()
-        for (line in lines) {
-            if (line.length < 4) continue
-            if (line.substring(0, 2).uppercase() != "41") continue
-            val pidByte = line.substring(2, 4).uppercase()
+        for (rawLine in lines) {
+            // ELM adapters vary: ATS0 may still be overridden by a user profile,
+            // and some return indexed multi-line responses. Normalize both forms
+            // before looking for the standard 41 <PID> response prefix.
+            val line = rawLine.trim()
+                .replace(Regex("(?i)^[0-9A-F]:"), "")
+                .filterNot { it.isWhitespace() }
+                .uppercase()
+            if (line.length < 4 || !line.startsWith("41")) continue
+            val pidByte = line.substring(2, 4)
             val fullPid = PID_BYTE_TO_FULL[pidByte] ?: continue
             result[fullPid] = parseResponse(fullPid, line)
         }
