@@ -56,6 +56,7 @@ import com.obdiitools.viewmodel.MainViewModel
 fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit = {}) {
     val connectionState by viewModel.connectionState.collectAsState()
     val data by viewModel.obdData.collectAsState()
+    val confirmedPids by viewModel.confirmedPids.collectAsState()
     val prefs by viewModel.userPreferences.collectAsState()
     val sessionFuelLitres by viewModel.sessionFuelLitres.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
@@ -70,6 +71,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
         } else {
             DashboardContent(
                 data = data,
+                confirmedPids = confirmedPids,
                 connectionState = connectionState,
                 prefs = prefs,
                 sessionFuelLitres = sessionFuelLitres,
@@ -111,6 +113,7 @@ private fun DisconnectedState() {
 @Composable
 private fun DashboardContent(
     data: OBDData,
+    confirmedPids: Set<String>,
     connectionState: ConnectionState,
     prefs: UserPreferences,
     sessionFuelLitres: Float,
@@ -144,14 +147,24 @@ private fun DashboardContent(
         HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(20.dp))
 
-        // Primary gauges — RPM + Speed
-        Row(
+        if (confirmedPids.isEmpty()) {
+            Text(
+                text = "LEARNING VEHICLE CAPABILITIES — waiting for verified live readings…",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = NeonYellow,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+        }
+
+        // Primary gauges — only show values confirmed by repeated live samples.
+        if (confirmedPids.any { it in setOf("010C", "010D") }) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            CircularGauge(
+            if ("010C" in confirmedPids) CircularGauge(
                 value = data.rpm?.toFloat(),
                 minValue = 0f,
                 maxValue = 8000f,
@@ -161,7 +174,7 @@ private fun DashboardContent(
                 accentColor = NeonCyan,
                 showColorZones = true,
             )
-            CircularGauge(
+            if ("010D" in confirmedPids) CircularGauge(
                 value = data.speedKph?.let { UnitConverter.speed(it, prefs.speedUnit) },
                 minValue = 0f,
                 maxValue = UnitConverter.speedMax(prefs.speedUnit),
@@ -175,14 +188,14 @@ private fun DashboardContent(
 
         Spacer(Modifier.height(20.dp))
 
-        // Secondary gauges — Coolant + Throttle
-        Row(
+        // Secondary gauges — show only confirmed sensors.
+        if (confirmedPids.any { it in setOf("0105", "0111", "0104") }) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            CircularGauge(
+            if ("0105" in confirmedPids) CircularGauge(
                 value = data.coolantTempC?.let { UnitConverter.temperature(it, prefs.temperatureUnit) },
                 minValue = UnitConverter.tempMin(prefs.temperatureUnit),
                 maxValue = UnitConverter.tempMax(prefs.temperatureUnit),
@@ -192,7 +205,7 @@ private fun DashboardContent(
                 accentColor = NeonRed,
                 showColorZones = true,
             )
-            CircularGauge(
+            if ("0111" in confirmedPids) CircularGauge(
                 value = data.throttlePercent,
                 minValue = 0f,
                 maxValue = 100f,
@@ -201,7 +214,7 @@ private fun DashboardContent(
                 size = 130.dp,
                 accentColor = NeonGreen,
             )
-            CircularGauge(
+            if ("0104" in confirmedPids) CircularGauge(
                 value = data.engineLoadPercent,
                 minValue = 0f,
                 maxValue = 100f,
@@ -215,8 +228,8 @@ private fun DashboardContent(
 
         Spacer(Modifier.height(20.dp))
 
-        // Linear gauges card
-        GlassCard(
+        // Linear gauges card — omit sensors the vehicle has not verified.
+        if (confirmedPids.any { it in setOf("012F", "010F", "010E", "0110") }) GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
@@ -231,13 +244,13 @@ private fun DashboardContent(
                     color = TextSecondary,
                     letterSpacing = 2.sp,
                 )
-                LinearGauge(
+                if ("012F" in confirmedPids) LinearGauge(
                     value = data.fuelLevelPercent,
                     label = "Fuel Level",
                     unit = "%",
                     accentColor = NeonGreen,
                 )
-                LinearGauge(
+                if ("010F" in confirmedPids) LinearGauge(
                     value = data.intakeAirTempC?.let { UnitConverter.temperature(it, prefs.temperatureUnit) },
                     minValue = UnitConverter.tempMin(prefs.temperatureUnit),
                     maxValue = UnitConverter.temperature(80, prefs.temperatureUnit),
@@ -245,7 +258,7 @@ private fun DashboardContent(
                     unit = prefs.temperatureUnit.symbol,
                     accentColor = NeonCyan,
                 )
-                LinearGauge(
+                if ("010E" in confirmedPids) LinearGauge(
                     value = data.timingAdvanceDeg,
                     minValue = -64f,
                     maxValue = 64f,
@@ -253,7 +266,7 @@ private fun DashboardContent(
                     unit = "°",
                     accentColor = NeonPurple,
                 )
-                LinearGauge(
+                if ("0110" in confirmedPids) LinearGauge(
                     value = data.mafGramsPerSec?.let { UnitConverter.airMass(it, prefs.airMassUnit) },
                     minValue = 0f,
                     maxValue = if (prefs.airMassUnit == com.obdiitools.data.AirMassUnit.G_S) 655.35f else 86.67f,
@@ -263,7 +276,7 @@ private fun DashboardContent(
                 )
                 val maf = data.mafGramsPerSec
                 val spd = data.speedKph
-                if (maf != null) {
+                if ("0110" in confirmedPids && maf != null) {
                     val isIdling = spd == null || spd < 5
                     val econValue: Float?
                     val econMax: Float
@@ -304,8 +317,8 @@ private fun DashboardContent(
 
         Spacer(Modifier.height(16.dp))
 
-        // Stats row card
-        GlassCard(
+        // Stats row card — battery is adapter-reported; other fields require PID confirmation.
+        if (data.batteryVoltage != null || confirmedPids.any { it in setOf("015C", "0146", "0133") }) GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
@@ -314,7 +327,7 @@ private fun DashboardContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround,
             ) {
-                StatItem(
+                if ("015C" in confirmedPids) StatItem(
                     label = "OIL TEMP",
                     value = data.oilTempC?.let { UnitConverter.formatTemp(it, prefs.temperatureUnit) + prefs.temperatureUnit.symbol } ?: "--",
                     color = NeonOrange,
@@ -324,12 +337,12 @@ private fun DashboardContent(
                     value = data.batteryVoltage?.let { "${"%.1f".format(it)}V" } ?: "--",
                     color = NeonGreen,
                 )
-                StatItem(
+                if ("0146" in confirmedPids) StatItem(
                     label = "AMBIENT",
                     value = data.ambientTempC?.let { UnitConverter.formatTemp(it, prefs.temperatureUnit) + prefs.temperatureUnit.symbol } ?: "--",
                     color = NeonCyan,
                 )
-                StatItem(
+                if ("0133" in confirmedPids) StatItem(
                     label = "BARO",
                     value = data.baroPressureKpa?.let { UnitConverter.formatPressure(it, prefs.pressureUnit) + " " + prefs.pressureUnit.symbol } ?: "--",
                     color = NeonPurple,
