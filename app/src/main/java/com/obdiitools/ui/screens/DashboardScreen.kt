@@ -57,6 +57,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
     val connectionState by viewModel.connectionState.collectAsState()
     val data by viewModel.obdData.collectAsState()
     val confirmedPids by viewModel.confirmedPids.collectAsState()
+    val previouslyKnownPids by viewModel.previouslyKnownPids.collectAsState()
     val prefs by viewModel.userPreferences.collectAsState()
     val sessionFuelLitres by viewModel.sessionFuelLitres.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
@@ -72,6 +73,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
             DashboardContent(
                 data = data,
                 confirmedPids = confirmedPids,
+                previouslyKnownPids = previouslyKnownPids,
                 connectionState = connectionState,
                 prefs = prefs,
                 sessionFuelLitres = sessionFuelLitres,
@@ -114,6 +116,7 @@ private fun DisconnectedState() {
 private fun DashboardContent(
     data: OBDData,
     confirmedPids: Set<String>,
+    previouslyKnownPids: Set<String>,
     connectionState: ConnectionState,
     prefs: UserPreferences,
     sessionFuelLitres: Float,
@@ -148,8 +151,13 @@ private fun DashboardContent(
         Spacer(Modifier.height(20.dp))
 
         if (confirmedPids.isEmpty()) {
+            val message = if (previouslyKnownPids.isNotEmpty()) {
+                "RECHECKING ${previouslyKnownPids.size} PREVIOUSLY LEARNED READINGS…"
+            } else {
+                "LEARNING VEHICLE CAPABILITIES — waiting for verified live readings…"
+            }
             Text(
-                text = "LEARNING VEHICLE CAPABILITIES — waiting for verified live readings…",
+                text = message,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 color = NeonYellow,
