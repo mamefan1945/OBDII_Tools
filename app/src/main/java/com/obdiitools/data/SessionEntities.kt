@@ -53,4 +53,6 @@ data class SessionDataPoint(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val accuracy: Float? = null,
+    val mazdaSelectedGear: String? = null,
+    val mazdaTransmissionTempC: Double? = null,
 )
