@@ -13,7 +13,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,10 +29,12 @@ import com.obdiitools.ui.theme.TextSecondary
 fun DTCCard(dtc: DTC, modifier: Modifier = Modifier) {
     val severity = DTCDatabase.getSeverity(dtc.code)
     val severityColor = when (severity) {
-        DTCDatabase.Severity.HIGH   -> NeonRed
+        DTCDatabase.Severity.HIGH -> NeonRed
         DTCDatabase.Severity.MEDIUM -> NeonOrange
-        DTCDatabase.Severity.LOW    -> NeonYellow
+        DTCDatabase.Severity.LOW -> NeonYellow
     }
+    val details = dtc.details
+    val title = details?.title?.takeIf { it.isNotBlank() } ?: dtc.description
 
     GlassCard(
         modifier = modifier.fillMaxWidth(),
@@ -48,11 +49,9 @@ fun DTCCard(dtc: DTC, modifier: Modifier = Modifier) {
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
                 tint = severityColor,
-                modifier = Modifier
-                    .size(20.dp)
-                    .padding(top = 2.dp),
+                modifier = Modifier.size(20.dp).padding(top = 2.dp),
             )
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -74,23 +73,77 @@ fun DTCCard(dtc: DTC, modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                Text(
-                    text = dtc.description.ifBlank { "No description available" },
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 13.sp,
-                    color = TextPrimary,
-                )
+                if (title.isNotBlank()) {
+                    Text(title, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                }
+                if (details != null && details.description.isNotBlank()) {
+                    Text(details.description, fontSize = 12.sp, color = TextSecondary)
+                } else if (details == null && dtc.description == "Unknown fault code") {
+                    Text(
+                        if (dtc.code.length == 5 && dtc.code[1] == '1')
+                            "Manufacturer-specific code. A verified make/model/ECU-specific definition is needed."
+                        else
+                            "No detailed definition is available in the generic code database.",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                    )
+                }
                 Text(
                     text = when (severity) {
-                        DTCDatabase.Severity.HIGH   -> "High severity"
+                        DTCDatabase.Severity.HIGH -> "High severity"
                         DTCDatabase.Severity.MEDIUM -> "Medium severity"
-                        DTCDatabase.Severity.LOW    -> "Low severity"
+                        DTCDatabase.Severity.LOW -> "Severity not established"
                     },
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = TextSecondary,
                 )
+                if (details?.commonCauses?.isNotEmpty() == true) {
+                    Text(
+                        "POSSIBLE CAUSES — NOT A CONFIRMED DIAGNOSIS",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        color = NeonOrange,
+                    )
+                    details.commonCauses.take(5).forEach { cause ->
+                        Text(
+                            "• ${cause.label} (${cause.likelihood})",
+                            fontSize = 12.sp,
+                            color = TextPrimary,
+                        )
+                    }
+                }
+                if (details?.symptoms?.isNotEmpty() == true) {
+                    Text(
+                        "COMMON SYMPTOMS",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        color = TextSecondary,
+                    )
+                    details.symptoms.take(4).forEach { symptom ->
+                        Text("• $symptom", fontSize = 12.sp, color = TextPrimary)
+                    }
+                }
+                if (details?.repairDifficulty != null || details?.diyPossible != null) {
+                    val repairText = listOfNotNull(
+                        details.repairDifficulty?.let { "Repair difficulty: $it" },
+                        details.diyPossible?.let { if (it) "DIY may be possible" else "Professional service may be required" },
+                    ).joinToString(" · ")
+                    Text(repairText, fontSize = 11.sp, color = TextSecondary)
+                }
+                if (details?.reviewed != null) {
+                    Text("Reference reviewed: ${details.reviewed}", fontSize = 10.sp, color = TextSecondary)
+                }
+                if (details != null) {
+                    Text(
+                        "Generic reference: OBDex (CC0-1.0). ${details.sourceCount} source references. " +
+                            "Actual cause must be confirmed with vehicle-specific diagnosis.",
+                        fontSize = 10.sp,
+                        color = TextSecondary,
+                    )
+                }
             }
         }
     }

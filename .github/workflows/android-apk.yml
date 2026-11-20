@@ -72,6 +72,17 @@ jobs:
           keytool -list -v -keystore "$HOME/.android/debug.keystore" \
             -alias androiddebugkey -storepass "$KEYSTORE_PASSWORD"
 
+      - name: Download offline generic DTC reference database
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          curl --fail --location --retry 3 --retry-delay 2 \
+            https://foerbsnavi.github.io/OBDex/generic.min.json \
+            --output app/src/main/assets/obdex-generic.min.json
+          jq -e 'type == "array" and length >= 9000 and any(.[]; .code == "P0420" and (.title.en | type == "string"))' \
+            app/src/main/assets/obdex-generic.min.json > /dev/null
+          echo "Validated bundled OBDex generic DTC database."
+
       - name: Build debug APK
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}

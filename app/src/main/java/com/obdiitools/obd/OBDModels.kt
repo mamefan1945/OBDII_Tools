@@ -27,10 +27,30 @@ data class OBDData(
     val o2Bank2S2Volts: Float? = null,
 )
 
+data class DtcCause(
+    val label: String,
+    val likelihood: String,
+)
+
+data class DtcDetails(
+    val title: String,
+    val description: String,
+    val category: String,
+    val commonCauses: List<DtcCause> = emptyList(),
+    val symptoms: List<String> = emptyList(),
+    val repairDifficulty: String? = null,
+    val diyPossible: Boolean? = null,
+    val emissionsRelevant: Boolean? = null,
+    val limpModePossible: Boolean? = null,
+    val reviewed: String? = null,
+    val sourceCount: Int = 0,
+)
+
 data class DTC(
     val code: String,
     val description: String = "",
     val isPending: Boolean = false,
+    val details: DtcDetails? = null,
 )
 
 sealed class ConnectionState {

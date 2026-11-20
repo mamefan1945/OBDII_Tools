@@ -1016,7 +1016,7 @@ class OBDRepository @Inject constructor(
                 val storedDtcs = ELM327Protocol.parseDTCs(stored, false)
                 val pendingDtcs = ELM327Protocol.parseDTCs(pending, true)
                 val allDtcs = (storedDtcs + pendingDtcs).map { dtc ->
-                    dtc.copy(description = DTCDatabase.getDescription(dtc.code))
+                    ObdexDtcDatabase.enrich(context, dtc)
                 }.distinctBy { it.code }
                 _dtcList.value = allDtcs
                 if (storedDtcs.isNotEmpty()) fetchFreezeFrames(tx, storedDtcs)
