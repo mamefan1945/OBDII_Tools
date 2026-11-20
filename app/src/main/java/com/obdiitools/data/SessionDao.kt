@@ -50,14 +50,13 @@ interface SessionDao {
         UPDATE session_data_points SET
             rpm = :rpm, speedKph = :speedKph, coolantTempC = :coolantTempC,
             throttlePercent = :throttlePercent, engineLoadPercent = :engineLoadPercent,
-            mafGramsPerSec = :mafGramsPerSec, batteryVoltage = :batteryVoltage,
-            latitude = :latitude, longitude = :longitude, accuracy = :accuracy
+            mafGramsPerSec = :mafGramsPerSec, batteryVoltage = :batteryVoltage
         WHERE id = :id
     """)
     suspend fun updatePointWithObd(
         id: Long, rpm: Int?, speedKph: Int?, coolantTempC: Int?,
         throttlePercent: Float?, engineLoadPercent: Float?, mafGramsPerSec: Float?,
-        batteryVoltage: Float?, latitude: Double?, longitude: Double?, accuracy: Float?,
+        batteryVoltage: Float?,
     )
 
     @Query("""
