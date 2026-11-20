@@ -65,6 +65,9 @@ class MainViewModel @Inject constructor(
 
     val vehicleCapabilities = repository.vehicleCapabilities
 
+    val previouslyKnownPids: StateFlow<Set<String>> = repository.previouslyKnownPids
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     val dtcList: StateFlow<List<DTC>> = repository.dtcList
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -117,6 +120,7 @@ class MainViewModel @Inject constructor(
                             try {
                                 val info = vinRepository.fetchAndDecodeVin()
                                 _vinInfo.value = info
+                                repository.setVehicleIdentity(info?.vin)
                                 if (info != null && (info.vin.isNotBlank() || info.make.isNotBlank() || info.model.isNotBlank())) {
                                     sessionRepository.updateCurrentSessionMakeModel(info.make, info.model, info.vin)
                                 }
@@ -127,6 +131,7 @@ class MainViewModel @Inject constructor(
                     }
                     is ConnectionState.Disconnected -> {
                         vinFetchJob?.cancel()
+                        repository.setVehicleIdentity(null)
                         _vinInfo.value = null
                         _vinLoading.value = false
                         vinRepository.clearCache()
