@@ -129,9 +129,6 @@ class SessionRepository @Inject constructor(
                 engineLoadPercent = data.engineLoadPercent,
                 mafGramsPerSec = data.mafGramsPerSec,
                 batteryVoltage = data.batteryVoltage,
-                latitude = null,
-                longitude = null,
-                accuracy = null,
             )
         } else {
             dao.insertDataPoint(
