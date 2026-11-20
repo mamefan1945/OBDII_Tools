@@ -41,8 +41,10 @@ class DeepScanViewModel @Inject constructor(
         val mode09Pids: List<SupportedPid>,
         val ecuVin: String? = null,
         val identityStatus: String? = null,
+        val validatedMode01Pids: List<SupportedPid> = emptyList(),
     ) {
         val totalPids get() = mode01Pids.size + mode09Pids.size
+        val validatedCount get() = validatedMode01Pids.size
     }
 
     data class MazdaDidResult(val did: String, val description: String, val status: String, val rawResponse: String)
@@ -113,6 +115,20 @@ class DeepScanViewModel @Inject constructor(
                     val mode01 = repository.queryModeSupport(addr, "01")
                     if (!isActive) return@forEachIndexed
 
+                    // Bitmaps are only advertised capability. Validate every
+                    // advertised Mode 01 PID with two decoded reads from this ECU.
+                    val validatedMode01 = mutableListOf<SupportedPid>()
+                    mode01.sorted().forEachIndexed { pidIndex, pid ->
+                        if (!isActive) return@forEachIndexed
+                        _scanState.value = _scanState.value.copy(
+                            phase = "Validating 0x$addr — $pid (" + (pidIndex + 1) + "/" + mode01.size + ")",
+                        )
+                        if (repository.validateMode01Pid(addr, pid)) {
+                            validatedMode01 += SupportedPid(pid, mode01PidName(pid))
+                        }
+                    }
+                    if (!isActive) return@forEachIndexed
+
                     // Mode 09 is queried on the broadcast address and conventional
                     // engine request address. A response proves support, not ECU identity.
                     val mode09 = if (addr == "7DF" || addr.uppercase() == "7E0") {
@@ -152,6 +168,7 @@ class DeepScanViewModel @Inject constructor(
                                     else -> "F190 response was not a valid 17-character VIN"
                                 }
                             },
+                            validatedMode01Pids = validatedMode01,
                         )
                     )
                     // Emit partial results as we go so the UI updates live
