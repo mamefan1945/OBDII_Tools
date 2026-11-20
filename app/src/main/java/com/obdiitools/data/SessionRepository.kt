@@ -218,12 +218,19 @@ class SessionRepository @Inject constructor(
 
         val session = dao.getSessionById(snap.id) ?: return null
         val endTime = System.currentTimeMillis()
+
+        // OBD speed is polled less frequently than GPS and may be missing on
+        // individual cycles. Prefer the recorded GPS track for trip distance,
+        // rejecting inaccurate fixes, long gaps, and implausible jumps.
+        val gpsDistanceKm = calculateGpsDistanceKm(dao.getGpsPointsForSession(snap.id))
+        val tripDistanceKm = gpsDistanceKm?.takeIf { it > 0f } ?: snap.distKm
+
         dao.updateSession(session.copy(
             endTimeMs = endTime,
             maxRpm = snap.maxRpm,
             maxSpeedKph = snap.maxSpeed,
             maxCoolantTempC = snap.maxCoolant,
-            distanceKm = snap.distKm,
+            distanceKm = tripDistanceKm,
             totalFuelLitres = snap.fuelLitres,
         ))
 
@@ -233,12 +240,12 @@ class SessionRepository @Inject constructor(
             make = session.make,
             model = session.model,
             durationMs = duration,
-            distanceKm = snap.distKm,
+            distanceKm = tripDistanceKm,
             maxRpm = snap.maxRpm,
             maxSpeedKph = snap.maxSpeed,
             maxCoolantTempC = snap.maxCoolant,
             totalFuelLitres = snap.fuelLitres,
-            avgSpeedKph = snap.distKm?.let { dist ->
+            avgSpeedKph = tripDistanceKm?.let { dist ->
                 val hours = (endTime - session.startTimeMs) / 3_600_000f
                 if (hours > 0f) dist / hours else null
             } ?: if (snap.speedCount > 0) snap.speedSum.toFloat() / snap.speedCount else null,
@@ -276,4 +283,42 @@ class SessionRepository @Inject constructor(
         dao.getGpsPointsForSession(sessionId)
 
     suspend fun deleteSession(sessionId: Long) = dao.deleteSession(sessionId)
+
+    private fun calculateGpsDistanceKm(points: List<SessionDataPoint>): Float? {
+        val fixes = points.asSequence()
+            .filter { it.latitude != null && it.longitude != null }
+            .filter { (it.accuracy ?: Float.MAX_VALUE) <= MAX_TRIP_GPS_ACCURACY_METERS }
+            .sortedBy { it.timestampMs }
+            .toList()
+        if (fixes.size < 2) return null
+
+        var distanceMeters = 0.0
+        for (index in 1 until fixes.size) {
+            val previous = fixes[index - 1]
+            val current = fixes[index]
+            val elapsedMs = current.timestampMs - previous.timestampMs
+            if (elapsedMs <= 0L || elapsedMs > MAX_TRIP_GPS_GAP_MS) continue
+
+            val lat1 = Math.toRadians(previous.latitude!!)
+            val lat2 = Math.toRadians(current.latitude!!)
+            val deltaLat = lat2 - lat1
+            val deltaLon = Math.toRadians(current.longitude!! - previous.longitude!!)
+            val a = kotlin.math.sin(deltaLat / 2) * kotlin.math.sin(deltaLat / 2) +
+                kotlin.math.cos(lat1) * kotlin.math.cos(lat2) *
+                kotlin.math.sin(deltaLon / 2) * kotlin.math.sin(deltaLon / 2)
+            val segmentMeters = 2.0 * EARTH_RADIUS_METERS *
+                kotlin.math.asin(kotlin.math.sqrt(a.coerceIn(0.0, 1.0)))
+
+            // A single bad fix must not inflate the trip distance.
+            if (segmentMeters <= MAX_TRIP_GPS_SEGMENT_METERS) distanceMeters += segmentMeters
+        }
+        return (distanceMeters / 1000.0).toFloat().takeIf { it > 0f }
+    }
+
+    private companion object {
+        const val MAX_TRIP_GPS_ACCURACY_METERS = 50f
+        const val MAX_TRIP_GPS_GAP_MS = 5_000L
+        const val MAX_TRIP_GPS_SEGMENT_METERS = 50.0
+        const val EARTH_RADIUS_METERS = 6_371_000.0
+    }
 }
