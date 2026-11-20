@@ -76,6 +76,11 @@ class OBDRepository @Inject constructor(
     private val _supportedPids = MutableStateFlow<Set<String>>(emptySet())
     val supportedPids: StateFlow<Set<String>> = _supportedPids.asStateFlow()
 
+    private val capabilityTracker = com.obdiitools.obd.VehicleCapabilityTracker()
+    val vehicleCapabilities = capabilityTracker.capabilities
+    private val _confirmedPids = MutableStateFlow<Set<String>>(emptySet())
+    val confirmedPids: StateFlow<Set<String>> = _confirmedPids.asStateFlow()
+
     private val _readinessStatus = MutableStateFlow<ReadinessStatus?>(null)
     val readinessStatus: StateFlow<ReadinessStatus?> = _readinessStatus.asStateFlow()
 
@@ -553,6 +558,8 @@ class OBDRepository @Inject constructor(
                     return@withContext
                 }
 
+                capabilityTracker.reset()
+                _confirmedPids.value = emptySet()
                 val supported = conn.querySupportedPids()
                 _supportedPids.value = supported
 
@@ -597,6 +604,8 @@ class OBDRepository @Inject constructor(
         _obdData.value = OBDData()
         _lowVoltageWarning.value = false
         _supportedPids.value = emptySet()
+        capabilityTracker.reset()
+        _confirmedPids.value = emptySet()
         _readinessStatus.value = null
         _freezeFrames.value = emptyList()
         _activeAlerts.value = emptySet()
@@ -789,6 +798,7 @@ class OBDRepository @Inject constructor(
     private fun applyPidValues(values: Map<String, Any?>) {
         var current = _obdData.value
         for ((pid, value) in values) {
+            capabilityTracker.record(pid, value)
             // A present PID with a null parse result means the adapter returned
             // NO DATA or malformed bytes. Clear the old value instead of
             // retaining a stale dashboard reading indefinitely.
@@ -818,6 +828,7 @@ class OBDRepository @Inject constructor(
             }
         }
         _obdData.value = current
+        _confirmedPids.value = capabilityTracker.confirmedPids
     }
 
     private fun checkAlerts() {
