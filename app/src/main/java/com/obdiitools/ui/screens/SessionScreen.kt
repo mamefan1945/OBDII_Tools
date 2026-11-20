@@ -118,6 +118,7 @@ fun SessionScreen(
     var shareIncludeObd by remember { mutableStateOf(true) }
     var shareIncludeCvt by remember { mutableStateOf(true) }
     var shareIncludeGps by remember { mutableStateOf(true) }
+    var shareIncludeMazdaTcm by remember { mutableStateOf(true) }
     var includeVehicle by remember { mutableStateOf(true) }
     var includeStats by remember { mutableStateOf(true) }
     var includeTelemetry by remember { mutableStateOf(true) }
@@ -266,6 +267,10 @@ fun SessionScreen(
                         Checkbox(checked = shareIncludeGps, onCheckedChange = { shareIncludeGps = it })
                         Text("GPS coordinates and accuracy")
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = shareIncludeMazdaTcm, onCheckedChange = { shareIncludeMazdaTcm = it })
+                        Text("Mazda transmission gear and fluid temperature")
+                    }
                     Text("GPS data can reveal travel history and precise locations.")
                 }
             },
@@ -279,6 +284,7 @@ fun SessionScreen(
                         includeObdTelemetry = shareIncludeObd,
                         includeCvtTelemetry = shareIncludeCvt,
                         includeGps = shareIncludeGps,
+                        includeMazdaTcmTelemetry = shareIncludeMazdaTcm,
                     )
                     scope.launch(Dispatchers.IO) {
                         val intent = SessionExporter.buildShareIntent(context, session, dataPoints, options)
