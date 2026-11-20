@@ -14,7 +14,24 @@ data class MazdaCx5TransmissionData(
     val rawTemperatureResponse: String = "",
 )
 
+data class MazdaDidCandidate(val did: String, val description: String)
+
+/**
+ * Bounded read-only TCM probe set. The first two identifiers are already
+ * validated on the user's 2016 CX-5. Remaining entries are catalogue leads
+ * only; their presence here does not imply 2016 support or a known decoder.
+ */
 object MazdaCx5Protocol {
+    val TCM_DISCOVERY_CANDIDATES = listOf(
+        MazdaDidCandidate("1E12", "Selected transmission gear (vehicle-verified)"),
+        MazdaDidCandidate("1E1C", "Transmission fluid temperature (vehicle-verified)"),
+        MazdaDidCandidate("1674", "Transmission temperature alternate (catalogue lead)"),
+        MazdaDidCandidate("1E3F", "Transmission temperature alternate (catalogue lead)"),
+        MazdaDidCandidate("11B3", "Transmission gear alternate (catalogue lead)"),
+        MazdaDidCandidate("11BD", "Transmission temperature alternate (catalogue lead)"),
+        MazdaDidCandidate("163A", "Torque converter input torque (catalogue lead)"),
+        MazdaDidCandidate("DD01", "Transmission odometer (catalogue lead)"),
+    )
     const val TCM_REQUEST_ID = "7E1"
     const val GEAR_DID = "1E12"
     const val TRANSMISSION_TEMPERATURE_DID = "1E1C"
