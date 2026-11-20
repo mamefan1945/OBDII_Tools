@@ -179,13 +179,18 @@ fun OBDIIApp(viewModel: MainViewModel) {
                 )
             }
             composable(NavScreen.Dashboard.route) {
-                DashboardScreen(viewModel, onNavigateToLiveData = { navController.navigate("live_data") })
+                DashboardScreen(
+                    viewModel,
+                    onNavigateToLiveData = { navController.navigate("live_data") },
+                    onNavigateToBluetooth = { navController.navigate(NavScreen.Bluetooth.route) },
+                )
             }
             composable(NavScreen.DTC.route) {
                 DTCScreen(
                     viewModel,
                     onNavigateToFreezeFrame = { navController.navigate("freeze_frame") },
                     onNavigateToReadiness   = { navController.navigate("readiness") },
+                    onNavigateToBluetooth   = { navController.navigate(NavScreen.Bluetooth.route) },
                 )
             }
             composable(NavScreen.Bluetooth.route) { BluetoothScreen(viewModel) }
@@ -288,10 +293,21 @@ private fun OBDBottomNav(
             NavigationBarItem(
                 selected = selected,
                 onClick = {
-                    navController.navigate(tab.route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
+                    if (tab is NavScreen.Home) {
+                        navController.navigate(NavScreen.Home.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                inclusive = false
+                                saveState = false
+                            }
+                            launchSingleTop = true
+                            restoreState = false
+                        }
+                    } else {
+                        navController.navigate(tab.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 },
                 icon = {
