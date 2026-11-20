@@ -742,29 +742,31 @@ class OBDRepository @Inject constructor(
     private fun applyPidValues(values: Map<String, Any?>) {
         var current = _obdData.value
         for ((pid, value) in values) {
+            // A present PID with a null parse result means the adapter returned
+            // NO DATA or malformed bytes. Clear the old value instead of
+            // retaining a stale dashboard reading indefinitely.
             current = when (pid.uppercase()) {
-                // No stale fallback: adapter returns NO DATA when stopped, which must propagate as null.
                 ELM327Protocol.PID.RPM          -> current.copy(rpm = value as? Int)
                 ELM327Protocol.PID.SPEED        -> current.copy(speedKph = value as? Int)
-                ELM327Protocol.PID.THROTTLE     -> current.copy(throttlePercent = (value as? Float) ?: current.throttlePercent)
-                ELM327Protocol.PID.COOLANT_TEMP -> current.copy(coolantTempC = (value as? Int) ?: current.coolantTempC)
-                ELM327Protocol.PID.ENGINE_LOAD  -> current.copy(engineLoadPercent = (value as? Float) ?: current.engineLoadPercent)
-                ELM327Protocol.PID.MAF          -> current.copy(mafGramsPerSec = (value as? Float) ?: current.mafGramsPerSec)
-                ELM327Protocol.PID.INTAKE_TEMP  -> current.copy(intakeAirTempC = (value as? Int) ?: current.intakeAirTempC)
-                ELM327Protocol.PID.TIMING_ADV   -> current.copy(timingAdvanceDeg = (value as? Float) ?: current.timingAdvanceDeg)
-                ELM327Protocol.PID.FUEL_LEVEL   -> current.copy(fuelLevelPercent = (value as? Float) ?: current.fuelLevelPercent)
-                ELM327Protocol.PID.AMBIENT_TEMP -> current.copy(ambientTempC = (value as? Int) ?: current.ambientTempC)
-                ELM327Protocol.PID.STFT_BANK1   -> current.copy(stftBank1Pct = (value as? Float) ?: current.stftBank1Pct)
-                ELM327Protocol.PID.LTFT_BANK1   -> current.copy(ltftBank1Pct = (value as? Float) ?: current.ltftBank1Pct)
-                ELM327Protocol.PID.STFT_BANK2   -> current.copy(stftBank2Pct = (value as? Float) ?: current.stftBank2Pct)
-                ELM327Protocol.PID.LTFT_BANK2   -> current.copy(ltftBank2Pct = (value as? Float) ?: current.ltftBank2Pct)
-                ELM327Protocol.PID.O2_B1S1      -> current.copy(o2Bank1S1Volts = (value as? Float) ?: current.o2Bank1S1Volts)
-                ELM327Protocol.PID.O2_B1S2      -> current.copy(o2Bank1S2Volts = (value as? Float) ?: current.o2Bank1S2Volts)
-                ELM327Protocol.PID.O2_B2S1      -> current.copy(o2Bank2S1Volts = (value as? Float) ?: current.o2Bank2S1Volts)
-                ELM327Protocol.PID.O2_B2S2      -> current.copy(o2Bank2S2Volts = (value as? Float) ?: current.o2Bank2S2Volts)
-                ELM327Protocol.PID.OIL_TEMP      -> current.copy(oilTempC = value as? Int)
-                ELM327Protocol.PID.BARO_PRESSURE -> current.copy(baroPressureKpa = (value as? Int) ?: current.baroPressureKpa)
-                ELM327Protocol.PID.FUEL_PRESSURE -> current.copy(fuelPressureKpa = (value as? Int) ?: current.fuelPressureKpa)
+                ELM327Protocol.PID.THROTTLE     -> current.copy(throttlePercent = value as? Float)
+                ELM327Protocol.PID.COOLANT_TEMP -> current.copy(coolantTempC = value as? Int)
+                ELM327Protocol.PID.ENGINE_LOAD  -> current.copy(engineLoadPercent = value as? Float)
+                ELM327Protocol.PID.MAF          -> current.copy(mafGramsPerSec = value as? Float)
+                ELM327Protocol.PID.INTAKE_TEMP  -> current.copy(intakeAirTempC = value as? Int)
+                ELM327Protocol.PID.TIMING_ADV   -> current.copy(timingAdvanceDeg = value as? Float)
+                ELM327Protocol.PID.FUEL_LEVEL   -> current.copy(fuelLevelPercent = value as? Float)
+                ELM327Protocol.PID.AMBIENT_TEMP -> current.copy(ambientTempC = value as? Int)
+                ELM327Protocol.PID.STFT_BANK1   -> current.copy(stftBank1Pct = value as? Float)
+                ELM327Protocol.PID.LTFT_BANK1   -> current.copy(ltftBank1Pct = value as? Float)
+                ELM327Protocol.PID.STFT_BANK2   -> current.copy(stftBank2Pct = value as? Float)
+                ELM327Protocol.PID.LTFT_BANK2   -> current.copy(ltftBank2Pct = value as? Float)
+                ELM327Protocol.PID.O2_B1S1      -> current.copy(o2Bank1S1Volts = value as? Float)
+                ELM327Protocol.PID.O2_B1S2      -> current.copy(o2Bank1S2Volts = value as? Float)
+                ELM327Protocol.PID.O2_B2S1      -> current.copy(o2Bank2S1Volts = value as? Float)
+                ELM327Protocol.PID.O2_B2S2      -> current.copy(o2Bank2S2Volts = value as? Float)
+                ELM327Protocol.PID.OIL_TEMP     -> current.copy(oilTempC = value as? Int)
+                ELM327Protocol.PID.BARO_PRESSURE -> current.copy(baroPressureKpa = value as? Int)
+                ELM327Protocol.PID.FUEL_PRESSURE -> current.copy(fuelPressureKpa = value as? Int)
                 else -> current
             }
         }
