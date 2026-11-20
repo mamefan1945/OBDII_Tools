@@ -209,13 +209,13 @@ class DeepScanViewModel @Inject constructor(
             repository.pausePolling()
             _scanState.value = _scanState.value.copy(
                 isDiscoveringMazdaDids = true,
-                mazdaDidProgress = 0 to MAZDA_TCM_DID_CANDIDATES.size,
+                mazdaDidProgress = 0 to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
                 mazdaDidResults = emptyList(),
             )
             val results = mutableListOf<MazdaDidResult>()
             try {
-                MAZDA_TCM_DID_CANDIDATES.forEachIndexed { index, candidate ->
-                    val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.first)
+                MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.forEachIndexed { index, candidate ->
+                    val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did)
                     val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.first, raw)
                     val status = when {
                         parsed.isSuccess -> "POSITIVE RESPONSE — raw only"
@@ -226,9 +226,9 @@ class DeepScanViewModel @Inject constructor(
                         parsed.errorCode == "UNK" -> "MALFORMED RESPONSE"
                         else -> "NO RESPONSE"
                     }
-                    results += MazdaDidResult(candidate.first, candidate.second, status, raw.ifBlank { "(no response)" })
+                    results += MazdaDidResult(candidate.first, candidate.description, status, raw.ifBlank { "(no response)" })
                     _scanState.value = _scanState.value.copy(
-                        mazdaDidProgress = (index + 1) to MAZDA_TCM_DID_CANDIDATES.size,
+                        mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
                         mazdaDidResults = results.toList(),
                     )
                 }
@@ -262,17 +262,6 @@ class DeepScanViewModel @Inject constructor(
     private fun mode09PidName(code: String) = MODE09_NAMES[code.uppercase()] ?: "Info ${code.takeLast(2)}"
 
     companion object {
-        private val MAZDA_TCM_DID_CANDIDATES = listOf(
-            "1E12" to "Selected transmission gear (known baseline)",
-            "1E1C" to "Transmission fluid temperature (known baseline)",
-            "1674" to "Transmission temperature alternate", 
-            "1E3F" to "Transmission temperature alternate",
-            "11B3" to "Transmission gear alternate",
-            "11BD" to "Transmission temperature alternate",
-            "163A" to "Torque converter input torque",
-            "DD01" to "Transmission odometer",
-        )
-
         private val MODE09_NAMES = mapOf(
             "0901" to "VIN Message Count",
             "0902" to "Vehicle Identification Number (VIN)",
