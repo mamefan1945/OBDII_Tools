@@ -216,7 +216,7 @@ class DeepScanViewModel @Inject constructor(
             try {
                 MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.forEachIndexed { index, candidate ->
                     val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did)
-                    val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.first, raw)
+                    val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did, raw)
                     val status = when {
                         parsed.isSuccess -> "POSITIVE RESPONSE — raw only"
                         parsed.errorCode != null && parsed.errorCode !in setOf("NC", "ND", "ERR", "UNK") ->
@@ -226,7 +226,7 @@ class DeepScanViewModel @Inject constructor(
                         parsed.errorCode == "UNK" -> "MALFORMED RESPONSE"
                         else -> "NO RESPONSE"
                     }
-                    results += MazdaDidResult(candidate.first, candidate.description, status, raw.ifBlank { "(no response)" })
+                    results += MazdaDidResult(candidate.did, candidate.description, status, raw.ifBlank { "(no response)" })
                     _scanState.value = _scanState.value.copy(
                         mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
                         mazdaDidResults = results.toList(),
