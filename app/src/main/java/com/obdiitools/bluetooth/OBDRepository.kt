@@ -28,6 +28,7 @@ import com.obdiitools.obd.ReadinessStatus
 import com.obdiitools.obd.UdsResponse
 import com.obdiitools.obd.parseReadinessStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -201,7 +202,9 @@ class OBDRepository @Inject constructor(
         val conn = connection ?: return null
         return conn.withTransaction {
             try {
-                query("ATZ", 1500)
+                // Do not issue ATZ here: it can reset the Bluetooth radio on
+                // BLE ELM327 adapters. The connection initialization already
+                // configured the adapter; reassert only safe runtime settings.
                 query("ATE0", 300)
                 query("ATAL", 300)
                 query("ATH0", 300)
@@ -565,6 +568,12 @@ class OBDRepository @Inject constructor(
                 sessionRepository.startSession(deviceInfo.name)
                 startPolling()
                 candidateConnection = null
+            } catch (cancelled: CancellationException) {
+                candidateConnection?.let { candidate ->
+                    candidate.close()
+                    if (connection === candidate) connection = null
+                }
+                throw cancelled
             } catch (e: Exception) {
                 candidateConnection?.let { candidate ->
                     candidate.close()
