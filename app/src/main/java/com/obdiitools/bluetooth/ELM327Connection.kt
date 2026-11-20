@@ -41,7 +41,9 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
     override suspend fun query(command: String, timeoutMs: Long): String = withContext(Dispatchers.IO) {
         try {
             sendRaw(command)
-            readResponseLines(timeoutMs).firstOrNull() ?: ""
+            firstUsefulResponse(readResponseLines(timeoutMs))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: java.io.IOException) {
             throw e  // let polling loop detect disconnection
         } catch (e: Exception) {
@@ -53,6 +55,8 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
         try {
             sendRaw(command)
             readResponseLines(timeoutMs)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: java.io.IOException) {
             throw e  // let polling loop detect disconnection
         } catch (e: Exception) {
@@ -201,6 +205,16 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
             }
         }
     }.flowOn(Dispatchers.IO)
+
+
+    private fun firstUsefulResponse(lines: List<String>): String =
+        lines.firstOrNull { line ->
+            val normalized = line.filterNot { it.isWhitespace() }.uppercase()
+            normalized.isNotEmpty() &&
+                !normalized.startsWith("SEARCHING") &&
+                !normalized.startsWith("BUSINIT") &&
+                normalized != "OK"
+        } ?: ""
 
     private fun sendRaw(command: String) {
         outputStream.write("$command\r".toByteArray(Charsets.UTF_8))
