@@ -522,6 +522,35 @@ class OBDRepository @Inject constructor(
         }
     }
 
+    /**
+     * Validate a Mode 01 PID by requiring two independently decoded responses.
+     * This is read-only and is used by Deep Scan to distinguish advertised
+     * support from a value this ECU actually returns.
+     */
+    suspend fun validateMode01Pid(ecuAddress: String, pid: String): Boolean {
+        val conn = connection ?: return false
+        val address = ecuAddress.uppercase()
+        val command = pid.uppercase()
+        if (!address.matches(Regex("^[0-9A-F]{3}$")) ||
+            !command.matches(Regex("^01[0-9A-F]{2}$"))) return false
+        return conn.withTransaction {
+            try {
+                query("ATSH $address", 300)
+                val first = ELM327Protocol.parseResponse(command, query(command, 1200))
+                delay(80)
+                val second = ELM327Protocol.parseResponse(command, query(command, 1200))
+                if (address == "7DF") {
+                    capabilityTracker.record(command, first)
+                    capabilityTracker.record(command, second)
+                    _confirmedPids.value = capabilityTracker.confirmedPids
+                }
+                first != null && second != null
+            } finally {
+                withContext(NonCancellable) { runCatching { query("ATSH 7DF", 300) } }
+            }
+        }
+    }
+
     val isConnected: Boolean
         get() = _connectionState.value is ConnectionState.Connected
 
