@@ -17,6 +17,8 @@ data class DbcSignal(
     val scale: Double,
     val offset: Double,
     val unit: String,
+    val isMultiplexer: Boolean = false,
+    val multiplexerValue: Int? = null,
 )
 
 data class DecodedSignal(
