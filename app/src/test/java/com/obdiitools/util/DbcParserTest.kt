@@ -40,8 +40,10 @@ BO_ 2147483939 TEST_EXT: 8 ECU
  SG_ SPEED_B m2 : 12|8@1+ (0.1,0) [0|25.5] "km/h" ECU
 """.trimIndent()
         val parsed = DbcParser.parse(dbc)
-        assertTrue(parsed.containsKey(0x123L))
-        val signals = parsed.getValue(0x123L).second
+        assertTrue(parsed.containsKey(0x80000123L))
+        assertEquals(0x123L, parsed.getValue(0x80000123L).first.id)
+        assertEquals(true, parsed.getValue(0x80000123L).first.isExtended)
+        val signals = parsed.getValue(0x80000123L).second
         assertEquals(true, signals.single { it.name == "MUX" }.isMultiplexer)
         assertEquals(1, signals.single { it.name == "SPEED_A" }.multiplexerValue)
         assertEquals(2, signals.single { it.name == "SPEED_B" }.multiplexerValue)
