@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -36,6 +35,7 @@ import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.OBDData
 import com.obdiitools.ui.components.CircularGauge
 import com.obdiitools.ui.components.ConnectionStatusBar
+import com.obdiitools.ui.components.ConnectDevicePrompt
 import com.obdiitools.ui.components.GlassCard
 import com.obdiitools.ui.components.LinearGauge
 import com.obdiitools.ui.theme.BackgroundDeep
@@ -54,7 +54,11 @@ import com.obdiitools.util.UnitConverter
 import com.obdiitools.viewmodel.MainViewModel
 
 @Composable
-fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit = {}) {
+fun DashboardScreen(
+    viewModel: MainViewModel,
+    onNavigateToLiveData: () -> Unit = {},
+    onNavigateToBluetooth: () -> Unit = {},
+) {
     val connectionState by viewModel.connectionState.collectAsState()
     val data by viewModel.obdData.collectAsState()
     val livePidValues by viewModel.livePidValues.collectAsState()
@@ -70,7 +74,7 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
             .background(BackgroundDeep)
     ) {
         if (!isConnected) {
-            DisconnectedState()
+            ConnectDevicePrompt(onClick = onNavigateToBluetooth)
         } else {
             DashboardContent(
                 data = data,
@@ -81,35 +85,6 @@ fun DashboardScreen(viewModel: MainViewModel, onNavigateToLiveData: () -> Unit =
                 prefs = prefs,
                 sessionFuelLitres = sessionFuelLitres,
                 onNavigateToLiveData = onNavigateToLiveData,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DisconnectedState() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Default.BluetoothDisabled,
-                null,
-                tint = SurfaceBorder,
-                modifier = Modifier.size(72.dp),
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Connect to a device",
-                color = TextSecondary,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "to view live data",
-                color = TextSecondary.copy(alpha = 0.6f),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
             )
         }
     }
