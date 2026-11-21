@@ -485,6 +485,51 @@ class OBDRepository @Inject constructor(
         }
     }
 
+    /**
+     * Reads the Nissan CVT7 fluid-deterioration counter with the read-only 2103
+     * request. It requires a confirmed C0 diagnostic session and restores the
+     * standard adapter configuration before releasing the transaction.
+     */
+    suspend fun readNissanCvt7Deterioration(
+        ecuAddress: String,
+    ): com.obdiitools.obd.NissanCvt7DeteriorationResult? {
+        if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return null
+        val conn = connection ?: return null
+        return conn.withTransaction {
+            try {
+                query("ATE0", 300)
+                query("ATAL", 300)
+                query("ATH0", 300)
+                query("ATS0", 300)
+                query("ATST32", 300)
+                query("ATSW00", 300)
+                query("ATSP6", 600)
+                query("ATCAF1", 300)
+                query("ATSH ${ecuAddress.uppercase()}", 400)
+                query("ATFCSH ${ecuAddress.uppercase()}", 300)
+                query("ATFCSD 300000", 300)
+                query("ATFCSM1", 300)
+                query("ATCRA 7E9", 300)
+                val session = queryLines("10C0", 1500)
+                if (!com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(session, "50C0")) {
+                    return@withTransaction null
+                }
+                val response = queryLines("2103", 2500)
+                com.obdiitools.obd.NissanCvt7Protocol.parseCvtDeteriorationResponse(response)
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { query("ATCRA", 300) }
+                    runCatching { query("ATFCSM0", 300) }
+                    runCatching { query("ATSH 7DF", 400) }
+                    runCatching { query("ATSP0", 600) }
+                    runCatching { query("ATCAF1", 300) }
+                    runCatching { query("ATH0", 300) }
+                    runCatching { query("ATS0", 300) }
+                }
+            }
+        }
+    }
+
     /** Reads Nissan CVT7 stored DTCs only after the TCM identity was confirmed. */
     suspend fun readNissanCvt7DTCs(ecuAddress: String): List<DTC>? {
         if (!ecuAddress.matches(Regex("(?i)^[0-9A-F]{3}$"))) return null

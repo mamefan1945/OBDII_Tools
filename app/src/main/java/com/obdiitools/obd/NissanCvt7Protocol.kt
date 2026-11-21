@@ -18,6 +18,12 @@ data class NissanCvt7PollResult(
     val parseStatus: String,
 )
 
+data class NissanCvt7DeteriorationResult(
+    val rawCounter: Long,
+    val method1Value: Long,
+    val method2Value: Long,
+)
+
 data class NissanCvt7LiveData(
     val vehicleSpeedKph: Int,
     val engineRpm: Int,
@@ -66,6 +72,36 @@ object NissanCvt7Protocol {
         }
         val compact = lines.joinToString("") { it.filterNot(Char::isWhitespace).uppercase() }
         return compact.contains(responsePrefix.uppercase())
+    }
+
+    /**
+     * Parses the read-only Nissan CVT7 fluid-deterioration response to 21 03.
+     * The reference formatter reads four bytes immediately after 61 03 as an
+     * unsigned counter. Its two CVT7 display methods are counter / 16 and the
+     * unscaled counter; neither is selected automatically here.
+     */
+    fun parseCvtDeteriorationResponse(lines: List<String>): NissanCvt7DeteriorationResult? {
+        if (lines.isEmpty()) return null
+        val response = buildString {
+            lines.forEachIndexed { index, rawLine ->
+                var line = rawLine.filterNot(Char::isWhitespace).uppercase()
+                if (index == 0) line = line.removePrefix("07A")
+                line = line.replace(Regex("^[0-9A-F]:"), "")
+                if (line.isEmpty() || line.contains("NODATA") || line.contains("NO DATA") ||
+                    line.contains("ERROR") || line.contains("?")) return@forEachIndexed
+                if (line.all { it in "0123456789ABCDEF" }) append(line)
+            }
+        }
+        val marker = response.indexOf("6103")
+        if (marker < 0) return null
+        val dataStart = marker + 4
+        if (response.length < dataStart + 8) return null
+        val rawCounter = response.substring(dataStart, dataStart + 8).toLongOrNull(16) ?: return null
+        return NissanCvt7DeteriorationResult(
+            rawCounter = rawCounter,
+            method1Value = rawCounter / 16L,
+            method2Value = rawCounter,
+        )
     }
 
     /**

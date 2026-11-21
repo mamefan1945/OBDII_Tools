@@ -60,6 +60,14 @@ class CVTViewModel @Inject constructor(
 
     private var cvtDtcJob: Job? = null
 
+    private val _cvtDeterioration = MutableStateFlow<com.obdiitools.obd.NissanCvt7DeteriorationResult?>(null)
+    val cvtDeterioration: StateFlow<com.obdiitools.obd.NissanCvt7DeteriorationResult?> = _cvtDeterioration.asStateFlow()
+    private val _isReadingCvtDeterioration = MutableStateFlow(false)
+    val isReadingCvtDeterioration: StateFlow<Boolean> = _isReadingCvtDeterioration.asStateFlow()
+    private val _cvtDeteriorationStatus = MutableStateFlow("Not read yet.")
+    val cvtDeteriorationStatus: StateFlow<String> = _cvtDeteriorationStatus.asStateFlow()
+    private var cvtDeteriorationJob: Job? = null
+
     val sourceDescription: StateFlow<String> = _sourceDescription.asStateFlow()
 
     val connectionState: StateFlow<ConnectionState> = repository.connectionState
@@ -142,9 +150,14 @@ class CVTViewModel @Inject constructor(
         pollJob = null
         cvtDtcJob?.cancel()
         cvtDtcJob = null
+        cvtDeteriorationJob?.cancel()
+        cvtDeteriorationJob = null
         _isReadingCvtDtcs.value = false
+        _isReadingCvtDeterioration.value = false
         _cvtDtcs.value = emptyList()
         _cvtDtcStatus.value = "Not scanned yet."
+        _cvtDeterioration.value = null
+        _cvtDeteriorationStatus.value = "Not read yet."
         probeComplete = false
         nissanCvt7Detected = false
         nissanCvt7EcuAddress = null
@@ -215,6 +228,30 @@ class CVTViewModel @Inject constructor(
         }
     }
 
+    fun readCvtDeterioration() {
+        val address = nissanCvt7EcuAddress ?: return
+        if (_isReadingCvtDeterioration.value || _isReadingCvtDtcs.value || _isCapturing.value) return
+        cvtDeteriorationJob?.cancel()
+        cvtDeteriorationJob = viewModelScope.launch {
+            _isReadingCvtDeterioration.value = true
+            _cvtDeteriorationStatus.value = "Reading CVT fluid deterioration counter (read-only 2103)…"
+            try {
+                val result = repository.readNissanCvt7Deterioration(address)
+                if (result == null) {
+                    _cvtDeterioration.value = null
+                    _cvtDeteriorationStatus.value = "TCM did not return a complete 6103 response. Counter could not be read."
+                } else {
+                    _cvtDeterioration.value = result
+                    _cvtDeteriorationStatus.value = "Read from the confirmed CVT7 controller. Compare both calculation methods with observed counter behavior; do not assume which method applies."
+                }
+            } catch (error: Exception) {
+                _cvtDeteriorationStatus.value = "Deterioration read failed: ${error.message ?: "unknown error"}"
+            } finally {
+                _isReadingCvtDeterioration.value = false
+            }
+        }
+    }
+
     private suspend fun probe() {
         _sourceDescription.value = "Searching for the Nissan CVT7 transmission controller…"
         val discovery = repository.discoverNissanCvt7 { progress ->
@@ -250,7 +287,7 @@ class CVTViewModel @Inject constructor(
                 delay(1000)
                 continue
             }
-            if (_isReadingCvtDtcs.value || _isCapturing.value) {
+            if (_isReadingCvtDtcs.value || _isReadingCvtDeterioration.value || _isCapturing.value) {
                 delay(100)
                 continue
             }

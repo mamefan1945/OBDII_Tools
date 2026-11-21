@@ -123,6 +123,23 @@ class NissanCvt7ProtocolTest {
     }
 
     @Test
+    fun parsesCvt7DeteriorationCounterAndBothReferenceMethods() {
+        val result = NissanCvt7Protocol.parseCvtDeteriorationResponse(
+            listOf("07A", "0:610300033450")
+        )
+        assertEquals(210000L, result?.rawCounter)
+        assertEquals(13125L, result?.method1Value)
+        assertEquals(210000L, result?.method2Value)
+    }
+
+    @Test
+    fun rejectsNegativeAndTruncatedCvt7DeteriorationResponses() {
+        assertNull(NissanCvt7Protocol.parseCvtDeteriorationResponse(listOf("7F2131")))
+        assertNull(NissanCvt7Protocol.parseCvtDeteriorationResponse(listOf("6103000334")))
+        assertNull(NissanCvt7Protocol.parseCvtDeteriorationResponse(emptyList()))
+    }
+
+    @Test
     fun parsesNissanCvt7DtcRecordsFromIndexedElmResponse() {
         val codes = NissanCvt7Protocol.parseCvtDtcResponse(
             listOf("07A0:5902FF06150000", "1:07400000")

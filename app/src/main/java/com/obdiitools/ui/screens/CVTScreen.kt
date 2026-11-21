@@ -92,6 +92,9 @@ fun CVTScreen(
     val cvtDtcs          by viewModel.cvtDtcs.collectAsState()
     val isReadingCvtDtcs by viewModel.isReadingCvtDtcs.collectAsState()
     val cvtDtcStatus     by viewModel.cvtDtcStatus.collectAsState()
+    val cvtDeterioration by viewModel.cvtDeterioration.collectAsState()
+    val isReadingCvtDeterioration by viewModel.isReadingCvtDeterioration.collectAsState()
+    val cvtDeteriorationStatus by viewModel.cvtDeteriorationStatus.collectAsState()
     val transmissionModel by viewModel.detectedTransmissionModel.collectAsState()
     val transmissionPartNumber by viewModel.transmissionPartNumber.collectAsState()
     val transmissionEcuAddress by viewModel.transmissionEcuAddress.collectAsState()
@@ -259,6 +262,50 @@ fun CVTScreen(
                             color = TextSecondary,
                         )
                         cvtDtcs.forEach { dtc -> DTCCard(dtc = dtc) }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "CVT FLUID DETERIORATION",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = NeonCyan,
+                            letterSpacing = 1.sp,
+                        )
+                        Button(
+                            onClick = { viewModel.readCvtDeterioration() },
+                            enabled = !isReadingCvtDeterioration && !isReadingCvtDtcs && !isCapturing,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NeonCyan.copy(alpha = 0.15f),
+                                disabledContainerColor = SurfaceElevated,
+                            ),
+                        ) {
+                            Text(
+                                if (isReadingCvtDeterioration) "READING DETERIORATION…" else "READ DETERIORATION COUNTER",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = if (isReadingCvtDeterioration) TextSecondary else NeonCyan,
+                            )
+                        }
+                        Text(
+                            cvtDeteriorationStatus,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = TextSecondary,
+                        )
+                        cvtDeterioration?.let { result ->
+                            CvtInfoRow("RAW COUNTER", result.rawCounter.toString())
+                            CvtInfoRow("METHOD 1 (÷16)", result.method1Value.toString())
+                            CvtInfoRow("METHOD 2 (RAW)", result.method2Value.toString())
+                            Text(
+                                "Nissan service information commonly uses 210,000 points as the fluid-replacement threshold. CVT7 calculation method varies; compare the counter's change with CVT temperature before interpreting it.",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                            )
+                        }
                     }
                 }
             }
