@@ -47,7 +47,16 @@ class DeepScanViewModel @Inject constructor(
         val validatedCount get() = validatedMode01Pids.size
     }
 
-    data class MazdaDidResult(val did: String, val description: String, val status: String, val rawResponse: String)
+    data class MazdaDidResult(
+        val did: String,
+        val description: String,
+        val status: String,
+        val rawResponse: String,
+        val requestCommand: String = "22$did",
+        val requestAddress: String = MazdaCx5Protocol.TCM_REQUEST_ID,
+        val expectedResponseAddress: String = "7E9",
+        val capturedAtMs: Long = System.currentTimeMillis(),
+    )
 
     data class ScanState(
         val isScanning: Boolean = false,
@@ -57,6 +66,7 @@ class DeepScanViewModel @Inject constructor(
         val isProbingMazda: Boolean = false,
         val mazdaProbeStatus: String? = null,
         val mazdaTransmission: MazdaCx5TransmissionData? = null,
+        val mazdaProbeCapturedAtMs: Long? = null,
         val isDiscoveringMazdaDids: Boolean = false,
         val mazdaDidProgress: Pair<Int, Int>? = null,
         val mazdaDidResults: List<MazdaDidResult> = emptyList(),
@@ -202,6 +212,7 @@ class DeepScanViewModel @Inject constructor(
                     isProbingMazda = true,
                     mazdaProbeStatus = "Probing Mazda TCM at 0x7E1…",
                     mazdaTransmission = null,
+                    mazdaProbeCapturedAtMs = System.currentTimeMillis(),
                 )
                 try {
                     val rawGear = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID)
@@ -254,9 +265,18 @@ class DeepScanViewModel @Inject constructor(
                 val results = mutableListOf<MazdaDidResult>()
                 try {
                     MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.forEachIndexed { index, candidate ->
-                        val raw = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did)
+                        if (!isActive) throw CancellationException("Mazda DID discovery cancelled")
+                        val capturedAt = System.currentTimeMillis()
+                        val raw = try {
+                            repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            "ERROR: ${error.message ?: "communication error"}"
+                        }
                         val parsed = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, candidate.did, raw)
                         val status = when {
+                            raw.startsWith("ERROR:", ignoreCase = true) -> "ADAPTER ERROR"
                             parsed.isSuccess -> "POSITIVE RESPONSE — raw only"
                             parsed.errorCode != null && parsed.errorCode !in setOf("NC", "ND", "ERR", "UNK") ->
                                 "NEGATIVE RESPONSE — NRC 0x${parsed.errorCode}"
@@ -265,7 +285,14 @@ class DeepScanViewModel @Inject constructor(
                             parsed.errorCode == "UNK" -> "MALFORMED RESPONSE"
                             else -> "NO RESPONSE"
                         }
-                        results += MazdaDidResult(candidate.did, candidate.description, status, raw.ifBlank { "(no response)" })
+                        results += MazdaDidResult(
+                            did = candidate.did,
+                            description = candidate.description,
+                            status = status,
+                            rawResponse = raw.ifBlank { "(no response)" },
+                            requestCommand = "22${candidate.did}",
+                            capturedAtMs = capturedAt,
+                        )
                         _scanState.value = _scanState.value.copy(
                             mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
                             mazdaDidResults = results.toList(),
