@@ -1,6 +1,10 @@
 package com.obdiitools.viewmodel
 
 import androidx.lifecycle.ViewModel
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.data.SessionRepository
@@ -30,6 +34,7 @@ import javax.inject.Inject
 class DeepScanViewModel @Inject constructor(
     private val repository: OBDRepository,
     private val sessionRepository: SessionRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     data class SupportedPid(val code: String, val name: String)
@@ -72,7 +77,43 @@ class DeepScanViewModel @Inject constructor(
         val mazdaDidResults: List<MazdaDidResult> = emptyList(),
     )
 
-    private val _scanState = MutableStateFlow(ScanState())
+    private val capturePreferences = appContext.getSharedPreferences("mazda_diagnostic_captures", Context.MODE_PRIVATE)
+
+    private fun loadSavedMazdaDidResults(): List<MazdaDidResult> = runCatching {
+        val json = JSONArray(capturePreferences.getString("did_results", "[]"))
+        List(json.length()) { index ->
+            val item = json.getJSONObject(index)
+            MazdaDidResult(
+                did = item.getString("did"),
+                description = item.getString("description"),
+                status = item.getString("status"),
+                rawResponse = item.getString("rawResponse"),
+                requestCommand = item.optString("requestCommand", "22" + item.getString("did")),
+                requestAddress = item.optString("requestAddress", MazdaCx5Protocol.TCM_REQUEST_ID),
+                expectedResponseAddress = item.optString("expectedResponseAddress", "7E9"),
+                capturedAtMs = item.optLong("capturedAtMs", 0L),
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    private fun saveMazdaDidResults(results: List<MazdaDidResult>) {
+        val json = JSONArray()
+        results.forEach { result ->
+            json.put(JSONObject().apply {
+                put("did", result.did)
+                put("description", result.description)
+                put("status", result.status)
+                put("rawResponse", result.rawResponse)
+                put("requestCommand", result.requestCommand)
+                put("requestAddress", result.requestAddress)
+                put("expectedResponseAddress", result.expectedResponseAddress)
+                put("capturedAtMs", result.capturedAtMs)
+            })
+        }
+        capturePreferences.edit().putString("did_results", json.toString()).apply()
+    }
+
+    private val _scanState = MutableStateFlow(ScanState(mazdaDidResults = loadSavedMazdaDidResults()))
     val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
     val connectionState: StateFlow<ConnectionState> = repository.connectionState
@@ -90,7 +131,15 @@ class DeepScanViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             scanMutex.withLock {
                 repository.pausePolling()
-                _scanState.value = ScanState(isScanning = true, phase = "Discovering ECUs on CAN bus…")
+                val previous = _scanState.value
+                _scanState.value = ScanState(
+                    isScanning = true,
+                    phase = "Discovering ECUs on CAN bus…",
+                    mazdaProbeStatus = previous.mazdaProbeStatus,
+                    mazdaTransmission = previous.mazdaTransmission,
+                    mazdaProbeCapturedAtMs = previous.mazdaProbeCapturedAtMs,
+                    mazdaDidResults = previous.mazdaDidResults,
+                )
                 try {
                     delay(300)
                 // ── Phase 1: ECU discovery ────────────────────────────────────
@@ -296,6 +345,7 @@ class DeepScanViewModel @Inject constructor(
                             requestCommand = "22${candidate.did}",
                             capturedAtMs = capturedAt,
                         )
+                        saveMazdaDidResults(results)
                         _scanState.value = _scanState.value.copy(
                             mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,
                             mazdaDidResults = results.toList(),
@@ -305,6 +355,7 @@ class DeepScanViewModel @Inject constructor(
                     throw cancelled
                 } catch (error: Exception) {
                     results += MazdaDidResult("----", "Discovery error", error.message ?: "Communication error", "")
+                    saveMazdaDidResults(results)
                     _scanState.value = _scanState.value.copy(mazdaDidResults = results.toList())
                 } finally {
                     _scanState.value = _scanState.value.copy(
