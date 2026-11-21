@@ -216,6 +216,7 @@ class DeepScanViewModel @Inject constructor(
                 )
                 try {
                     val rawGear = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID)
+                    if (!isActive) throw CancellationException("Mazda TCM probe cancelled")
                     val rawTemp = repository.queryRawUds(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID)
                     val gear = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.GEAR_DID, rawGear)
                     val temp = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID, rawTemp)
