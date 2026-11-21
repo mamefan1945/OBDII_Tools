@@ -9,10 +9,12 @@ class MazdaCx5ProtocolTest {
         UdsResponse.parse("7E1", did, "62$did$payload")
 
     @Test
-    fun decodesOnlyVehicleVerifiedForwardGearValues() {
+    fun decodesVehicleObservedForwardGearValuesOneThroughFive() {
         assertEquals("1", MazdaCx5Protocol.parseGear(response("1E12", "01")))
         assertEquals("2", MazdaCx5Protocol.parseGear(response("1E12", "02")))
-        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "03")))
+        assertEquals("3", MazdaCx5Protocol.parseGear(response("1E12", "03")))
+        assertEquals("4", MazdaCx5Protocol.parseGear(response("1E12", "04")))
+        assertEquals("5", MazdaCx5Protocol.parseGear(response("1E12", "05")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "06")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "50")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "60")))
