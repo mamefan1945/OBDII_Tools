@@ -38,10 +38,27 @@ class MazdaCx5ProtocolTest {
         assertEquals(candidates.size, candidates.map { it.did }.toSet().size)
         assertEquals("1E12", candidates[0].did)
         assertEquals("1E1C", candidates[1].did)
+        assertEquals(true, candidates[0].vehicleVerified)
+        assertEquals(true, candidates[1].vehicleVerified)
+        assertEquals(false, candidates.drop(2).any { it.vehicleVerified })
         candidates.forEach { candidate ->
             assertEquals(4, candidate.did.length)
             assert(candidate.did.all { it in '0'..'9' || it in 'A'..'F' })
         }
+    }
+
+    @Test
+    fun parsesMultiFrameMazdaTemperatureResponse() {
+        val raw = "SEARCHING...\n0:621E1C01\n1:4F"
+        val parsed = UdsResponse.parse("7E1", "1E1C", raw)
+        assertEquals(true, parsed.isSuccess)
+        assertEquals(20.9375, MazdaCx5Protocol.parseTransmissionTemperatureC(parsed)!!, 0.00001)
+    }
+
+    @Test
+    fun candidateVerificationMetadataDoesNotPromoteCatalogueLeads() {
+        val verified = MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.filter { it.vehicleVerified }
+        assertEquals(listOf("1E12", "1E1C"), verified.map { it.did })
     }
 
     @Test
