@@ -44,9 +44,9 @@ object MazdaCx5Protocol {
     fun parseGear(response: UdsResponse): String? {
         if (!response.isSuccess || response.did.uppercase() != GEAR_DID) return null
         val raw = response.dataBytes.firstOrNull() ?: return null
-        // Only 1st and 2nd gear values have been confirmed on this vehicle.
-        // Do not infer P/R/N or higher-gear encodings from cross-year catalogues.
-        return raw.takeIf { it in 1..2 }?.toString()
+        // Forward gear values 1 through 5 have been observed on this vehicle
+        // in repeated live TCM reads. Do not infer P/R/N or 6th gear encoding.
+        return raw.takeIf { it in 1..5 }?.toString()
     }
 
     fun parseTransmissionTemperatureC(response: UdsResponse): Double? {
