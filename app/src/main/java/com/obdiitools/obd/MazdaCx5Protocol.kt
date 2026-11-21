@@ -14,7 +14,7 @@ data class MazdaCx5TransmissionData(
     val rawTemperatureResponse: String = "",
 )
 
-data class MazdaDidCandidate(val did: String, val description: String)
+data class MazdaDidCandidate(val did: String, val description: String, val vehicleVerified: Boolean = false)
 
 /**
  * Bounded read-only TCM probe set. The first two identifiers are already
@@ -23,8 +23,8 @@ data class MazdaDidCandidate(val did: String, val description: String)
  */
 object MazdaCx5Protocol {
     val TCM_DISCOVERY_CANDIDATES = listOf(
-        MazdaDidCandidate("1E12", "Selected transmission gear (vehicle-verified)"),
-        MazdaDidCandidate("1E1C", "Transmission fluid temperature (vehicle-verified)"),
+        MazdaDidCandidate("1E12", "Selected transmission gear", vehicleVerified = true),
+        MazdaDidCandidate("1E1C", "Transmission fluid temperature", vehicleVerified = true),
         MazdaDidCandidate("1674", "Transmission temperature alternate (catalogue lead)"),
         MazdaDidCandidate("1E3F", "Transmission temperature alternate (catalogue lead)"),
         MazdaDidCandidate("11B3", "Transmission gear alternate (catalogue lead)"),
