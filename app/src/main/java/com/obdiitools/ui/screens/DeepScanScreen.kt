@@ -259,6 +259,9 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
     )
     state.mazdaProbeStatus?.let { status ->
         lines += "MAZDA TCM PROBE — 0x7E1"
+        state.mazdaProbeCapturedAtMs?.let { lines += "Captured at: ${java.time.Instant.ofEpochMilli(it)}" }
+        lines += "Requests: 22${com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID} and 22${com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID}"
+        lines += "Expected TCM response address: 0x7E9 (adapter response text does not expose CAN frame IDs)"
         lines += status
         state.mazdaTransmission?.let { data ->
             data.gear?.let { lines += "Decoded gear: $it" }
@@ -267,6 +270,21 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
             }
             data.rawGearResponse?.takeIf { it.isNotBlank() }?.let { lines += "DID 1E12 raw: $it" }
             data.rawTemperatureResponse?.takeIf { it.isNotBlank() }?.let { lines += "DID 1E1C raw: $it" }
+        }
+        lines += ""
+    }
+    if (state.mazdaDidResults.isNotEmpty()) {
+        lines += "MAZDA TCM DID DISCOVERY — request address 0x7E1"
+        lines += "Expected response address: 0x7E9"
+        lines += "Requests use read-only UDS ReadDataByIdentifier (service 0x22)."
+        lines += "Raw values are adapter-returned response text, not captured CAN frames."
+        state.mazdaDidResults.forEach { result ->
+            lines += "DID ${result.did} — ${result.description}"
+            lines += "Captured at: ${java.time.Instant.ofEpochMilli(result.capturedAtMs)}"
+            lines += "Request: 0x${result.requestAddress} ${result.requestCommand}"
+            lines += "Expected response address: 0x${result.expectedResponseAddress}"
+            lines += "Status: ${result.status}"
+            lines += "Adapter response: ${result.rawResponse}"
         }
         lines += ""
     }
@@ -380,9 +398,11 @@ private fun MazdaDidDiscoveryCard(
         results.forEach { result ->
             Text("DID ${result.did} · ${result.description}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = TextPrimary)
             Text(result.status, fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = if (result.status.startsWith("POSITIVE")) NeonGreen else TextSecondary)
-            Text("RAW: ${result.rawResponse}", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
+            Text("REQ 0x${result.requestAddress} ${result.requestCommand}  →  expected ECU 0x${result.expectedResponseAddress}", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
+            Text("TIME: ${java.time.Instant.ofEpochMilli(result.capturedAtMs)}", fontFamily = FontFamily.Monospace, fontSize = 8.sp, color = TextSecondary)
+            Text("ADAPTER RESPONSE: ${result.rawResponse}", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
         }
-        Text("Positive responses are preserved as raw bytes. No value is decoded until its layout and scaling are verified.", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
+        Text("Only 1E12 and 1E1C are vehicle-verified. Other entries are catalogue leads. Adapter text is not a raw CAN-frame capture.", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextSecondary)
     }
 }
 
