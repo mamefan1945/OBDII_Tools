@@ -642,19 +642,19 @@ private fun MetricGrid(data: CVTData, prefs: UserPreferences) {
             )
         }
         data.cvtRatio.value?.let {
-            add(MetricDisplay("GEAR RATIO", "%.2f".format(it), data.cvtRatio.source, NeonYellow))
+            add(MetricDisplay("GEAR RATIO", "%.2f:1".format(java.util.Locale.US, it), data.cvtRatio.source, NeonYellow))
         }
         data.accelerator.value?.let {
             add(MetricDisplay("ACCELERATOR", "%.2f".format(it), data.accelerator.source, NeonCyan))
         }
         data.torqueConverterRatio.value?.let {
-            add(MetricDisplay("TORQUE RATIO", "%.2f".format(it), data.torqueConverterRatio.source, NeonYellow))
+            add(MetricDisplay("TORQUE RATIO", "%.2f:1".format(java.util.Locale.US, it), data.torqueConverterRatio.source, NeonYellow))
         }
         data.virtualGear.value?.let {
             add(MetricDisplay("VIRTUAL GEAR", "$it", data.virtualGear.source, NeonPurple))
         }
         data.dGearRatio.value?.let {
-            add(MetricDisplay("D GEAR RATIO", "%.2f".format(it), data.dGearRatio.source, NeonYellow))
+            add(MetricDisplay("D GEAR RATIO", "%.2f:1".format(java.util.Locale.US, it), data.dGearRatio.source, NeonYellow))
         }
         data.gForce.value?.let {
             add(MetricDisplay("G-FORCE", "%.2f g".format(it), data.gForce.source, NeonCyan))
