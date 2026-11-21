@@ -296,11 +296,13 @@ fun CVTScreen(
                             color = TextSecondary,
                         )
                         cvtDeterioration?.let { result ->
-                            CvtInfoRow("RAW COUNTER", result.rawCounter.toString())
-                            CvtInfoRow("METHOD 1 (÷16)", result.method1Value.toString())
-                            CvtInfoRow("METHOD 2 (RAW)", result.method2Value.toString())
+                            CvtInfoRow("CVTF DEGRADATION", result.rawCounter.toString())
+                            CvtInfoRow("REPLACEMENT THRESHOLD", "210,000")
                             Text(
-                                "Nissan service information commonly uses 210,000 points as the fluid-replacement threshold. CVT7 calculation method varies; compare the counter's change with CVT temperature before interpreting it.",
+                                if (result.fluidReplacementRequired)
+                                    "AT OR ABOVE NISSAN'S REFERENCE THRESHOLD — CVT FLUID REPLACEMENT INDICATED."
+                                else
+                                    "BELOW NISSAN'S REFERENCE THRESHOLD — FLUID REPLACEMENT NOT INDICATED BY THIS COUNTER.",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.sp,
                                 color = TextSecondary,

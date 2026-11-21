@@ -242,7 +242,7 @@ class CVTViewModel @Inject constructor(
                     _cvtDeteriorationStatus.value = "TCM did not return a complete 6103 response. Counter could not be read."
                 } else {
                     _cvtDeterioration.value = result
-                    _cvtDeteriorationStatus.value = "Read from the confirmed CVT7 controller. Compare both calculation methods with observed counter behavior; do not assume which method applies."
+                    _cvtDeteriorationStatus.value = "Read from the confirmed CVT7 controller. Nissan's RE0F11A reference threshold is 210,000 points."
                 }
             } catch (error: Exception) {
                 _cvtDeteriorationStatus.value = "Deterioration read failed: ${error.message ?: "unknown error"}"

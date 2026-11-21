@@ -20,9 +20,10 @@ data class NissanCvt7PollResult(
 
 data class NissanCvt7DeteriorationResult(
     val rawCounter: Long,
-    val method1Value: Long,
-    val method2Value: Long,
-)
+) {
+    val fluidReplacementRequired: Boolean
+        get() = rawCounter >= 210_000L
+}
 
 data class NissanCvt7LiveData(
     val vehicleSpeedKph: Int,
@@ -77,8 +78,8 @@ object NissanCvt7Protocol {
     /**
      * Parses the read-only Nissan CVT7 fluid-deterioration response to 21 03.
      * The reference formatter reads four bytes immediately after 61 03 as an
-     * unsigned counter. Its two CVT7 display methods are counter / 16 and the
-     * unscaled counter; neither is selected automatically here.
+     * unsigned counter. Nissan's RE0F11A service information specifies 210,000
+     * as the CVTF degradation replacement threshold, so retain the raw count.
      */
     fun parseCvtDeteriorationResponse(lines: List<String>): NissanCvt7DeteriorationResult? {
         if (lines.isEmpty()) return null
@@ -97,11 +98,7 @@ object NissanCvt7Protocol {
         val dataStart = marker + 4
         if (response.length < dataStart + 8) return null
         val rawCounter = response.substring(dataStart, dataStart + 8).toLongOrNull(16) ?: return null
-        return NissanCvt7DeteriorationResult(
-            rawCounter = rawCounter,
-            method1Value = rawCounter / 16L,
-            method2Value = rawCounter,
-        )
+        return NissanCvt7DeteriorationResult(rawCounter = rawCounter)
     }
 
     /**

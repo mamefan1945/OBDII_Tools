@@ -123,13 +123,17 @@ class NissanCvt7ProtocolTest {
     }
 
     @Test
-    fun parsesCvt7DeteriorationCounterAndBothReferenceMethods() {
+    fun parsesCvt7DeteriorationCounterAndAppliesNissanThreshold() {
         val result = NissanCvt7Protocol.parseCvtDeteriorationResponse(
             listOf("07A", "0:610300033450")
         )
         assertEquals(210000L, result?.rawCounter)
-        assertEquals(13125L, result?.method1Value)
-        assertEquals(210000L, result?.method2Value)
+        assertEquals(true, result?.fluidReplacementRequired)
+        val belowThreshold = NissanCvt7Protocol.parseCvtDeteriorationResponse(
+            listOf("61030003344F")
+        )
+        assertEquals(209999L, belowThreshold?.rawCounter)
+        assertEquals(false, belowThreshold?.fluidReplacementRequired)
     }
 
     @Test
