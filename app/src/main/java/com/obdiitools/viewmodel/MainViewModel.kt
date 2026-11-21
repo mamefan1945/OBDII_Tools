@@ -31,6 +31,7 @@ import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.DTC
 import com.obdiitools.obd.FreezeFrame
 import com.obdiitools.obd.OBDData
+import com.obdiitools.obd.MazdaCx5DashboardData
 import com.obdiitools.obd.ReadinessStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -59,6 +60,9 @@ class MainViewModel @Inject constructor(
 
     val obdData: StateFlow<OBDData> = repository.obdData
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OBDData())
+
+    val mazdaCx5DashboardData: StateFlow<MazdaCx5DashboardData?> = repository.mazdaCx5DashboardData
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val livePidValues: StateFlow<Map<String, Float>> = repository.livePidValues
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())

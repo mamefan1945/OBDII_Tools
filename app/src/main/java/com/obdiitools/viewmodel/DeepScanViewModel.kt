@@ -221,6 +221,8 @@ class DeepScanViewModel @Inject constructor(
                     val temp = UdsResponse.parse(MazdaCx5Protocol.TCM_REQUEST_ID, MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID, rawTemp)
                     val data = MazdaCx5Protocol.parseTransmissionData(gear, temp, rawGear, rawTemp)
                     val found = data.gear != null || data.transmissionTemperatureC != null
+                    val capturedAtMs = _scanState.value.mazdaProbeCapturedAtMs ?: System.currentTimeMillis()
+                    repository.updateMazdaCx5DashboardData(data.takeIf { found }, capturedAtMs)
                     if (found) {
                         sessionRepository.recordMazdaTcmData(data.gear, data.transmissionTemperatureC)
                     }

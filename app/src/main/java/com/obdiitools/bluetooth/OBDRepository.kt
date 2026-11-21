@@ -25,6 +25,8 @@ import com.obdiitools.obd.DTCDatabase
 import com.obdiitools.obd.ELM327Protocol
 import com.obdiitools.obd.FreezeFrame
 import com.obdiitools.obd.OBDData
+import com.obdiitools.obd.MazdaCx5DashboardData
+import com.obdiitools.obd.MazdaCx5TransmissionData
 import com.obdiitools.obd.ObdexDtcDatabase
 import com.obdiitools.obd.ReadinessStatus
 import com.obdiitools.obd.UdsResponse
@@ -68,6 +70,13 @@ class OBDRepository @Inject constructor(
 
     private val _obdData = MutableStateFlow(OBDData())
     val obdData: StateFlow<OBDData> = _obdData.asStateFlow()
+
+    private val _mazdaCx5DashboardData = MutableStateFlow<MazdaCx5DashboardData?>(null)
+    val mazdaCx5DashboardData: StateFlow<MazdaCx5DashboardData?> = _mazdaCx5DashboardData.asStateFlow()
+
+    fun updateMazdaCx5DashboardData(data: MazdaCx5TransmissionData?, capturedAtMs: Long) {
+        _mazdaCx5DashboardData.value = data?.let { MazdaCx5DashboardData(it, capturedAtMs) }
+    }
 
     private val _livePidValues = MutableStateFlow<Map<String, Float>>(emptyMap())
     val livePidValues: StateFlow<Map<String, Float>> = _livePidValues.asStateFlow()
@@ -646,6 +655,7 @@ class OBDRepository @Inject constructor(
 
     @SuppressLint("MissingPermission")
     suspend fun connect(deviceInfo: BluetoothDeviceInfo) {
+        _mazdaCx5DashboardData.value = null
         _connectionState.value = ConnectionState.Connecting(deviceInfo.name, deviceInfo.address)
         withContext(Dispatchers.IO) {
             var candidateConnection: OBDConnection? = null
@@ -721,6 +731,7 @@ class OBDRepository @Inject constructor(
         connection?.close()
         connection = null
         _connectionState.value = ConnectionState.Disconnected
+        _mazdaCx5DashboardData.value = null
         _obdData.value = OBDData()
         _livePidValues.value = emptyMap()
         _lowVoltageWarning.value = false

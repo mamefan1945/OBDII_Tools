@@ -16,6 +16,11 @@ data class MazdaCx5TransmissionData(
 
 data class MazdaDidCandidate(val did: String, val description: String, val vehicleVerified: Boolean = false)
 
+data class MazdaCx5DashboardData(
+    val transmission: MazdaCx5TransmissionData,
+    val capturedAtMs: Long,
+)
+
 /**
  * Bounded read-only TCM probe set. The first two identifiers are already
  * validated on the user's 2016 CX-5. Remaining entries are catalogue leads

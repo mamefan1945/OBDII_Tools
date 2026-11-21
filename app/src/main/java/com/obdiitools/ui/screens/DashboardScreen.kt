@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.OBDData
+import com.obdiitools.obd.MazdaCx5DashboardData
 import com.obdiitools.ui.components.CircularGauge
 import com.obdiitools.ui.components.ConnectionStatusBar
 import com.obdiitools.ui.components.ConnectDevicePrompt
@@ -61,6 +62,7 @@ fun DashboardScreen(
 ) {
     val connectionState by viewModel.connectionState.collectAsState()
     val data by viewModel.obdData.collectAsState()
+    val mazdaCx5Data by viewModel.mazdaCx5DashboardData.collectAsState()
     val livePidValues by viewModel.livePidValues.collectAsState()
     val confirmedPids by viewModel.confirmedPids.collectAsState()
     val previouslyKnownPids by viewModel.previouslyKnownPids.collectAsState()
@@ -78,6 +80,7 @@ fun DashboardScreen(
         } else {
             DashboardContent(
                 data = data,
+                mazdaCx5Data = mazdaCx5Data,
                 livePidValues = livePidValues,
                 confirmedPids = confirmedPids,
                 previouslyKnownPids = previouslyKnownPids,
@@ -93,6 +96,7 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     data: OBDData,
+    mazdaCx5Data: MazdaCx5DashboardData?,
     livePidValues: Map<String, Float>,
     confirmedPids: Set<String>,
     previouslyKnownPids: Set<String>,
@@ -126,6 +130,7 @@ private fun DashboardContent(
         }
 
         ConnectionStatusBar(state = connectionState)
+        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it) }
         HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(20.dp))
 
@@ -445,6 +450,43 @@ private fun DashboardContent(
         }
 
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData) {
+    val transmission = data.transmission
+    if (transmission.gear == null && transmission.transmissionTemperatureC == null) return
+    Spacer(Modifier.height(16.dp))
+    GlassCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        accentColor = NeonOrange,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "MAZDA CX-5 TRANSMISSION",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                color = NeonOrange,
+                letterSpacing = 1.5.sp,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround,
+            ) {
+                transmission.gear?.let { StatItem("SELECTED GEAR", it, NeonCyan) }
+                transmission.transmissionTemperatureC?.let {
+                    StatItem("ATF TEMP", "%.1f °C".format(it), NeonOrange)
+                }
+            }
+            Text(
+                "Read-only TCM data · updated ${java.time.Instant.ofEpochMilli(data.capturedAtMs)}",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 8.sp,
+                color = TextSecondary,
+            )
+        }
     }
 }
 
