@@ -170,6 +170,12 @@ class MainViewModel @Inject constructor(
     fun startBleScan() {
         bleScanJob?.cancel()
         _bleScanError.value = null
+        if (!scanner.isBluetoothEnabled) {
+            _bleDevices.value = emptyList()
+            _isBleScanRunning.value = false
+            _bleScanError.value = "Bluetooth is turned off. Turn on Bluetooth and try again."
+            return
+        }
         bleScanJob = viewModelScope.launch {
             _bleDevices.value = emptyList()
             _isBleScanRunning.value = true
