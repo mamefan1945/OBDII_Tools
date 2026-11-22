@@ -35,6 +35,25 @@ class MazdaCx5ProtocolTest {
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "08")))
     }
 
+
+    @Test
+    fun decodesAllFourDscWheelSpeedDidsAsUnsignedKph() {
+        assertEquals(0, MazdaCx5Protocol.parseWheelSpeedKph(response("2B07", "00"), "2B07"))
+        assertEquals(65, MazdaCx5Protocol.parseWheelSpeedKph(response("2B06", "41"), "2B06"))
+        assertEquals(200, MazdaCx5Protocol.parseWheelSpeedKph(response("2B08", "C8"), "2B08"))
+        assertEquals(123, MazdaCx5Protocol.parseWheelSpeedKph(response("2B09", "7B"), "2B09"))
+        assertEquals(listOf("2B07", "2B06", "2B09", "2B08"), MazdaCx5Protocol.WHEEL_SPEED_DIDS)
+    }
+
+    @Test
+    fun rejectsWrongWheelDidNegativeShortAndOutOfRangeValues() {
+        assertNull(MazdaCx5Protocol.parseWheelSpeedKph(response("2B07", "41"), "2B06"))
+        assertNull(MazdaCx5Protocol.parseWheelSpeedKph(UdsResponse.parse("760", "2B07", "7F2211"), "2B07"))
+        assertNull(MazdaCx5Protocol.parseWheelSpeedKph(response("2B07", ""), "2B07"))
+        assertNull(MazdaCx5Protocol.parseWheelSpeedKph(response("2B07", "C9"), "2B07"))
+        assertNull(MazdaCx5Protocol.parseWheelSpeedKph(response("2B07", "41"), "2B0A"))
+    }
+
     @Test
     fun decodesSignedSixteenthDegreeTemperature() {
         assertEquals(20.9375, MazdaCx5Protocol.parseTransmissionTemperatureC(response("1E1C", "014F"))!!, 0.00001)
