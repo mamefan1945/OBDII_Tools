@@ -76,6 +76,10 @@ object SessionBackup {
                         .put("cvtTargetSecondaryPressureMpa", p.cvtTargetSecondaryPressureMpa ?: JSONObject.NULL)
                         .put("mazdaSelectedGear", p.mazdaSelectedGear ?: JSONObject.NULL)
                         .put("mazdaTransmissionTempC", p.mazdaTransmissionTempC ?: JSONObject.NULL)
+                        .put("mazdaFrontLeftWheelSpeedKph", p.mazdaFrontLeftWheelSpeedKph ?: JSONObject.NULL)
+                        .put("mazdaFrontRightWheelSpeedKph", p.mazdaFrontRightWheelSpeedKph ?: JSONObject.NULL)
+                        .put("mazdaRearLeftWheelSpeedKph", p.mazdaRearLeftWheelSpeedKph ?: JSONObject.NULL)
+                        .put("mazdaRearRightWheelSpeedKph", p.mazdaRearRightWheelSpeedKph ?: JSONObject.NULL)
                 }
                 if (options.includeGps) {
                     point.put("latitude", p.latitude ?: JSONObject.NULL)
@@ -157,6 +161,10 @@ object SessionBackup {
                 cvtTargetSecondaryPressureMpa = o.nullableFloat("cvtTargetSecondaryPressureMpa"),
                 mazdaSelectedGear = if (o.isNull("mazdaSelectedGear")) null else o.optString("mazdaSelectedGear"),
                 mazdaTransmissionTempC = o.nullableDouble("mazdaTransmissionTempC"),
+                mazdaFrontLeftWheelSpeedKph = o.nullableInt("mazdaFrontLeftWheelSpeedKph"),
+                mazdaFrontRightWheelSpeedKph = o.nullableInt("mazdaFrontRightWheelSpeedKph"),
+                mazdaRearLeftWheelSpeedKph = o.nullableInt("mazdaRearLeftWheelSpeedKph"),
+                mazdaRearRightWheelSpeedKph = o.nullableInt("mazdaRearRightWheelSpeedKph"),
                 latitude = o.nullableDouble("latitude"), longitude = o.nullableDouble("longitude"),
                 accuracy = o.nullableFloat("accuracy"),
             )
