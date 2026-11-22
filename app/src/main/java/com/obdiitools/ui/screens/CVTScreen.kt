@@ -58,6 +58,7 @@ import com.obdiitools.data.UserPreferences
 import com.obdiitools.util.UnitConverter
 import com.obdiitools.obd.CVTData
 import com.obdiitools.obd.CVTDataSource
+import com.obdiitools.obd.CVTReading
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.LockupState
 import com.obdiitools.ui.components.GlassCard
