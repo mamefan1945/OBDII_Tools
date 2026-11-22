@@ -37,7 +37,9 @@ interface SessionDao {
           AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
           AND throttlePercent IS NULL AND engineLoadPercent IS NULL
           AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL AND ambientTempC IS NULL
-          AND (mazdaSelectedGear IS NOT NULL OR mazdaTransmissionTempC IS NOT NULL)
+          AND (mazdaSelectedGear IS NOT NULL OR mazdaTransmissionTempC IS NOT NULL
+               OR mazdaFrontLeftWheelSpeedKph IS NOT NULL OR mazdaFrontRightWheelSpeedKph IS NOT NULL
+               OR mazdaRearLeftWheelSpeedKph IS NOT NULL OR mazdaRearRightWheelSpeedKph IS NOT NULL)
         ORDER BY ABS(timestampMs - :timestampMs) ASC
         LIMIT 1
     """)
@@ -94,8 +96,20 @@ interface SessionDao {
     @Query("UPDATE session_data_points SET latitude = :latitude, longitude = :longitude, accuracy = :accuracy WHERE id = :id")
     suspend fun updatePointWithGps(id: Long, latitude: Double, longitude: Double, accuracy: Float)
 
-    @Query("UPDATE session_data_points SET mazdaSelectedGear = COALESCE(:gear, mazdaSelectedGear), mazdaTransmissionTempC = COALESCE(:temperatureC, mazdaTransmissionTempC) WHERE id = :id")
-    suspend fun updatePointWithMazdaTcm(id: Long, gear: String?, temperatureC: Double?)
+    @Query("""
+        UPDATE session_data_points SET
+            mazdaSelectedGear = COALESCE(:gear, mazdaSelectedGear),
+            mazdaTransmissionTempC = COALESCE(:temperatureC, mazdaTransmissionTempC),
+            mazdaFrontLeftWheelSpeedKph = COALESCE(:frontLeftKph, mazdaFrontLeftWheelSpeedKph),
+            mazdaFrontRightWheelSpeedKph = COALESCE(:frontRightKph, mazdaFrontRightWheelSpeedKph),
+            mazdaRearLeftWheelSpeedKph = COALESCE(:rearLeftKph, mazdaRearLeftWheelSpeedKph),
+            mazdaRearRightWheelSpeedKph = COALESCE(:rearRightKph, mazdaRearRightWheelSpeedKph)
+        WHERE id = :id
+    """)
+    suspend fun updatePointWithMazdaTcm(
+        id: Long, gear: String?, temperatureC: Double?,
+        frontLeftKph: Int?, frontRightKph: Int?, rearLeftKph: Int?, rearRightKph: Int?,
+    )
 
     @Query("UPDATE session_data_points SET diagnosticEventType = :eventType, diagnosticEventDetail = :detail WHERE id = :id")
     suspend fun updatePointWithDiagnosticEvent(id: Long, eventType: String, detail: String?)
