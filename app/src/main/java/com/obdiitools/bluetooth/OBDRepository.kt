@@ -609,6 +609,30 @@ class OBDRepository @Inject constructor(
     // Sends availability PIDs (00, 20, 40 …) to the given ECU address and decodes
     // the 32-bit bitmasks to build the full set of supported PID codes.
     // Always restores ATSH 7DF on completion.
+    /**
+     * Read one advertised Mode 01 PID without requiring an existing decoder.
+     * Used by Deep Scan to capture raw evidence for supported-but-unimplemented
+     * parameters. The request header is always restored after the read.
+     */
+    suspend fun queryRawMode01Pid(ecuAddress: String, pid: String): String {
+        val conn = connection ?: return ""
+        val address = ecuAddress.uppercase()
+        val command = pid.uppercase()
+        if (!address.matches(Regex("^[0-9A-F]{3}$")) ||
+            !command.matches(Regex("^01[0-9A-F]{2}$"))) return ""
+        return conn.withTransaction {
+            val tx = this
+            try {
+                tx.query("ATSH $address", 300)
+                tx.queryLines(command, 1200).joinToString("\\n")
+            } finally {
+                withContext(NonCancellable) {
+                    runCatching { tx.query("ATSH 7DF", 300) }
+                }
+            }
+        }
+    }
+
     suspend fun queryModeSupport(ecuAddress: String, mode: String): Set<String> {
         val conn = connection ?: return emptySet()
         val normalizedMode = mode.uppercase()
