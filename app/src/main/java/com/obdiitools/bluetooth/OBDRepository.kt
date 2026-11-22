@@ -79,6 +79,9 @@ class OBDRepository @Inject constructor(
     private var lastMazdaTemperaturePollAtMs = 0L
     private var lastMazdaGearFailureAtMs = 0L
     private var lastMazdaTemperatureFailureAtMs = 0L
+    private var lastMazdaWheelSpeedPollAtMs = 0L
+    private var lastMazdaWheelSpeedFailureAtMs = mutableMapOf<String, Long>()
+    private var mazdaWheelSpeedCapturedAtMs = mutableMapOf<String, Long>()
     // Keep repeated identical TCM failures from creating hundreds of duplicate session rows.
     private val lastMazdaDiagnosticEventAtMs = mutableMapOf<String, Long>()
     private var mazdaGearCapturedAtMs: Long? = null
@@ -118,6 +121,9 @@ class OBDRepository @Inject constructor(
             lastMazdaTemperaturePollAtMs = 0L
             lastMazdaGearFailureAtMs = 0L
             lastMazdaTemperatureFailureAtMs = 0L
+            lastMazdaWheelSpeedPollAtMs = 0L
+            lastMazdaWheelSpeedFailureAtMs.clear()
+            mazdaWheelSpeedCapturedAtMs.clear()
             lastMazdaDiagnosticEventAtMs.clear()
             mazdaGearCapturedAtMs = null
             mazdaTemperatureCapturedAtMs = null
@@ -974,9 +980,8 @@ class OBDRepository @Inject constructor(
     }
 
     /**
-     * Polls only the two Mazda CX-5 TCM identifiers confirmed on the user's
-     * vehicle. This runs inside the normal serialized polling transaction so
-     * UDS header changes cannot interleave with standard PID requests.
+     * Polls confirmed Mazda CX-5 TCM data and the four documented DSC wheel-speed
+     * identifiers. All reads run inside the normal serialized polling transaction.
      */
     private suspend fun pollMazdaCx5Transmission(conn: OBDConnection) {
         if (!mazdaCx5PollingEnabled || pollingPaused) return
@@ -985,13 +990,18 @@ class OBDRepository @Inject constructor(
             now - lastMazdaGearFailureAtMs >= MAZDA_FAILED_READ_RETRY_MS
         val temperatureDue = now - lastMazdaTemperaturePollAtMs >= MAZDA_TEMPERATURE_POLL_INTERVAL_MS &&
             now - lastMazdaTemperatureFailureAtMs >= MAZDA_FAILED_READ_RETRY_MS
-        if (!gearDue && !temperatureDue) return
+        val wheelSpeedsDue = now - lastMazdaWheelSpeedPollAtMs >= MAZDA_WHEEL_SPEED_POLL_INTERVAL_MS
+        if (!gearDue && !temperatureDue && !wheelSpeedsDue) return
 
         var gear: String? = _mazdaCx5DashboardData.value?.transmission?.gear
         var temperatureC: Double? =
             _mazdaCx5DashboardData.value?.transmission?.transmissionTemperatureC
         var gearRaw = _mazdaCx5DashboardData.value?.transmission?.rawGearResponse.orEmpty()
         var temperatureRaw = _mazdaCx5DashboardData.value?.transmission?.rawTemperatureResponse.orEmpty()
+        var frontLeftKph = _mazdaCx5DashboardData.value?.transmission?.frontLeftWheelSpeedKph
+        var frontRightKph = _mazdaCx5DashboardData.value?.transmission?.frontRightWheelSpeedKph
+        var rearLeftKph = _mazdaCx5DashboardData.value?.transmission?.rearLeftWheelSpeedKph
+        var rearRightKph = _mazdaCx5DashboardData.value?.transmission?.rearRightWheelSpeedKph
         var receivedValidData = false
 
         if (gearDue) {
@@ -1068,6 +1078,52 @@ class OBDRepository @Inject constructor(
             }
         }
 
+        if (wheelSpeedsDue && !pollingPaused) {
+            lastMazdaWheelSpeedPollAtMs = now
+            val wheelDids = listOf(
+                com.obdiitools.obd.MazdaCx5Protocol.FRONT_LEFT_WHEEL_SPEED_DID,
+                com.obdiitools.obd.MazdaCx5Protocol.FRONT_RIGHT_WHEEL_SPEED_DID,
+                com.obdiitools.obd.MazdaCx5Protocol.REAR_LEFT_WHEEL_SPEED_DID,
+                com.obdiitools.obd.MazdaCx5Protocol.REAR_RIGHT_WHEEL_SPEED_DID,
+            )
+            for (did in wheelDids) {
+                if (pollingPaused) break
+                if (now - (lastMazdaWheelSpeedFailureAtMs[did] ?: 0L) < MAZDA_FAILED_READ_RETRY_MS) continue
+                try {
+                    val raw = conn.queryUds(com.obdiitools.obd.MazdaCx5Protocol.DSC_REQUEST_ID, did)
+                    val parsed = UdsResponse.parse(
+                        com.obdiitools.obd.MazdaCx5Protocol.DSC_REQUEST_ID, did, raw
+                    )
+                    val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseWheelSpeedKph(parsed, did)
+                    if (decoded != null) {
+                        when (did) {
+                            com.obdiitools.obd.MazdaCx5Protocol.FRONT_LEFT_WHEEL_SPEED_DID -> frontLeftKph = decoded
+                            com.obdiitools.obd.MazdaCx5Protocol.FRONT_RIGHT_WHEEL_SPEED_DID -> frontRightKph = decoded
+                            com.obdiitools.obd.MazdaCx5Protocol.REAR_LEFT_WHEEL_SPEED_DID -> rearLeftKph = decoded
+                            com.obdiitools.obd.MazdaCx5Protocol.REAR_RIGHT_WHEEL_SPEED_DID -> rearRightKph = decoded
+                        }
+                        mazdaWheelSpeedCapturedAtMs[did] = System.currentTimeMillis()
+                        lastMazdaWheelSpeedFailureAtMs[did] = 0L
+                        receivedValidData = true
+                    } else {
+                        lastMazdaWheelSpeedFailureAtMs[did] = now
+                        recordMazdaDiagnosticEventThrottled(
+                            key = "DSC:$did:${raw.trim().uppercase()}",
+                            eventType = "MAZDA_DSC_WHEEL_SPEED_READ_FAILED",
+                            detail = "ECU=760 DID=$did raw=${raw.take(180)}"
+                        )
+                    }
+                } catch (error: Exception) {
+                    lastMazdaWheelSpeedFailureAtMs[did] = now
+                    recordMazdaDiagnosticEventThrottled(
+                        key = "DSC:$did:ERROR:${error.javaClass.simpleName}",
+                        eventType = "MAZDA_DSC_WHEEL_SPEED_READ_ERROR",
+                        detail = "ECU=760 DID=$did ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
+                    )
+                }
+            }
+        }
+
         val capturedAt = System.currentTimeMillis()
         val gearFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
             mazdaGearCapturedAtMs, capturedAt, MAZDA_DATA_STALE_AFTER_MS
@@ -1077,32 +1133,64 @@ class OBDRepository @Inject constructor(
         )
         if (!gearFresh) gear = null
         if (!temperatureFresh) temperatureC = null
+        val frontLeftFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
+            mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.FRONT_LEFT_WHEEL_SPEED_DID], capturedAt, MAZDA_DATA_STALE_AFTER_MS
+        )
+        val frontRightFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
+            mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.FRONT_RIGHT_WHEEL_SPEED_DID], capturedAt, MAZDA_DATA_STALE_AFTER_MS
+        )
+        val rearLeftFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
+            mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.REAR_LEFT_WHEEL_SPEED_DID], capturedAt, MAZDA_DATA_STALE_AFTER_MS
+        )
+        val rearRightFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
+            mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.REAR_RIGHT_WHEEL_SPEED_DID], capturedAt, MAZDA_DATA_STALE_AFTER_MS
+        )
+        if (!frontLeftFresh) frontLeftKph = null
+        if (!frontRightFresh) frontRightKph = null
+        if (!rearLeftFresh) rearLeftKph = null
+        if (!rearRightFresh) rearRightKph = null
 
         val previousDashboard = _mazdaCx5DashboardData.value
         val staleValueExpired =
             previousDashboard?.transmission?.gear != gear ||
-                previousDashboard?.transmission?.transmissionTemperatureC != temperatureC
-        if (receivedValidData || gearDue || temperatureDue || staleValueExpired) {
+                previousDashboard?.transmission?.transmissionTemperatureC != temperatureC ||
+                previousDashboard?.transmission?.frontLeftWheelSpeedKph != frontLeftKph ||
+                previousDashboard?.transmission?.frontRightWheelSpeedKph != frontRightKph ||
+                previousDashboard?.transmission?.rearLeftWheelSpeedKph != rearLeftKph ||
+                previousDashboard?.transmission?.rearRightWheelSpeedKph != rearRightKph
+        if (receivedValidData || gearDue || temperatureDue || wheelSpeedsDue || staleValueExpired) {
             val data = MazdaCx5TransmissionData(
                 gear = gear,
                 transmissionTemperatureC = temperatureC,
                 rawGearResponse = gearRaw,
                 rawTemperatureResponse = temperatureRaw,
+                frontLeftWheelSpeedKph = frontLeftKph,
+                frontRightWheelSpeedKph = frontRightKph,
+                rearLeftWheelSpeedKph = rearLeftKph,
+                rearRightWheelSpeedKph = rearRightKph,
             )
-            _mazdaCx5DashboardData.value = if (gearFresh || temperatureFresh) {
+            _mazdaCx5DashboardData.value = if (gearFresh || temperatureFresh || frontLeftFresh || frontRightFresh || rearLeftFresh || rearRightFresh) {
                 MazdaCx5DashboardData(
                     transmission = data,
                     capturedAtMs = capturedAt,
                     gearCapturedAtMs = mazdaGearCapturedAtMs.takeIf { gearFresh },
                     temperatureCapturedAtMs = mazdaTemperatureCapturedAtMs.takeIf { temperatureFresh },
+                    frontLeftWheelSpeedCapturedAtMs = mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.FRONT_LEFT_WHEEL_SPEED_DID].takeIf { frontLeftFresh },
+                    frontRightWheelSpeedCapturedAtMs = mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.FRONT_RIGHT_WHEEL_SPEED_DID].takeIf { frontRightFresh },
+                    rearLeftWheelSpeedCapturedAtMs = mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.REAR_LEFT_WHEEL_SPEED_DID].takeIf { rearLeftFresh },
+                    rearRightWheelSpeedCapturedAtMs = mazdaWheelSpeedCapturedAtMs[com.obdiitools.obd.MazdaCx5Protocol.REAR_RIGHT_WHEEL_SPEED_DID].takeIf { rearRightFresh },
                 )
             } else null
         }
 
-        if (receivedValidData && (gearFresh || temperatureFresh)) {
+        if (receivedValidData && (gearFresh || temperatureFresh || frontLeftFresh || frontRightFresh || rearLeftFresh || rearRightFresh)) {
             sessionRepository.recordMazdaTcmData(
                 gear = gear.takeIf { gearFresh },
                 transmissionTemperatureC = temperatureC.takeIf { temperatureFresh },
+                frontLeftWheelSpeedKph = frontLeftKph.takeIf { frontLeftFresh },
+                frontRightWheelSpeedKph = frontRightKph.takeIf { frontRightFresh },
+                rearLeftWheelSpeedKph = rearLeftKph.takeIf { rearLeftFresh },
+                rearRightWheelSpeedKph = rearRightKph.takeIf { rearRightFresh },
             )
         }
     }
@@ -1416,6 +1504,7 @@ class OBDRepository @Inject constructor(
     companion object {
         private const val MAZDA_GEAR_POLL_INTERVAL_MS = 1_000L
         private const val MAZDA_TEMPERATURE_POLL_INTERVAL_MS = 2_500L
+        private const val MAZDA_WHEEL_SPEED_POLL_INTERVAL_MS = 1_000L
         private const val MAZDA_FAILED_READ_RETRY_MS = 5_000L
         private const val MAZDA_DIAGNOSTIC_EVENT_INTERVAL_MS = 60_000L
         private const val MAZDA_DATA_STALE_AFTER_MS = 10_000L
