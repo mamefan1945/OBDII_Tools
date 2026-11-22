@@ -88,7 +88,10 @@ object ObdexDtcDatabase {
                 emissionsRelevant = flags?.let { if (it.has("emissions_relevant")) it.optBoolean("emissions_relevant") else null },
                 limpModePossible = flags?.let { if (it.has("limp_mode_possible")) it.optBoolean("limp_mode_possible") else null },
                 reviewed = item.optString("reviewed").takeIf { it.isNotBlank() },
-                sourceCount = item.optJSONArray("sources")?.length() ?: 0,
+                sourceCount = item.optInt(
+                    "source_count",
+                    item.optJSONArray("sources")?.length() ?: 0,
+                ),
             )
         }
         return result
