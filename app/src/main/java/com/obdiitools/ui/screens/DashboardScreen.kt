@@ -117,7 +117,7 @@ private fun DashboardContent(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 100.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 16.dp)) {
             Text(
                 text = "LIVE DATA",
                 fontFamily = FontFamily.Monospace,
