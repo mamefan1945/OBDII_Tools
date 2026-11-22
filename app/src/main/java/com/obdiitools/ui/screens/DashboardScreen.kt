@@ -135,7 +135,7 @@ private fun DashboardContent(
         }
 
         ConnectionStatusBar(state = connectionState)
-        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it, ambientTempC) }
+        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it, data.ambientTempC) }
         HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(20.dp))
 
@@ -336,7 +336,7 @@ private fun DashboardContent(
                 )
                 if ("0146" in confirmedPids) StatItem(
                     label = "AMBIENT",
-                    value = ambientTempC?.let { UnitConverter.formatTemp(it, prefs.temperatureUnit) + prefs.temperatureUnit.symbol } ?: "--",
+                    value = data.ambientTempC?.let { UnitConverter.formatTemp(it, prefs.temperatureUnit) + prefs.temperatureUnit.symbol } ?: "--",
                     color = NeonCyan,
                 )
                 if ("0133" in confirmedPids) StatItem(
@@ -497,7 +497,7 @@ private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientT
             OutlinedTextField(
                 value = clusterTemperatureF,
                 onValueChange = { value ->
-                    if (value.length <= 6 && (value.isEmpty() || value.matches(Regex("-?\\\\d{0,3}(\\\\.\\\\d{0,1})?")))) {
+                    if (value.length <= 6 && (value.isEmpty() || value.matches(Regex("-?\\d{0,3}(\\.\\d{0,1})?")))) {
                         clusterTemperatureF = value
                     }
                 },
