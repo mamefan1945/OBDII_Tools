@@ -84,6 +84,7 @@ fun CanMonitorScreen(
     val showUnknown    by viewModel.showUnknown.collectAsState()
     val dbcLoaded      by viewModel.dbcLoaded.collectAsState()
     val captureCount   by viewModel.captureCount.collectAsState()
+    val captureElapsedMs by viewModel.captureElapsedMs.collectAsState()
 
     val saveCaptureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
@@ -99,7 +100,8 @@ fun CanMonitorScreen(
         if (!showDecoded && filteredFrames.isNotEmpty()) rawListState.scrollToItem(0)
     }
 
-    val subtitle = if (showDecoded) "${decodedSignals.size} signals" else "${filteredFrames.size} shown / $captureCount captured"
+    val captureSeconds = captureElapsedMs / 1000
+    val subtitle = if (showDecoded) "${decodedSignals.size} signals" else "${filteredFrames.size} shown / $captureCount captured · ${captureSeconds}s"
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
