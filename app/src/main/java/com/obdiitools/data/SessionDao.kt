@@ -24,7 +24,7 @@ interface SessionDao {
           AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
           AND (rpm IS NOT NULL OR speedKph IS NOT NULL OR coolantTempC IS NOT NULL
                OR throttlePercent IS NOT NULL OR engineLoadPercent IS NOT NULL
-               OR mafGramsPerSec IS NOT NULL OR batteryVoltage IS NOT NULL)
+               OR mafGramsPerSec IS NOT NULL OR batteryVoltage IS NOT NULL OR ambientTempC IS NOT NULL)
         ORDER BY ABS(timestampMs - :timestampMs) ASC
         LIMIT 1
     """)
@@ -53,13 +53,14 @@ interface SessionDao {
         UPDATE session_data_points SET
             rpm = :rpm, speedKph = :speedKph, coolantTempC = :coolantTempC,
             throttlePercent = :throttlePercent, engineLoadPercent = :engineLoadPercent,
-            mafGramsPerSec = :mafGramsPerSec, batteryVoltage = :batteryVoltage
+            mafGramsPerSec = :mafGramsPerSec, batteryVoltage = :batteryVoltage,
+            ambientTempC = :ambientTempC
         WHERE id = :id
     """)
     suspend fun updatePointWithObd(
         id: Long, rpm: Int?, speedKph: Int?, coolantTempC: Int?,
         throttlePercent: Float?, engineLoadPercent: Float?, mafGramsPerSec: Float?,
-        batteryVoltage: Float?,
+        batteryVoltage: Float?, ambientTempC: Int?,
     )
 
     @Query("""
@@ -82,6 +83,9 @@ interface SessionDao {
 
     @Query("UPDATE session_data_points SET mazdaSelectedGear = :gear, mazdaTransmissionTempC = :temperatureC WHERE id = :id")
     suspend fun updatePointWithMazdaTcm(id: Long, gear: String?, temperatureC: Double?)
+
+    @Query("UPDATE session_data_points SET diagnosticEventType = :eventType, diagnosticEventDetail = :detail WHERE id = :id")
+    suspend fun updatePointWithDiagnosticEvent(id: Long, eventType: String, detail: String?)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertImportedSession(session: SessionEntity): Long
