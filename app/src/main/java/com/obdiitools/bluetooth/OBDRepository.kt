@@ -786,13 +786,6 @@ class OBDRepository @Inject constructor(
         }
     }
 
-    private companion object {
-        const val MAZDA_GEAR_POLL_INTERVAL_MS = 1_000L
-        const val MAZDA_TEMPERATURE_POLL_INTERVAL_MS = 2_500L
-        const val MAZDA_FAILED_READ_RETRY_MS = 5_000L
-        const val MAZDA_DATA_STALE_AFTER_MS = 10_000L
-    }
-
     private fun startPolling() {
         pollingJob?.cancel()
         pollingJob = scope.launch {
@@ -1343,6 +1336,11 @@ class OBDRepository @Inject constructor(
     }
 
     companion object {
+        private const val MAZDA_GEAR_POLL_INTERVAL_MS = 1_000L
+        private const val MAZDA_TEMPERATURE_POLL_INTERVAL_MS = 2_500L
+        private const val MAZDA_FAILED_READ_RETRY_MS = 5_000L
+        private const val MAZDA_DATA_STALE_AFTER_MS = 10_000L
+
         // Candidate 11-bit Nissan enhanced-diagnostic addresses. Accept only
         // a valid CVT7 0x21/0x01 data block, not merely an ECU response.
         private val NISSAN_CVT7_ECU_CANDIDATES = listOf("7E1")
