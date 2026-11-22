@@ -1026,9 +1026,12 @@ class OBDRepository @Inject constructor(
         }
 
         val capturedAt = System.currentTimeMillis()
-        val gearFresh = mazdaGearCapturedAtMs?.let { capturedAt - it <= MAZDA_DATA_STALE_AFTER_MS } == true
-        val temperatureFresh =
-            mazdaTemperatureCapturedAtMs?.let { capturedAt - it <= MAZDA_DATA_STALE_AFTER_MS } == true
+        val gearFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
+            mazdaGearCapturedAtMs, capturedAt, MAZDA_DATA_STALE_AFTER_MS
+        )
+        val temperatureFresh = com.obdiitools.obd.MazdaCx5Protocol.isFresh(
+            mazdaTemperatureCapturedAtMs, capturedAt, MAZDA_DATA_STALE_AFTER_MS
+        )
         if (!gearFresh) gear = null
         if (!temperatureFresh) temperatureC = null
 
