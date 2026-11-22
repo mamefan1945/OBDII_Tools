@@ -85,7 +85,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateToDiagnostics: () -> Unit
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 16.dp)
                 .padding(bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
