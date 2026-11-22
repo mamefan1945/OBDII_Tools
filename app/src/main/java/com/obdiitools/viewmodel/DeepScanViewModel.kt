@@ -200,8 +200,9 @@ class DeepScanViewModel @Inject constructor(
                     // reduce false leads while preserving values for later analysis.
                     val knownPidCodes = AllPidDefinitions.ALL.map { it.command }.toSet()
                     val rawCandidates = mutableListOf<RawPidCandidate>()
-                    mode01.asSequence()
-                        .filter { it !in knownPidCodes }
+                    if (addr != "7DF") {
+                        mode01.asSequence()
+                            .filter { it !in knownPidCodes }
                         .sorted()
                         .take(MAX_RAW_MODE01_CANDIDATES_PER_ECU)
                         .forEach { pid ->
@@ -224,6 +225,7 @@ class DeepScanViewModel @Inject constructor(
                                 )
                             }
                         }
+                    }
                     if (!isActive) return@forEachIndexed
 
                     // Mode 09 is queried on the broadcast address and conventional
