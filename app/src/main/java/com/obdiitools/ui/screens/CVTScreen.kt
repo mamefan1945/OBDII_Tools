@@ -3,6 +3,7 @@ package com.obdiitools.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,9 +109,11 @@ fun CVTScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = BackgroundDeep,
         topBar = {
             CenterAlignedTopAppBar(
+        windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
