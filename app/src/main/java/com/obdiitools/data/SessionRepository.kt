@@ -183,9 +183,12 @@ class SessionRepository @Inject constructor(
         val sessionId = currentSessionId ?: return@withLock
         if (gear == null && transmissionTemperatureC == null) return@withLock
         val now = System.currentTimeMillis()
-        val nearbyObdPoint = dao.findNearbyObdPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
-        if (nearbyObdPoint != null) {
-            dao.updatePointWithMazdaTcm(nearbyObdPoint.id, gear, transmissionTemperatureC)
+        // Prefer attaching TCM values to the nearest standard OBD sample. If none
+        // exists, merge with a nearby Mazda-only sample before creating another row.
+        val nearbyPoint = dao.findNearbyObdPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
+            ?: dao.findNearbyMazdaOnlyPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
+        if (nearbyPoint != null) {
+            dao.updatePointWithMazdaTcm(nearbyPoint.id, gear, transmissionTemperatureC)
         } else {
             dao.insertDataPoint(
                 SessionDataPoint(
