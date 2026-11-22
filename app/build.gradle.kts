@@ -23,7 +23,8 @@ val gitHash: String = try {
 
 android {
     namespace = "com.obdiitools"
-    compileSdk = 35
+    compileSdk = 37
+    compileSdkMinor = 1
 
     defaultConfig {
         applicationId = "com.obdiitools"
