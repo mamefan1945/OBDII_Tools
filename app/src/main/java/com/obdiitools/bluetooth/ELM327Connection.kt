@@ -182,7 +182,7 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
                             if (line.isNotBlank() && !line.startsWith(">")) emit(line)
                             sb.clear()
                         }
-                        c == '>' -> { /* prompt — ATMA still active, ignore */ }
+                        c == '>' -> throw java.io.IOException("Adapter returned to command prompt; ATMA stopped")
                         else -> sb.append(c)
                     }
                 } else {
