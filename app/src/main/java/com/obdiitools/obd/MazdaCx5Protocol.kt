@@ -19,6 +19,8 @@ data class MazdaDidCandidate(val did: String, val description: String, val vehic
 data class MazdaCx5DashboardData(
     val transmission: MazdaCx5TransmissionData,
     val capturedAtMs: Long,
+    val gearCapturedAtMs: Long? = null,
+    val temperatureCapturedAtMs: Long? = null,
 )
 
 /**
