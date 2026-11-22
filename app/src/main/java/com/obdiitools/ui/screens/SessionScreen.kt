@@ -624,7 +624,13 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                         GraphSeries.CVT_SECONDARY_PRESSURE -> point.cvtSecondaryPressureMpa ?: return@mapNotNull null
                         GraphSeries.CVT_TARGET_PRESSURE -> point.cvtTargetSecondaryPressureMpa ?: return@mapNotNull null
                         GraphSeries.MAZDA_GEAR -> point.mazdaSelectedGear?.toFloatOrNull() ?: return@mapNotNull null
-                        GraphSeries.MAZDA_TEMP -> point.mazdaTransmissionTempC?.toFloat()?.let { UnitConverter.temperature(it, prefs.temperatureUnit) } ?: return@mapNotNull null
+                        GraphSeries.MAZDA_TEMP -> {
+                            val celsius = point.mazdaTransmissionTempC?.toFloat() ?: return@mapNotNull null
+                            when (prefs.temperatureUnit) {
+                                TemperatureUnit.CELSIUS -> celsius
+                                TemperatureUnit.FAHRENHEIT -> celsius * 9f / 5f + 32f
+                            }
+                        }
                     }
                     point.timestampMs to v
                 }
