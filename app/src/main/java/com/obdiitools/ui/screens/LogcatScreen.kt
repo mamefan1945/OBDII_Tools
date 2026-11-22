@@ -2,6 +2,7 @@ package com.obdiitools.ui.screens
 
 import android.os.Process as AndroidProcess
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -103,6 +104,7 @@ fun LogcatScreen(onBack: () -> Unit) {
             .background(BackgroundDeep),
     ) {
         TopAppBar(
+        windowInsets = WindowInsets(0, 0, 0, 0),
             title = {
                 Column {
                     Text("LOGCAT", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonCyan, letterSpacing = 2.sp)
