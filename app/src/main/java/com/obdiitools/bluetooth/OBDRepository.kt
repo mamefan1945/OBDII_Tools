@@ -756,6 +756,7 @@ class OBDRepository @Inject constructor(
 
     fun disconnect() {
         mazdaCx5PollingEnabled = false
+        scope.launch { sessionRepository.recordDiagnosticEvent("OBD_DISCONNECTED", "Adapter disconnected") }
         pollingJob?.cancel()
         pollingJob = null
         pollCycleCount = 0
@@ -956,47 +957,71 @@ class OBDRepository @Inject constructor(
 
         if (gearDue) {
             lastMazdaGearPollAtMs = now
-            val raw = conn.queryUds(
-                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
-                com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID,
-            )
-            val parsed = UdsResponse.parse(
-                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
-                com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID,
-                raw,
-            )
-            val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseGear(parsed)
-            if (decoded != null) {
-                gear = decoded
-                gearRaw = raw
-                mazdaGearCapturedAtMs = System.currentTimeMillis()
-                lastMazdaGearFailureAtMs = 0L
-                receivedValidData = true
-            } else {
+            try {
+                val raw = conn.queryUds(
+                    com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                    com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID,
+                )
+                val parsed = UdsResponse.parse(
+                    com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                    com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID,
+                    raw,
+                )
+                val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseGear(parsed)
+                if (decoded != null) {
+                    gear = decoded
+                    gearRaw = raw
+                    mazdaGearCapturedAtMs = System.currentTimeMillis()
+                    lastMazdaGearFailureAtMs = 0L
+                    receivedValidData = true
+                } else {
+                    lastMazdaGearFailureAtMs = now
+                    sessionRepository.recordDiagnosticEvent(
+                        "MAZDA_TCM_READ_FAILED",
+                        "ECU=7E1 DID=1E12 raw=${raw.take(180)}"
+                    )
+                }
+            } catch (error: Exception) {
                 lastMazdaGearFailureAtMs = now
+                sessionRepository.recordDiagnosticEvent(
+                    "MAZDA_TCM_READ_ERROR",
+                    "ECU=7E1 DID=1E12 ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
+                )
             }
         }
 
         if (temperatureDue && !pollingPaused) {
             lastMazdaTemperaturePollAtMs = now
-            val raw = conn.queryUds(
-                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
-                com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID,
-            )
-            val parsed = UdsResponse.parse(
-                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
-                com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID,
-                raw,
-            )
-            val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseTransmissionTemperatureC(parsed)
-            if (decoded != null) {
-                temperatureC = decoded
-                temperatureRaw = raw
-                mazdaTemperatureCapturedAtMs = System.currentTimeMillis()
-                lastMazdaTemperatureFailureAtMs = 0L
-                receivedValidData = true
-            } else {
+            try {
+                val raw = conn.queryUds(
+                    com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                    com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID,
+                )
+                val parsed = UdsResponse.parse(
+                    com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                    com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID,
+                    raw,
+                )
+                val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseTransmissionTemperatureC(parsed)
+                if (decoded != null) {
+                    temperatureC = decoded
+                    temperatureRaw = raw
+                    mazdaTemperatureCapturedAtMs = System.currentTimeMillis()
+                    lastMazdaTemperatureFailureAtMs = 0L
+                    receivedValidData = true
+                } else {
+                    lastMazdaTemperatureFailureAtMs = now
+                    sessionRepository.recordDiagnosticEvent(
+                        "MAZDA_TCM_READ_FAILED",
+                        "ECU=7E1 DID=1E1C raw=${raw.take(180)}"
+                    )
+                }
+            } catch (error: Exception) {
                 lastMazdaTemperatureFailureAtMs = now
+                sessionRepository.recordDiagnosticEvent(
+                    "MAZDA_TCM_READ_ERROR",
+                    "ECU=7E1 DID=1E1C ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
+                )
             }
         }
 
