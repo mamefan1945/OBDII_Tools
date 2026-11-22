@@ -142,24 +142,6 @@ class OBDRepository @Inject constructor(
     private val _previouslyKnownPids = MutableStateFlow<Set<String>>(emptySet())
     val previouslyKnownPids: StateFlow<Set<String>> = _previouslyKnownPids.asStateFlow()
 
-    /**
-     * Profiles are stored locally under a one-way VIN hash. Previously learned
-     * PIDs are hints only: they are never shown as available until this session
-     * independently confirms them again with live decoded samples.
-     */
-    fun setVehicleIdentity(vin: String?) {
-        val normalized = vin.orEmpty().uppercase().filter { it.isLetterOrDigit() }
-        val key = if (normalized.length == 17 && normalized != "00000000000000000") {
-            val digest = java.security.MessageDigest.getInstance("SHA-256")
-                .digest(normalized.toByteArray(Charsets.UTF_8))
-            "vin_" + digest.joinToString("") { "%02x".format(it) }
-        } else null
-        activeVehicleProfileKey = key
-        _previouslyKnownPids.value = key?.let {
-            capabilityProfilePreferences.getStringSet(it, emptySet())?.toSet()
-        } ?: emptySet()
-    }
-
     private fun persistCapabilityProfile() {
         val key = activeVehicleProfileKey ?: return
         val confirmed = _confirmedPids.value
