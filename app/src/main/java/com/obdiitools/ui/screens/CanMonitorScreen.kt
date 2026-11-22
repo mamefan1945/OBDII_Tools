@@ -1,5 +1,7 @@
 package com.obdiitools.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -80,6 +83,11 @@ fun CanMonitorScreen(
     val showDecoded    by viewModel.showDecoded.collectAsState()
     val showUnknown    by viewModel.showUnknown.collectAsState()
     val dbcLoaded      by viewModel.dbcLoaded.collectAsState()
+    val captureCount   by viewModel.captureCount.collectAsState()
+
+    val saveCaptureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri -> if (uri != null) viewModel.saveCapture(uri) }
 
     val rawListState = rememberLazyListState()
 
@@ -91,7 +99,7 @@ fun CanMonitorScreen(
         if (!showDecoded && filteredFrames.isNotEmpty()) rawListState.scrollToItem(0)
     }
 
-    val subtitle = if (showDecoded) "${decodedSignals.size} signals" else "${filteredFrames.size} frames"
+    val subtitle = if (showDecoded) "${decodedSignals.size} signals" else "${filteredFrames.size} shown / $captureCount captured"
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -122,6 +130,12 @@ fun CanMonitorScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(
+                        onClick = { saveCaptureLauncher.launch("can_capture_${System.currentTimeMillis()}.csv") },
+                        enabled = captureCount > 0,
+                    ) {
+                        Icon(Icons.Default.Save, "Save CAN capture", modifier = Modifier.size(18.dp))
+                    }
                     FilledTonalIconButton(onClick = { viewModel.clearFrames() }) {
                         Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
                     }
