@@ -73,7 +73,7 @@ class ELM327Connection(private val socket: BluetoothSocket) : OBDConnection {
             drainInput()
             // UDS Mode 22: ReadDataByIdentifier — 3000 ms allows multi-frame reassembly.
             sendRaw("22$did")
-            readResponseLines(timeoutMs = 3000).joinToString("\\n")
+            readResponseLines(timeoutMs = 3000).joinToString("\n")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: java.io.IOException) {
