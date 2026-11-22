@@ -473,6 +473,8 @@ private enum class GraphSeries(val label: String, val color: Color) {
     CVT_PRIMARY_PRESSURE("Primary Pressure", NeonCyan),
     CVT_SECONDARY_PRESSURE("Secondary Pressure", NeonOrange),
     CVT_TARGET_PRESSURE("Target Secondary", NeonGreen),
+    MAZDA_GEAR("Mazda Gear", NeonCyan),
+    MAZDA_TEMP("Mazda ATF Temp", NeonYellow),
 }
 
 @Composable
@@ -559,6 +561,8 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                 GraphSeries.CVT_PRIMARY_PRESSURE -> points.any { it.cvtPrimaryPressureMpa != null }
                 GraphSeries.CVT_SECONDARY_PRESSURE -> points.any { it.cvtSecondaryPressureMpa != null }
                 GraphSeries.CVT_TARGET_PRESSURE -> points.any { it.cvtTargetSecondaryPressureMpa != null }
+                GraphSeries.MAZDA_GEAR -> points.any { it.mazdaSelectedGear != null }
+                GraphSeries.MAZDA_TEMP -> points.any { it.mazdaTransmissionTempC != null }
                 else -> true
             }
         }
@@ -619,6 +623,8 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                         GraphSeries.CVT_PRIMARY_PRESSURE -> point.cvtPrimaryPressureMpa ?: return@mapNotNull null
                         GraphSeries.CVT_SECONDARY_PRESSURE -> point.cvtSecondaryPressureMpa ?: return@mapNotNull null
                         GraphSeries.CVT_TARGET_PRESSURE -> point.cvtTargetSecondaryPressureMpa ?: return@mapNotNull null
+                        GraphSeries.MAZDA_GEAR -> point.mazdaSelectedGear?.toFloatOrNull() ?: return@mapNotNull null
+                        GraphSeries.MAZDA_TEMP -> point.mazdaTransmissionTempC?.toFloat()?.let { UnitConverter.temperature(it, prefs.temperatureUnit) } ?: return@mapNotNull null
                     }
                     point.timestampMs to v
                 }
@@ -636,6 +642,8 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                 GraphSeries.CVT_TEMP -> " " + prefs.temperatureUnit.symbol
                 GraphSeries.CVT_RATIO -> " ratio"
                 GraphSeries.CVT_PRIMARY_PRESSURE, GraphSeries.CVT_SECONDARY_PRESSURE, GraphSeries.CVT_TARGET_PRESSURE -> " MPa"
+                GraphSeries.MAZDA_GEAR -> " gear"
+                GraphSeries.MAZDA_TEMP -> " ${prefs.temperatureUnit.symbol}"
             }
 
             if (timedValues.size < 2) {
