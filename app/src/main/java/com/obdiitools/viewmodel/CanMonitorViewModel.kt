@@ -1,6 +1,8 @@
 package com.obdiitools.viewmodel
 
 import android.content.Context
+import android.net.Uri
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
@@ -22,6 +24,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.BufferedWriter
+import java.io.File
+import java.io.FileWriter
 import javax.inject.Inject
 
 private const val MAX_FRAMES = 500
@@ -42,6 +47,14 @@ class CanMonitorViewModel @Inject constructor(
     private val _showUnknown  = MutableStateFlow(false)
     private val _dbcLoaded    = MutableStateFlow(false)
     private val _decodedMap   = MutableStateFlow<Map<String, DecodedSignal>>(emptyMap())
+    private val _captureCount = MutableStateFlow(0)
+
+    val captureCount: StateFlow<Int> = _captureCount.asStateFlow()
+    private val captureLock = Any()
+    private var captureFile: File? = null
+    private var captureWriter: BufferedWriter? = null
+    private var captureStartedAtMs = 0L
+    private var firstFrameNanos: Long? = null
 
     val filterText:   StateFlow<String>  = _filterText.asStateFlow()
     val isMonitoring: StateFlow<Boolean> = _isMonitoring.asStateFlow()
@@ -103,6 +116,10 @@ class CanMonitorViewModel @Inject constructor(
         if (activePauseLease == lease) {
             activePauseLease = null
             _isMonitoring.value = false
+            synchronized(captureLock) {
+                runCatching { captureWriter?.flush(); captureWriter?.close() }
+                captureWriter = null
+            }
             repository.resumePolling()
         }
     }
@@ -122,17 +139,80 @@ class CanMonitorViewModel @Inject constructor(
     fun toggleUnknown()          { _showUnknown.value  = !_showUnknown.value }
 
     fun clearFrames() {
-        _frames.value      = emptyList()
-        _decodedMap.value  = emptyMap()
+        _frames.value = emptyList()
+        _decodedMap.value = emptyMap()
+        synchronized(captureLock) {
+            runCatching { captureWriter?.close() }
+            captureWriter = null
+            captureFile?.delete()
+            captureFile = null
+            firstFrameNanos = null
+            _captureCount.value = 0
+        }
+    }
+
+    private fun beginCapture() {
+        synchronized(captureLock) {
+            runCatching { captureWriter?.close() }
+            captureFile?.delete()
+            captureStartedAtMs = System.currentTimeMillis()
+            firstFrameNanos = null
+            _captureCount.value = 0
+            val file = File(context.cacheDir, "can_capture_${captureStartedAtMs}.csv")
+            captureFile = file
+            captureWriter = BufferedWriter(FileWriter(file, false)).apply {
+                write("timestamp_epoch_ms,elapsed_ms,can_id,dlc,data_hex,data_bytes,raw_line\\n")
+                flush()
+            }
+        }
+    }
+
+    private fun recordCaptureFrame(frame: CanFrame) {
+        synchronized(captureLock) {
+            val writer = captureWriter ?: return
+            val first = firstFrameNanos ?: frame.receivedAt.also { firstFrameNanos = it }
+            val elapsedMs = ((frame.receivedAt - first) / 1_000_000L).coerceAtLeast(0L)
+            val timestampMs = captureStartedAtMs + elapsedMs
+            val bytes = frame.data.joinToString(" ") { "%02X".format(it) }
+            fun csv(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
+            writer.append("$timestampMs,$elapsedMs,${frame.id},${frame.data.size},${frame.dataHex},${csv(bytes)},${csv(frame.rawLine)}\\n")
+            _captureCount.value += 1
+            if (_captureCount.value % 128 == 0) writer.flush()
+        }
+    }
+
+    fun saveCapture(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching {
+                synchronized(captureLock) {
+                    val file = captureFile ?: error("No CAN capture to save")
+                    require(_captureCount.value > 0) { "No CAN frames captured" }
+                    captureWriter?.flush()
+                    val output = context.contentResolver.openOutputStream(uri)
+                        ?: error("Unable to open destination")
+                    output.use { stream -> file.inputStream().use { input -> input.copyTo(stream) } }
+                }
+            }
+            launch(Dispatchers.Main) {
+                val message = if (result.isSuccess) {
+                    "CAN capture saved (${_captureCount.value} frames)"
+                } else {
+                    "Could not save CAN capture: ${result.exceptionOrNull()?.message ?: "unknown error"}"
+                }
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     fun startMonitoring() {
         if (_isMonitoring.value) return
         _isMonitoring.value = true
+        beginCapture()
         val pauseLease = acquirePollingPause()
         monitorJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 repository.canMonitorFlow().collect { frame ->
+                    recordCaptureFrame(frame)
                     // Raw frame buffer (newest first, capped at MAX_FRAMES)
                     val cur = _frames.value
                     _frames.value = if (cur.size >= MAX_FRAMES) {
@@ -164,6 +244,10 @@ class CanMonitorViewModel @Inject constructor(
         monitorJob = null
         _isMonitoring.value = false
         releaseActivePollingPause()
+        synchronized(captureLock) {
+            runCatching { captureWriter?.flush(); captureWriter?.close() }
+            captureWriter = null
+        }
     }
 
     override fun onCleared() {
