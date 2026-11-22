@@ -39,7 +39,7 @@ No Mazda-specific value is decoded or presented until a real response has been c
 
 Deep Scan includes a user-invoked probe for the 2016 CX-5 automatic TCM at request ID 0x7E1. It reads two Mode 22 / UDS ReadDataByIdentifier values and performs no writes:
 
-- DID 1E12: selected transmission gear. The parameter catalogue lists the TCM request/response pair as 7E1 to 7E9 and marks 2016 supported. The catalogue's candidate values are 1–6 for forward gears; 50, 60, and 70 for neutral, reverse, and park. The P/R/N mapping still needs raw-response confirmation on this vehicle.
+- DID 1E12: selected transmission gear. The parameter catalogue lists the TCM request/response pair as 7E1 to 7E9 and marks 2016 supported. On this vehicle, raw values 46, 3C, and 32 were observed in Park, Reverse, and Neutral respectively; 01 and 02 were observed in forward gears 1 and 2. Values 03–06 are decoded as forward gears based on the catalogue, but have not all been independently tested.
 - DID 1E1C: transmission-fluid temperature. The catalogue lists 7E1 to 7E9, a signed 16-bit value divided by 16 to obtain °C, and marks 2016–2026 confirmed.
 
 The decoder validates the positive response service and matching DID before displaying a value. Unsupported, malformed, or absent values remain unavailable. This probe is user-invoked rather than automatically sent to every vehicle.
@@ -54,10 +54,10 @@ On-vehicle tests on the user's 2016 Mazda CX-5 automatic have established:
 - DID 1E1C has returned transmission-fluid temperatures of 38.6 °C (101.4 °F) and 43.3 °C (109.9 °F) on separate tests. These changing, plausible live readings support the 0x7E1 request path, positive response handling, and temperature conversion on this vehicle.
 - DID 1E12 displayed selected gear "1" while the selector was in Drive.
 - In manual mode, the user can select first and second gear, and the scan correspondingly displays "1" and "2". This is strong vehicle-specific confirmation that DID 1E12 reports the selected forward gear and that the current 1–6 numeric decoder is correct for at least gears 1 and 2 on this vehicle.
-- Park, Reverse, and Neutral have not produced a displayed gear value in the reported tests. The catalogue's proposed P/R/N encodings (50, 60, 70) remain unverified here.
+- Park, Reverse, and Neutral were subsequently confirmed by the user from raw DID 1E12 readings: 46 = P, 3C = R, and 32 = N. The app decoder now displays these selector states. The catalogue's proposed values 50, 60, and 70 are not used.
 - Raw request/response bytes and ISO-TP framing have not yet been captured for independent payload-level verification.
 
-Vehicle-specific confirmation currently covers the TCM response path, temperature display/conversion, and selected forward gears 1 and 2. It does not establish P/R/N decoding, gears 3–6, support for every 2016 CX-5 calibration, other Mazda model years, or other TCM data identifiers.
+Vehicle-specific confirmation currently covers the TCM response path, temperature display/conversion, selector states P/R/N, and selected forward gears 1 and 2. Gears 3–6 are decoded using the catalogue mapping but have not all been independently tested. This does not establish support for every 2016 CX-5 calibration, other Mazda model years, or other TCM data identifiers.
 
 
 ## Bounded TCM DID discovery
