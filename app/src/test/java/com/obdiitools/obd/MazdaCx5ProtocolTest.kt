@@ -25,6 +25,9 @@ class MazdaCx5ProtocolTest {
         assertEquals("5", MazdaCx5Protocol.parseGear(response("1E12", "05")))
         assertEquals("6", MazdaCx5Protocol.parseGear(response("1E12", "06")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "07")))
+        // Values seen in this session at standstill/low speed remain undecoded.
+        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "46")))
+        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "3C")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "50")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "60")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "70")))
