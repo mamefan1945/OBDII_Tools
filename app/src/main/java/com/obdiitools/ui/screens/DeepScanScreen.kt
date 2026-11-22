@@ -301,6 +301,13 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
         ecu.validatedMode01Pids.forEach { lines += "  ${it.code} — ${it.name}" }
         lines += "Mode 09 PIDs (${ecu.mode09Pids.size}):"
         ecu.mode09Pids.forEach { lines += "  ${it.code} — ${it.name}" }
+        if (ecu.rawMode01Candidates.isNotEmpty()) {
+            lines += "RAW MODE 01 CANDIDATES — advertised, positive twice, decoder not implemented:"
+            ecu.rawMode01Candidates.forEach { candidate ->
+                lines += "  ${candidate.code} — ${candidate.responseDataBytes} data bytes"
+                lines += "    ${candidate.rawResponse}"
+            }
+        }
         lines += ""
     }
     return lines.joinToString("\n").trim()
@@ -327,6 +334,7 @@ private fun DeepScanInfoPanel(
             InfoLine("1", "Scans 136 candidate 11-bit request addresses (0x700–0x77F and 0x7E0–0x7E7) for responding modules.")
             InfoLine("2", "Reads each ECU’s Mode 01 support bitmask, then validates advertised PIDs with two real responses and successful decoding. The report separates advertised from verified readings.")
             InfoLine("3", "Checks Mode 09 support and attempts read-only UDS VIN DID F190 on each individually responding ECU. Unsupported identifiers are reported, not guessed.")
+            InfoLine("4", "Also samples up to 12 advertised Mode 01 PIDs per ECU that have no decoder yet. Two positive responses with matching payload lengths are saved as raw discovery leads.")
             Text(
                 "This takes 2–5 minutes depending on how many ECUs respond.",
                 fontFamily = FontFamily.Monospace,
@@ -541,6 +549,38 @@ private fun EcuResultCard(result: DeepScanViewModel.EcuResult) {
         // Mode 09 PIDs
         if (result.mode09Pids.isNotEmpty()) {
             ModeSection("MODE 09 — VEHICLE INFO", result.mode09Pids, NeonPurple)
+        }
+
+        // Advertised Mode 01 PIDs without a decoder are sampled raw twice.
+        // These are discovery leads, not dashboard-ready signals yet.
+        if (result.rawMode01Candidates.isNotEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    "RAW DISCOVERY CANDIDATES — DECODER NEEDED",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    color = NeonYellow,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+                result.rawMode01Candidates.forEach { candidate ->
+                    Text(
+                        "${candidate.code} · ${candidate.responseDataBytes} data bytes · positive twice",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = TextPrimary,
+                    )
+                    Text(
+                        candidate.rawResponse,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                        color = TextSecondary,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(4.dp))
