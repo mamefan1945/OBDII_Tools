@@ -624,7 +624,7 @@ class OBDRepository @Inject constructor(
             val tx = this
             try {
                 tx.query("ATSH $address", 300)
-                tx.queryLines(command, 1200).joinToString("\\n")
+                tx.queryLines(command, 1200).joinToString("\n")
             } finally {
                 withContext(NonCancellable) {
                     runCatching { tx.query("ATSH 7DF", 300) }
