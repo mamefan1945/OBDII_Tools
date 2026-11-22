@@ -141,14 +141,6 @@ class CanMonitorViewModel @Inject constructor(
     fun clearFrames() {
         _frames.value = emptyList()
         _decodedMap.value = emptyMap()
-        synchronized(captureLock) {
-            runCatching { captureWriter?.close() }
-            captureWriter = null
-            captureFile?.delete()
-            captureFile = null
-            firstFrameNanos = null
-            _captureCount.value = 0
-        }
     }
 
     private fun beginCapture() {
@@ -158,10 +150,10 @@ class CanMonitorViewModel @Inject constructor(
             captureStartedAtMs = System.currentTimeMillis()
             firstFrameNanos = null
             _captureCount.value = 0
-            val file = File(context.cacheDir, "can_capture_${captureStartedAtMs}.csv")
+            val file = File(context.filesDir, "can_capture_${captureStartedAtMs}.csv")
             captureFile = file
             captureWriter = BufferedWriter(FileWriter(file, false)).apply {
-                write("timestamp_epoch_ms,elapsed_ms,can_id,dlc,data_hex,data_bytes,raw_line\\n")
+                write("timestamp_epoch_ms,elapsed_ms,can_id,dlc,data_hex,data_bytes,raw_line\n")
                 flush()
             }
         }
@@ -175,7 +167,7 @@ class CanMonitorViewModel @Inject constructor(
             val timestampMs = captureStartedAtMs + elapsedMs
             val bytes = frame.data.joinToString(" ") { "%02X".format(it) }
             fun csv(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
-            writer.append("$timestampMs,$elapsedMs,${frame.id},${frame.data.size},${frame.dataHex},${csv(bytes)},${csv(frame.rawLine)}\\n")
+            writer.append("$timestampMs,$elapsedMs,${frame.id},${frame.data.size},${frame.dataHex},${csv(bytes)},${csv(frame.rawLine)}\n")
             _captureCount.value += 1
             if (_captureCount.value % 128 == 0) writer.flush()
         }
