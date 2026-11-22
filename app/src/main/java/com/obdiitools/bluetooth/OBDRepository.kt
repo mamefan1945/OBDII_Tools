@@ -79,6 +79,8 @@ class OBDRepository @Inject constructor(
     private var lastMazdaTemperaturePollAtMs = 0L
     private var lastMazdaGearFailureAtMs = 0L
     private var lastMazdaTemperatureFailureAtMs = 0L
+    // Keep repeated identical TCM failures from creating hundreds of duplicate session rows.
+    private val lastMazdaDiagnosticEventAtMs = mutableMapOf<String, Long>()
     private var mazdaGearCapturedAtMs: Long? = null
     private var mazdaTemperatureCapturedAtMs: Long? = null
 
@@ -116,6 +118,7 @@ class OBDRepository @Inject constructor(
             lastMazdaTemperaturePollAtMs = 0L
             lastMazdaGearFailureAtMs = 0L
             lastMazdaTemperatureFailureAtMs = 0L
+            lastMazdaDiagnosticEventAtMs.clear()
             mazdaGearCapturedAtMs = null
             mazdaTemperatureCapturedAtMs = null
             _mazdaCx5DashboardData.value = null
@@ -934,6 +937,18 @@ class OBDRepository @Inject constructor(
         pollCycleCount = (pollCycleCount + 1) % 150
     }
 
+    private suspend fun recordMazdaDiagnosticEventThrottled(
+        key: String,
+        eventType: String,
+        detail: String,
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastMazdaDiagnosticEventAtMs[key]
+        if (previous != null && now - previous < MAZDA_DIAGNOSTIC_EVENT_INTERVAL_MS) return
+        lastMazdaDiagnosticEventAtMs[key] = now
+        sessionRepository.recordDiagnosticEvent(eventType, detail)
+    }
+
     /**
      * Polls only the two Mazda CX-5 TCM identifiers confirmed on the user's
      * vehicle. This runs inside the normal serialized polling transaction so
@@ -976,16 +991,18 @@ class OBDRepository @Inject constructor(
                     receivedValidData = true
                 } else {
                     lastMazdaGearFailureAtMs = now
-                    sessionRepository.recordDiagnosticEvent(
-                        "MAZDA_TCM_READ_FAILED",
-                        "ECU=7E1 DID=1E12 raw=${raw.take(180)}"
+                    recordMazdaDiagnosticEventThrottled(
+                        key = "1E12:${raw.trim().uppercase()}",
+                        eventType = "MAZDA_TCM_READ_FAILED",
+                        detail = "ECU=7E1 DID=1E12 raw=${raw.take(180)}"
                     )
                 }
             } catch (error: Exception) {
                 lastMazdaGearFailureAtMs = now
-                sessionRepository.recordDiagnosticEvent(
-                    "MAZDA_TCM_READ_ERROR",
-                    "ECU=7E1 DID=1E12 ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
+                recordMazdaDiagnosticEventThrottled(
+                    key = "1E12:ERROR:${error.javaClass.simpleName}",
+                    eventType = "MAZDA_TCM_READ_ERROR",
+                    detail = "ECU=7E1 DID=1E12 ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
                 )
             }
         }
@@ -1011,16 +1028,18 @@ class OBDRepository @Inject constructor(
                     receivedValidData = true
                 } else {
                     lastMazdaTemperatureFailureAtMs = now
-                    sessionRepository.recordDiagnosticEvent(
-                        "MAZDA_TCM_READ_FAILED",
-                        "ECU=7E1 DID=1E1C raw=${raw.take(180)}"
+                    recordMazdaDiagnosticEventThrottled(
+                        key = "1E1C:${raw.trim().uppercase()}",
+                        eventType = "MAZDA_TCM_READ_FAILED",
+                        detail = "ECU=7E1 DID=1E1C raw=${raw.take(180)}"
                     )
                 }
             } catch (error: Exception) {
                 lastMazdaTemperatureFailureAtMs = now
-                sessionRepository.recordDiagnosticEvent(
-                    "MAZDA_TCM_READ_ERROR",
-                    "ECU=7E1 DID=1E1C ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
+                recordMazdaDiagnosticEventThrottled(
+                    key = "1E1C:ERROR:${error.javaClass.simpleName}",
+                    eventType = "MAZDA_TCM_READ_ERROR",
+                    detail = "ECU=7E1 DID=1E1C ${error.javaClass.simpleName}: ${error.message.orEmpty().take(180)}"
                 )
             }
         }
@@ -1374,6 +1393,7 @@ class OBDRepository @Inject constructor(
         private const val MAZDA_GEAR_POLL_INTERVAL_MS = 1_000L
         private const val MAZDA_TEMPERATURE_POLL_INTERVAL_MS = 2_500L
         private const val MAZDA_FAILED_READ_RETRY_MS = 5_000L
+        private const val MAZDA_DIAGNOSTIC_EVENT_INTERVAL_MS = 60_000L
         private const val MAZDA_DATA_STALE_AFTER_MS = 10_000L
 
         // Candidate 11-bit Nissan enhanced-diagnostic addresses. Accept only
