@@ -478,6 +478,10 @@ private enum class GraphSeries(val label: String, val color: Color) {
     CVT_TARGET_PRESSURE("Target Secondary", NeonGreen),
     MAZDA_GEAR("Mazda Gear", NeonCyan),
     MAZDA_TEMP("Mazda ATF Temp", NeonYellow),
+    MAZDA_FRONT_LEFT("Mazda Front Left", NeonCyan),
+    MAZDA_FRONT_RIGHT("Mazda Front Right", NeonOrange),
+    MAZDA_REAR_LEFT("Mazda Rear Left", NeonGreen),
+    MAZDA_REAR_RIGHT("Mazda Rear Right", NeonYellow),
 }
 
 @Composable
@@ -566,6 +570,10 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                 GraphSeries.CVT_TARGET_PRESSURE -> points.any { it.cvtTargetSecondaryPressureMpa != null }
                 GraphSeries.MAZDA_GEAR -> points.any { it.mazdaSelectedGear != null }
                 GraphSeries.MAZDA_TEMP -> points.any { it.mazdaTransmissionTempC != null }
+                GraphSeries.MAZDA_FRONT_LEFT -> points.any { it.mazdaFrontLeftWheelSpeedKph != null }
+                GraphSeries.MAZDA_FRONT_RIGHT -> points.any { it.mazdaFrontRightWheelSpeedKph != null }
+                GraphSeries.MAZDA_REAR_LEFT -> points.any { it.mazdaRearLeftWheelSpeedKph != null }
+                GraphSeries.MAZDA_REAR_RIGHT -> points.any { it.mazdaRearRightWheelSpeedKph != null }
                 else -> true
             }
         }
@@ -634,6 +642,10 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                                 TemperatureUnit.FAHRENHEIT -> celsius * 9f / 5f + 32f
                             }
                         }
+                        GraphSeries.MAZDA_FRONT_LEFT -> point.mazdaFrontLeftWheelSpeedKph?.let { UnitConverter.speed(it, prefs.speedUnit) } ?: return@mapNotNull null
+                        GraphSeries.MAZDA_FRONT_RIGHT -> point.mazdaFrontRightWheelSpeedKph?.let { UnitConverter.speed(it, prefs.speedUnit) } ?: return@mapNotNull null
+                        GraphSeries.MAZDA_REAR_LEFT -> point.mazdaRearLeftWheelSpeedKph?.let { UnitConverter.speed(it, prefs.speedUnit) } ?: return@mapNotNull null
+                        GraphSeries.MAZDA_REAR_RIGHT -> point.mazdaRearRightWheelSpeedKph?.let { UnitConverter.speed(it, prefs.speedUnit) } ?: return@mapNotNull null
                     }
                     point.timestampMs to v
                 }
@@ -653,6 +665,8 @@ private fun SessionDetailContent(session: SessionEntity, points: List<SessionDat
                 GraphSeries.CVT_PRIMARY_PRESSURE, GraphSeries.CVT_SECONDARY_PRESSURE, GraphSeries.CVT_TARGET_PRESSURE -> " MPa"
                 GraphSeries.MAZDA_GEAR -> " gear"
                 GraphSeries.MAZDA_TEMP -> " ${prefs.temperatureUnit.symbol}"
+                GraphSeries.MAZDA_FRONT_LEFT, GraphSeries.MAZDA_FRONT_RIGHT,
+                GraphSeries.MAZDA_REAR_LEFT, GraphSeries.MAZDA_REAR_RIGHT -> " ${prefs.speedUnit.symbol}"
             }
 
             if (timedValues.size < 2) {
