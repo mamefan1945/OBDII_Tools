@@ -132,7 +132,7 @@ fun BluetoothScreen(viewModel: MainViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 16.dp)
+                .padding(top = 8.dp)
         ) {
             // Header
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
