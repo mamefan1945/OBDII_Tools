@@ -753,6 +753,7 @@ class OBDRepository @Inject constructor(
     }
 
     fun disconnect() {
+        mazdaCx5PollingEnabled = false
         pollingJob?.cancel()
         pollingJob = null
         pollCycleCount = 0
