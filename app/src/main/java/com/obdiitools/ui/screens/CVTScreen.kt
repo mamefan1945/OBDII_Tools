@@ -58,10 +58,10 @@ import com.obdiitools.data.UserPreferences
 import com.obdiitools.util.UnitConverter
 import com.obdiitools.obd.CVTData
 import com.obdiitools.obd.CVTDataSource
-import com.obdiitools.obd.CVTReading
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.LockupState
 import com.obdiitools.ui.components.GlassCard
+import com.obdiitools.ui.components.ShifterPositionCard
 import com.obdiitools.ui.components.DTCCard
 import com.obdiitools.ui.theme.BackgroundCard
 import com.obdiitools.ui.theme.BackgroundDeep
@@ -228,7 +228,15 @@ fun CVTScreen(
                 ) {
                     LockupStateBanner(cvtData.lockupState)
                 }
-                NissanSentraShifterCard(cvtData.selectorPosition)
+                ShifterPositionCard(
+                    title = "2016 SENTRA • CVT SELECTOR",
+                    positions = listOf("P", "R", "N", "D", "L"),
+                    selectedPosition = cvtData.selectorPosition.value,
+                    statusText = if (cvtData.selectorPosition.value == null)
+                        "Factory gate shown; live TCM position unavailable"
+                    else "Live position reported by the transmission controller",
+                    detailText = cvtData.selectorPosition.source.badge,
+                )
                 MetricGrid(cvtData, prefs)
 
                 if (sourceDesc.contains("controller confirmed", ignoreCase = true)) {
@@ -399,162 +407,6 @@ private fun CvtInfoRow(label: String, value: String) {
             fontSize = 14.sp,
             color = TextPrimary,
         )
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 2016 Nissan Sentra CVT selector graphic
-// Factory gate order is confirmed by the 2016 owner's manual. The TCM decoder
-// currently recognizes P/R/N/D only; L is deliberately shown but not inferred.
-// ──────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun NissanSentraShifterCard(reading: CVTReading<String>) {
-    val positions = listOf("P", "R", "N", "D", "L")
-    val reported = reading.value?.trim()?.uppercase()
-    val selectedIndex = positions.indexOf(reported).takeIf { it >= 0 }
-    val selectedColor = NeonCyan
-
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "2016 SENTRA • CVT SELECTOR",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    color = NeonCyan,
-                    letterSpacing = 1.sp,
-                )
-                Text(
-                    reported?.takeIf { it in positions } ?: "UNKNOWN",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = if (selectedIndex != null) selectedColor else NeonOrange,
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF171B20))
-                    .border(1.dp, SurfaceBorder, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(
-                    modifier = Modifier.width(38.dp).height(180.dp),
-                    verticalArrangement = Arrangement.SpaceEvenly,
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    positions.forEachIndexed { index, position ->
-                        Text(
-                            position,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (selectedIndex == index) FontWeight.Black else FontWeight.Medium,
-                            fontSize = 17.sp,
-                            color = if (selectedIndex == index) selectedColor else TextSecondary,
-                        )
-                    }
-                }
-                Spacer(Modifier.width(14.dp))
-                Canvas(modifier = Modifier.width(52.dp).height(180.dp)) {
-                    val centerX = size.width / 2f
-                    val top = 14.dp.toPx()
-                    val bottom = size.height - 14.dp.toPx()
-                    drawLine(
-                        color = Color(0xFF050709),
-                        start = Offset(centerX, top),
-                        end = Offset(centerX, bottom),
-                        strokeWidth = 20.dp.toPx(),
-                    )
-                    drawLine(
-                        color = Color(0xFF525B64),
-                        start = Offset(centerX - 7.dp.toPx(), top),
-                        end = Offset(centerX - 7.dp.toPx(), bottom),
-                        strokeWidth = 1.dp.toPx(),
-                    )
-                    selectedIndex?.let { index ->
-                        val y = top + (bottom - top) * index / 4f
-                        drawCircle(
-                            color = Color(0xFF9DA8B2),
-                            radius = 13.dp.toPx(),
-                            center = Offset(centerX, y),
-                        )
-                        drawCircle(
-                            color = selectedColor,
-                            radius = 10.dp.toPx(),
-                            center = Offset(centerX, y),
-                        )
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.9f),
-                            radius = 4.dp.toPx(),
-                            center = Offset(centerX - 3.dp.toPx(), y - 3.dp.toPx()),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(18.dp))
-                Column(
-                    modifier = Modifier.height(180.dp),
-                    verticalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    positions.forEachIndexed { index, position ->
-                        Box(
-                            modifier = Modifier
-                                .size(width = 78.dp, height = 26.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(
-                                    if (selectedIndex == index) selectedColor.copy(alpha = 0.14f)
-                                    else Color.Transparent
-                                )
-                                .border(
-                                    width = if (selectedIndex == index) 1.dp else 0.dp,
-                                    color = if (selectedIndex == index) selectedColor.copy(alpha = 0.7f)
-                                    else Color.Transparent,
-                                    shape = RoundedCornerShape(6.dp),
-                                )
-                                .padding(horizontal = 6.dp),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            Text(
-                                when (position) {
-                                    "P" -> "PARK"
-                                    "R" -> "REVERSE"
-                                    "N" -> "NEUTRAL"
-                                    "D" -> "DRIVE"
-                                    else -> "LOW"
-                                },
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 9.sp,
-                                fontWeight = if (selectedIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedIndex == index) selectedColor else TextSecondary,
-                            )
-                        }
-                    }
-                }
-            }
-            Text(
-                if (selectedIndex == null)
-                    "Factory gate shown for reference. Live TCM position is not decoded. L is not assumed to be D."
-                else if (reported == "L")
-                    "TCM reports L (Low)."
-                else
-                    "Live position reported by the transmission controller.",
-                fontFamily = FontFamily.Monospace,
-                fontSize = 9.sp,
-                color = TextSecondary,
-                lineHeight = 13.sp,
-            )
-        }
     }
 }
 
