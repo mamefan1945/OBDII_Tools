@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             .background(BackgroundDeep),
     ) {
         TopAppBar(
+        windowInsets = WindowInsets(0, 0, 0, 0),
             title = {
                 Column {
                     Text(
