@@ -17,13 +17,14 @@ class MazdaCx5ProtocolTest {
     }
 
     @Test
-    fun decodesVehicleObservedForwardGearValuesOneThroughFive() {
+    fun decodesVehicleObservedForwardGearValuesOneThroughSix() {
         assertEquals("1", MazdaCx5Protocol.parseGear(response("1E12", "01")))
         assertEquals("2", MazdaCx5Protocol.parseGear(response("1E12", "02")))
         assertEquals("3", MazdaCx5Protocol.parseGear(response("1E12", "03")))
         assertEquals("4", MazdaCx5Protocol.parseGear(response("1E12", "04")))
         assertEquals("5", MazdaCx5Protocol.parseGear(response("1E12", "05")))
-        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "06")))
+        assertEquals("6", MazdaCx5Protocol.parseGear(response("1E12", "06")))
+        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "07")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "50")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "60")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "70")))
