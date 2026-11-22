@@ -139,8 +139,9 @@ jobs:
             -alias androiddebugkey -storepass "$KEYSTORE_PASSWORD" |
             awk -F'SHA1: ' '/SHA1:/{print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
           ACTUAL=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "$APK" |
-            awk -F': ' '/certificate SHA-1 digest:/{print $2; exit}' |
-            tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+            sed -nE 's/.*certificate SHA-1 digest:[[:space:]]*([[:xdigit:]:]+).*/\1/p' |
+            head -n1 |
+            tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')
           echo "Keystore SHA-1: $EXPECTED"
           echo "APK SHA-1:      $ACTUAL"
           test -n "$EXPECTED" && test "$EXPECTED" = "$ACTUAL" || {
