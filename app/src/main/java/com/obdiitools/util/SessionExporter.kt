@@ -95,7 +95,11 @@ object SessionExporter {
             "cvt_primary_pressure_mpa", "cvt_secondary_pressure_mpa",
             "cvt_target_secondary_pressure_mpa",
         )
-        if (options.includeMazdaTcmTelemetry) columns += listOf("mazda_selected_gear", "mazda_transmission_temp_c")
+        if (options.includeMazdaTcmTelemetry) columns += listOf(
+            "mazda_selected_gear", "mazda_transmission_temp_c",
+            "mazda_front_left_wheel_speed_kph", "mazda_front_right_wheel_speed_kph",
+            "mazda_rear_left_wheel_speed_kph", "mazda_rear_right_wheel_speed_kph",
+        )
         columns += listOf("diagnostic_event_type", "diagnostic_event_detail")
         if (options.includeGps) columns += listOf("latitude", "longitude", "gps_accuracy_m")
         sb.appendLine(columns.joinToString(","))
@@ -129,6 +133,10 @@ object SessionExporter {
             if (options.includeMazdaTcmTelemetry) row += listOf(
                 pt.mazdaSelectedGear.orEmpty(),
                 pt.mazdaTransmissionTempC?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
+                pt.mazdaFrontLeftWheelSpeedKph?.toString().orEmpty(),
+                pt.mazdaFrontRightWheelSpeedKph?.toString().orEmpty(),
+                pt.mazdaRearLeftWheelSpeedKph?.toString().orEmpty(),
+                pt.mazdaRearRightWheelSpeedKph?.toString().orEmpty(),
             )
             row += listOf(
                 pt.diagnosticEventType?.let(::csvSafeCell).orEmpty(),
