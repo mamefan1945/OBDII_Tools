@@ -127,7 +127,11 @@ class MainViewModel @Inject constructor(
                             try {
                                 val info = vinRepository.fetchAndDecodeVin()
                                 _vinInfo.value = info
-                                repository.setVehicleIdentity(info?.vin)
+                                repository.setVehicleIdentity(
+                                    vin = info?.vin,
+                                    make = info?.make.orEmpty(),
+                                    model = info?.model.orEmpty(),
+                                )
                                 if (info != null && (info.vin.isNotBlank() || info.make.isNotBlank() || info.model.isNotBlank())) {
                                     sessionRepository.updateCurrentSessionMakeModel(info.make, info.model, info.vin)
                                 }
