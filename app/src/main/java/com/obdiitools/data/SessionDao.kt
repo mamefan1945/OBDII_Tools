@@ -36,6 +36,19 @@ interface SessionDao {
           AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
           AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
           AND throttlePercent IS NULL AND engineLoadPercent IS NULL
+          AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL AND ambientTempC IS NULL
+          AND (mazdaSelectedGear IS NOT NULL OR mazdaTransmissionTempC IS NOT NULL)
+        ORDER BY ABS(timestampMs - :timestampMs) ASC
+        LIMIT 1
+    """)
+    suspend fun findNearbyMazdaOnlyPoint(sessionId: Long, timestampMs: Long, maxDeltaMs: Long): SessionDataPoint?
+
+    @Query("""
+        SELECT * FROM session_data_points
+        WHERE sessionId = :sessionId
+          AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
+          AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
+          AND throttlePercent IS NULL AND engineLoadPercent IS NULL
           AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL
           AND (
                latitude IS NOT NULL AND longitude IS NOT NULL
@@ -81,7 +94,7 @@ interface SessionDao {
     @Query("UPDATE session_data_points SET latitude = :latitude, longitude = :longitude, accuracy = :accuracy WHERE id = :id")
     suspend fun updatePointWithGps(id: Long, latitude: Double, longitude: Double, accuracy: Float)
 
-    @Query("UPDATE session_data_points SET mazdaSelectedGear = :gear, mazdaTransmissionTempC = :temperatureC WHERE id = :id")
+    @Query("UPDATE session_data_points SET mazdaSelectedGear = COALESCE(:gear, mazdaSelectedGear), mazdaTransmissionTempC = COALESCE(:temperatureC, mazdaTransmissionTempC) WHERE id = :id")
     suspend fun updatePointWithMazdaTcm(id: Long, gear: String?, temperatureC: Double?)
 
     @Query("UPDATE session_data_points SET diagnosticEventType = :eventType, diagnosticEventDetail = :detail WHERE id = :id")
