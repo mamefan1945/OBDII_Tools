@@ -74,8 +74,49 @@ class OBDRepository @Inject constructor(
     private val _mazdaCx5DashboardData = MutableStateFlow<MazdaCx5DashboardData?>(null)
     val mazdaCx5DashboardData: StateFlow<MazdaCx5DashboardData?> = _mazdaCx5DashboardData.asStateFlow()
 
+    @Volatile private var mazdaCx5PollingEnabled = false
+    private var lastMazdaGearPollAtMs = 0L
+    private var lastMazdaTemperaturePollAtMs = 0L
+    private var lastMazdaGearFailureAtMs = 0L
+    private var lastMazdaTemperatureFailureAtMs = 0L
+    private var mazdaGearCapturedAtMs: Long? = null
+    private var mazdaTemperatureCapturedAtMs: Long? = null
+
     fun updateMazdaCx5DashboardData(data: MazdaCx5TransmissionData?, capturedAtMs: Long) {
-        _mazdaCx5DashboardData.value = data?.let { MazdaCx5DashboardData(it, capturedAtMs) }
+        _mazdaCx5DashboardData.value = data?.let {
+            MazdaCx5DashboardData(
+                transmission = it,
+                capturedAtMs = capturedAtMs,
+                gearCapturedAtMs = capturedAtMs.takeIf { _ -> it.gear != null },
+                temperatureCapturedAtMs = capturedAtMs.takeIf { _ -> it.transmissionTemperatureC != null },
+            )
+        }
+    }
+
+    fun setVehicleIdentity(vin: String?, make: String = "", model: String = "") {
+        val normalized = vin.orEmpty().uppercase().filter { it.isLetterOrDigit() }
+        val key = if (normalized.length == 17 && normalized != "00000000000000000") {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(normalized.toByteArray(Charsets.UTF_8))
+            "vin_" + digest.joinToString("") { "%02x".format(it) }
+        } else null
+        activeVehicleProfileKey = key
+        _previouslyKnownPids.value = key?.let {
+            capabilityProfilePreferences.getStringSet(it, emptySet())?.toSet()
+        } ?: emptySet()
+
+        val isMazdaCx5 = make.equals("Mazda", ignoreCase = true) &&
+            model.contains("CX-5", ignoreCase = true)
+        if (mazdaCx5PollingEnabled != isMazdaCx5) {
+            mazdaCx5PollingEnabled = isMazdaCx5
+            lastMazdaGearPollAtMs = 0L
+            lastMazdaTemperaturePollAtMs = 0L
+            lastMazdaGearFailureAtMs = 0L
+            lastMazdaTemperatureFailureAtMs = 0L
+            mazdaGearCapturedAtMs = null
+            mazdaTemperatureCapturedAtMs = null
+            _mazdaCx5DashboardData.value = null
+        }
     }
 
     private val _livePidValues = MutableStateFlow<Map<String, Float>>(emptyMap())
@@ -656,6 +697,12 @@ class OBDRepository @Inject constructor(
     @SuppressLint("MissingPermission")
     suspend fun connect(deviceInfo: BluetoothDeviceInfo) {
         _mazdaCx5DashboardData.value = null
+        lastMazdaGearPollAtMs = 0L
+        lastMazdaTemperaturePollAtMs = 0L
+        lastMazdaGearFailureAtMs = 0L
+        lastMazdaTemperatureFailureAtMs = 0L
+        mazdaGearCapturedAtMs = null
+        mazdaTemperatureCapturedAtMs = null
         _connectionState.value = ConnectionState.Connecting(deviceInfo.name, deviceInfo.address)
         withContext(Dispatchers.IO) {
             var candidateConnection: OBDConnection? = null
@@ -732,6 +779,12 @@ class OBDRepository @Inject constructor(
         connection = null
         _connectionState.value = ConnectionState.Disconnected
         _mazdaCx5DashboardData.value = null
+        lastMazdaGearPollAtMs = 0L
+        lastMazdaTemperaturePollAtMs = 0L
+        lastMazdaGearFailureAtMs = 0L
+        lastMazdaTemperatureFailureAtMs = 0L
+        mazdaGearCapturedAtMs = null
+        mazdaTemperatureCapturedAtMs = null
         _obdData.value = OBDData()
         _livePidValues.value = emptyMap()
         _lowVoltageWarning.value = false
@@ -747,6 +800,13 @@ class OBDRepository @Inject constructor(
         if (endingSessionId != null) {
             scope.launch { _lastTripSummary.value = sessionRepository.endSession(endingSessionId) }
         }
+    }
+
+    private companion object {
+        const val MAZDA_GEAR_POLL_INTERVAL_MS = 1_000L
+        const val MAZDA_TEMPERATURE_POLL_INTERVAL_MS = 2_500L
+        const val MAZDA_FAILED_READ_RETRY_MS = 5_000L
+        const val MAZDA_DATA_STALE_AFTER_MS = 10_000L
     }
 
     private fun startPolling() {
@@ -835,6 +895,9 @@ class OBDRepository @Inject constructor(
             }
         }
 
+        // --- Mazda CX-5 TCM data (serialized with all other adapter I/O) ---
+        pollMazdaCx5Transmission(conn)
+
         // --- Slow PIDs every 5th cycle (~1 Hz) ---
         if (pollCycleCount % 5 == 0) {
             if (pollingPaused) return
@@ -888,6 +951,105 @@ class OBDRepository @Inject constructor(
         }
 
         pollCycleCount = (pollCycleCount + 1) % 150
+    }
+
+    /**
+     * Polls only the two Mazda CX-5 TCM identifiers confirmed on the user's
+     * vehicle. This runs inside the normal serialized polling transaction so
+     * UDS header changes cannot interleave with standard PID requests.
+     */
+    private suspend fun pollMazdaCx5Transmission(conn: OBDConnection) {
+        if (!mazdaCx5PollingEnabled || pollingPaused) return
+        val now = SystemClock.elapsedRealtime()
+        val gearDue = now - lastMazdaGearPollAtMs >= MAZDA_GEAR_POLL_INTERVAL_MS &&
+            now - lastMazdaGearFailureAtMs >= MAZDA_FAILED_READ_RETRY_MS
+        val temperatureDue = now - lastMazdaTemperaturePollAtMs >= MAZDA_TEMPERATURE_POLL_INTERVAL_MS &&
+            now - lastMazdaTemperatureFailureAtMs >= MAZDA_FAILED_READ_RETRY_MS
+        if (!gearDue && !temperatureDue) return
+
+        var gear: String? = _mazdaCx5DashboardData.value?.transmission?.gear
+        var temperatureC: Double? =
+            _mazdaCx5DashboardData.value?.transmission?.transmissionTemperatureC
+        var gearRaw = _mazdaCx5DashboardData.value?.transmission?.rawGearResponse.orEmpty()
+        var temperatureRaw = _mazdaCx5DashboardData.value?.transmission?.rawTemperatureResponse.orEmpty()
+        var receivedValidData = false
+
+        if (gearDue) {
+            lastMazdaGearPollAtMs = now
+            val raw = conn.queryUds(
+                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID,
+            )
+            val parsed = UdsResponse.parse(
+                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID,
+                raw,
+            )
+            val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseGear(parsed)
+            if (decoded != null) {
+                gear = decoded
+                gearRaw = raw
+                mazdaGearCapturedAtMs = System.currentTimeMillis()
+                lastMazdaGearFailureAtMs = 0L
+                receivedValidData = true
+            } else {
+                lastMazdaGearFailureAtMs = now
+            }
+        }
+
+        if (temperatureDue && !pollingPaused) {
+            lastMazdaTemperaturePollAtMs = now
+            val raw = conn.queryUds(
+                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID,
+            )
+            val parsed = UdsResponse.parse(
+                com.obdiitools.obd.MazdaCx5Protocol.TCM_REQUEST_ID,
+                com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID,
+                raw,
+            )
+            val decoded = com.obdiitools.obd.MazdaCx5Protocol.parseTransmissionTemperatureC(parsed)
+            if (decoded != null) {
+                temperatureC = decoded
+                temperatureRaw = raw
+                mazdaTemperatureCapturedAtMs = System.currentTimeMillis()
+                lastMazdaTemperatureFailureAtMs = 0L
+                receivedValidData = true
+            } else {
+                lastMazdaTemperatureFailureAtMs = now
+            }
+        }
+
+        val capturedAt = System.currentTimeMillis()
+        val gearFresh = mazdaGearCapturedAtMs?.let { capturedAt - it <= MAZDA_DATA_STALE_AFTER_MS } == true
+        val temperatureFresh =
+            mazdaTemperatureCapturedAtMs?.let { capturedAt - it <= MAZDA_DATA_STALE_AFTER_MS } == true
+        if (!gearFresh) gear = null
+        if (!temperatureFresh) temperatureC = null
+
+        if (receivedValidData || _mazdaCx5DashboardData.value != null) {
+            val data = MazdaCx5TransmissionData(
+                gear = gear,
+                transmissionTemperatureC = temperatureC,
+                rawGearResponse = gearRaw,
+                rawTemperatureResponse = temperatureRaw,
+            )
+            _mazdaCx5DashboardData.value = if (gearFresh || temperatureFresh) {
+                MazdaCx5DashboardData(
+                    transmission = data,
+                    capturedAtMs = capturedAt,
+                    gearCapturedAtMs = mazdaGearCapturedAtMs.takeIf { gearFresh },
+                    temperatureCapturedAtMs = mazdaTemperatureCapturedAtMs.takeIf { temperatureFresh },
+                )
+            } else null
+        }
+
+        if (receivedValidData && (gearFresh || temperatureFresh)) {
+            sessionRepository.recordMazdaTcmData(
+                gear = gear.takeIf { gearFresh },
+                transmissionTemperatureC = temperatureC.takeIf { temperatureFresh },
+            )
+        }
     }
 
     private suspend fun pollAdaptivePids(conn: OBDConnection, supported: Set<String>) {
