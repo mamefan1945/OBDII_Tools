@@ -236,7 +236,7 @@ class CanMonitorViewModel @Inject constructor(
             _captureElapsedMs.value = elapsedMs
             val summary = "duration_ms=$elapsedMs,valid_frames=${_captureCount.value}"
             runCatching {
-                writer.append("SUMMARY,$elapsedMs,,,,,${csv(summary)}\n")
+                writer.append("SUMMARY,$elapsedMs,,,,,,SUMMARY,${csv(summary)}\n")
                 writer.flush()
                 writer.close()
             }
@@ -272,6 +272,11 @@ class CanMonitorViewModel @Inject constructor(
         _isMonitoring.value = true
         _monitorStatus.value = "Listening"
         beginCapture()
+        synchronized(captureLock) {
+            lastFrameAtElapsedMs = null
+            quietGapOpen = false
+            _lastFrameAgeMs.value = null
+        }
         monitorRunNumber += 1
         recordCaptureEvent("MONITOR_START", "run=$monitorRunNumber")
         val pauseLease = acquirePollingPause()
