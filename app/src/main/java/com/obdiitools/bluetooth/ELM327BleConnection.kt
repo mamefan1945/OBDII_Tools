@@ -364,7 +364,7 @@ class ELM327BleConnection(
                                 if (line.isNotBlank() && !line.startsWith(">")) emit(line)
                                 sb.clear()
                             }
-                            c == '>' -> { /* prompt */ }
+                            c == '>' -> throw java.io.IOException("Adapter returned to command prompt; ATMA stopped")
                             else -> sb.append(c)
                         }
                     }
