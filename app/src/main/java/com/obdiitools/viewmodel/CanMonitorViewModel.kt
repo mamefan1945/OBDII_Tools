@@ -32,6 +32,7 @@ import java.io.FileWriter
 import javax.inject.Inject
 
 private const val MAX_FRAMES = 500
+private const val CAN_QUIET_GAP_MS = 1_500L
 
 @HiltViewModel
 class CanMonitorViewModel @Inject constructor(
@@ -52,6 +53,10 @@ class CanMonitorViewModel @Inject constructor(
     private val _captureCount = MutableStateFlow(0)
     private val _monitorStatus = MutableStateFlow("Stopped")
     val monitorStatus: StateFlow<String> = _monitorStatus.asStateFlow()
+    private val _lastFrameAgeMs = MutableStateFlow<Long?>(null)
+    val lastFrameAgeMs: StateFlow<Long?> = _lastFrameAgeMs.asStateFlow()
+    private val _quietGapCount = MutableStateFlow(0)
+    val quietGapCount: StateFlow<Int> = _quietGapCount.asStateFlow()
 
     val captureCount: StateFlow<Int> = _captureCount.asStateFlow()
     private val captureLock = Any()
@@ -59,6 +64,9 @@ class CanMonitorViewModel @Inject constructor(
     private var captureWriter: BufferedWriter? = null
     private var captureStartedAtMs = 0L
     private var captureStartedElapsedMs = 0L
+    private var monitorRunNumber = 0
+    private var lastFrameAtElapsedMs: Long? = null
+    private var quietGapOpen = false
     private val _captureElapsedMs = MutableStateFlow(0L)
     val captureElapsedMs: StateFlow<Long> = _captureElapsedMs.asStateFlow()
 
@@ -156,8 +164,43 @@ class CanMonitorViewModel @Inject constructor(
             val file = File(context.filesDir, "can_capture_${captureStartedAtMs}.csv")
             captureFile = file
             captureWriter = BufferedWriter(FileWriter(file, false)).apply {
-                write("timestamp_epoch_ms,elapsed_ms,can_id,dlc,data_hex,data_bytes,raw_line\n")
+                write("timestamp_epoch_ms,elapsed_ms,can_id,dlc,data_hex,data_bytes,raw_line,record_type,event_detail\n")
                 flush()
+            }
+            _quietGapCount.value = 0
+            _lastFrameAgeMs.value = null
+            lastFrameAtElapsedMs = null
+            quietGapOpen = false
+        }
+    }
+
+    private fun captureElapsedNow(): Long =
+        (SystemClock.elapsedRealtime() - captureStartedElapsedMs).coerceAtLeast(0L)
+
+    private fun recordCaptureEvent(type: String, detail: String = "") {
+        synchronized(captureLock) {
+            val writer = captureWriter ?: return
+            val elapsedMs = captureElapsedNow()
+            val timestampMs = captureStartedAtMs + elapsedMs
+            writer.append("$timestampMs,$elapsedMs,EVENT,0,,,," + csv(type) + "," + csv(detail) + "\n")
+            writer.flush()
+        }
+    }
+
+    private fun checkForQuietGap() {
+        synchronized(captureLock) {
+            val last = lastFrameAtElapsedMs ?: return
+            val age = (SystemClock.elapsedRealtime() - last).coerceAtLeast(0L)
+            _lastFrameAgeMs.value = age
+            if (age >= CAN_QUIET_GAP_MS && !quietGapOpen) {
+                quietGapOpen = true
+                _quietGapCount.value += 1
+                val elapsedMs = captureElapsedNow()
+                val timestampMs = captureStartedAtMs + elapsedMs
+                val writer = captureWriter ?: return
+                writer.append("$timestampMs,$elapsedMs,EVENT,0,,,," +
+                    csv("QUIET_GAP_START") + "," + csv("no frames for at least ${age}ms") + "\n")
+                writer.flush()
             }
         }
     }
@@ -172,7 +215,15 @@ class CanMonitorViewModel @Inject constructor(
             val elapsedMs = (SystemClock.elapsedRealtime() - captureStartedElapsedMs).coerceAtLeast(0L)
             val timestampMs = captureStartedAtMs + elapsedMs
             val bytes = frame.data.joinToString(" ") { "%02X".format(it) }
-            writer.append("$timestampMs,$elapsedMs,${frame.id},${frame.data.size},${frame.dataHex},${csv(bytes)},${csv(frame.rawLine)}\n")
+            if (quietGapOpen) {
+                writer.append("$timestampMs,$elapsedMs,EVENT,0,,,," +
+                    csv("QUIET_GAP_END") + "," + csv("frame received after gap") + "\n")
+                quietGapOpen = false
+                writer.flush()
+            }
+            lastFrameAtElapsedMs = SystemClock.elapsedRealtime()
+            _lastFrameAgeMs.value = 0L
+            writer.append("$timestampMs,$elapsedMs,${frame.id},${frame.data.size},${frame.dataHex},${csv(bytes)},${csv(frame.rawLine)},FRAME,\n")
             _captureCount.value += 1
             if (_captureCount.value % 128 == 0) writer.flush()
         }
@@ -221,12 +272,24 @@ class CanMonitorViewModel @Inject constructor(
         _isMonitoring.value = true
         _monitorStatus.value = "Listening"
         beginCapture()
+        monitorRunNumber += 1
+        recordCaptureEvent("MONITOR_START", "run=$monitorRunNumber")
         val pauseLease = acquirePollingPause()
         monitorJob = viewModelScope.launch(Dispatchers.IO) {
             val elapsedTicker = launch {
                 while (true) {
-                    _captureElapsedMs.value = (SystemClock.elapsedRealtime() - captureStartedElapsedMs).coerceAtLeast(0L)
+                    _captureElapsedMs.value = captureElapsedNow()
+                    checkForQuietGap()
                     kotlinx.coroutines.delay(250)
+                }
+            }
+            val connectionWatcher = launch {
+                var previous: ConnectionState? = null
+                repository.connectionState.collect { state ->
+                    if (previous != null && previous != state) {
+                        recordCaptureEvent("CONNECTION_STATE", "$previous -> $state")
+                    }
+                    previous = state
                 }
             }
             try {
@@ -255,9 +318,13 @@ class CanMonitorViewModel @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                _monitorStatus.value = "Monitor ended: ${error.message ?: error.javaClass.simpleName}"
+                val message = error.message ?: error.javaClass.simpleName
+                recordCaptureEvent("MONITOR_ERROR", "${error.javaClass.simpleName}: $message")
+                _monitorStatus.value = "Monitor ended: $message"
             } finally {
+                connectionWatcher.cancel()
                 elapsedTicker.cancel()
+                recordCaptureEvent("MONITOR_STREAM_END", _monitorStatus.value)
                 if (_monitorStatus.value == "Listening") _monitorStatus.value = "Stream ended"
                 finishMonitoring(pauseLease)
             }
@@ -265,6 +332,7 @@ class CanMonitorViewModel @Inject constructor(
     }
 
     fun stopMonitoring() {
+        if (_isMonitoring.value) recordCaptureEvent("MONITOR_STOP", "run=$monitorRunNumber")
         monitorJob?.cancel()
         monitorJob = null
         _isMonitoring.value = false
