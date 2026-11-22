@@ -25,9 +25,11 @@ class MazdaCx5ProtocolTest {
         assertEquals("5", MazdaCx5Protocol.parseGear(response("1E12", "05")))
         assertEquals("6", MazdaCx5Protocol.parseGear(response("1E12", "06")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "07")))
-        // Values seen in this session at standstill/low speed remain undecoded.
-        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "46")))
-        assertNull(MazdaCx5Protocol.parseGear(response("1E12", "3C")))
+        // Selector values directly confirmed on this vehicle.
+        assertEquals("P", MazdaCx5Protocol.parseGear(response("1E12", "46")))
+        assertEquals("R", MazdaCx5Protocol.parseGear(response("1E12", "3C")))
+        assertEquals("N", MazdaCx5Protocol.parseGear(response("1E12", "32")))
+        // Catalogue candidate values are not substituted for observed values.
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "50")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "60")))
         assertNull(MazdaCx5Protocol.parseGear(response("1E12", "70")))
