@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Validate, test, and build signed debug APK
+    name: Validate, test, and build optimized signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -50,7 +50,7 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest
 
       - name: Run Android lint
-        run: gradle --no-daemon lintDebug
+        run: gradle --no-daemon lintRelease
 
       - name: Restore signing keystore
         env:
@@ -76,14 +76,46 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
+          SOURCE="app/src/main/assets/obdex-generic.source.json"
+          OUTPUT="app/src/main/assets/obdex-generic.min.json"
           curl --fail --location --retry 3 --retry-delay 2 \
             https://foerbsnavi.github.io/OBDex/generic.min.json \
-            --output app/src/main/assets/obdex-generic.min.json
+            --output "$SOURCE"
           jq -e 'type == "array" and length >= 9000 and any(.[]; .code == "P0420" and (.title.en | type == "string"))' \
-            app/src/main/assets/obdex-generic.min.json > /dev/null
-          echo "Validated bundled OBDex generic DTC database."
+            "$SOURCE" > /dev/null
+          # Keep only fields consumed by ObdexDtcDatabase. The upstream dataset
+          # contains metadata, translations and source URLs the app never reads.
+          jq -c '[.[] |
+            select((.code // "") | test("^[PBCU][0-9A-Fa-f]{4}$")) |
+            {
+              code: .code,
+              title: {en: (.title.en // "")},
+              description: {en: (.description.en // "")},
+              category: (.category // ""),
+              common_causes: [(.common_causes // [])[] | {
+                id: (.id // ""),
+                likelihood: (.likelihood // "unspecified"),
+                label: {en: (.label.en // "")}
+              }],
+              symptoms: [(.symptoms // [])[] | if type == "object" then {en: (.en // "")} else . end],
+              repair: (if .repair == null then null else {
+                difficulty: (.repair.difficulty // ""),
+                diy_possible: (.repair.diy_possible // false)
+              } end),
+              flags: (if .flags == null then null else {
+                emissions_relevant: (.flags.emissions_relevant // false),
+                limp_mode_possible: (.flags.limp_mode_possible // false)
+              } end),
+              reviewed: (.reviewed // ""),
+              source_count: ((.sources // []) | length)
+            }
+          ]' "$SOURCE" > "$OUTPUT"
+          jq -e 'type == "array" and length >= 8000 and any(.[]; .code == "P0420" and (.title.en | type == "string"))' \
+            "$OUTPUT" > /dev/null
+          rm "$SOURCE"
+          echo "Validated compact offline DTC database: $(wc -c < "$OUTPUT") bytes."
 
-      - name: Build debug APK
+      - name: Build optimized release APK
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           ANDROID_DEBUG_KEYSTORE: ${{ github.workspace }}/.github-signing/debug.keystore
@@ -94,14 +126,14 @@ jobs:
           test -n "$GOOGLE_MAPS_API_KEY" || { echo "Missing GOOGLE_MAPS_API_KEY secret"; exit 1; }
           mkdir -p "$(dirname "$ANDROID_DEBUG_KEYSTORE")"
           cp "$HOME/.android/debug.keystore" "$ANDROID_DEBUG_KEYSTORE"
-          gradle --no-daemon assembleDebug
+          gradle --no-daemon assembleRelease
 
       - name: Verify APK signing certificate matches keystore
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APK="app/build/outputs/apk/release/app-release.apk"
           test -f "$APK" || { echo "APK not found: $APK"; exit 1; }
           EXPECTED=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" \
             -alias androiddebugkey -storepass "$KEYSTORE_PASSWORD" |
@@ -116,11 +148,11 @@ jobs:
             exit 1
           }
 
-      - name: Upload debug APK artifact
+      - name: Upload optimized release APK artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: OBDII_Tools-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: OBDII_Tools-release
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -132,7 +164,7 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APK="app/build/outputs/apk/release/app-release.apk"
           VERSION_NAME=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n1)
           VERSION_NAME="${VERSION_NAME:-unknown}"
           BUILD_TIMESTAMP=$(date -u +'%Y%m%d-%H%M%S-UTC')
@@ -142,4 +174,4 @@ jobs:
           mkdir -p release-assets
           cp "$APK" "release-assets/$ASSET_NAME"
           cp "$APK" "release-assets/OBDII_Tools-latest.apk"
-          gh release create "$TAG" "release-assets/$ASSET_NAME" "release-assets/OBDII_Tools-latest.apk" --title "OBDII Tools v${VERSION_NAME} - build ${BUILD_NUMBER}" --notes "Automated signed debug/test APK. Commit: ${COMMIT_SHA}. Build: ${BUILD_NUMBER}. Built: ${BUILD_TIMESTAMP}." --target "$COMMIT_SHA"
+          gh release create "$TAG" "release-assets/$ASSET_NAME" "release-assets/OBDII_Tools-latest.apk" --title "OBDII Tools v${VERSION_NAME} - build ${BUILD_NUMBER}" --notes "Automated signed optimized release/test APK. Commit: ${COMMIT_SHA}. Build: ${BUILD_NUMBER}. Built: ${BUILD_TIMESTAMP}." --target "$COMMIT_SHA"
