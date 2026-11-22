@@ -100,6 +100,7 @@ class OBDRepository @Inject constructor(
                 .digest(normalized.toByteArray(Charsets.UTF_8))
             "vin_" + digest.joinToString("") { "%02x".format(it) }
         } else null
+        val vehicleChanged = activeVehicleProfileKey != key
         activeVehicleProfileKey = key
         _previouslyKnownPids.value = key?.let {
             capabilityProfilePreferences.getStringSet(it, emptySet())?.toSet()
@@ -107,7 +108,7 @@ class OBDRepository @Inject constructor(
 
         val isMazdaCx5 = make.equals("Mazda", ignoreCase = true) &&
             model.contains("CX-5", ignoreCase = true)
-        if (mazdaCx5PollingEnabled != isMazdaCx5) {
+        if (mazdaCx5PollingEnabled != isMazdaCx5 || vehicleChanged) {
             mazdaCx5PollingEnabled = isMazdaCx5
             lastMazdaGearPollAtMs = 0L
             lastMazdaTemperaturePollAtMs = 0L
@@ -678,6 +679,7 @@ class OBDRepository @Inject constructor(
 
     @SuppressLint("MissingPermission")
     suspend fun connect(deviceInfo: BluetoothDeviceInfo) {
+        mazdaCx5PollingEnabled = false
         _mazdaCx5DashboardData.value = null
         lastMazdaGearPollAtMs = 0L
         lastMazdaTemperaturePollAtMs = 0L
