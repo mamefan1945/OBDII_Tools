@@ -9,6 +9,14 @@ class MazdaCx5ProtocolTest {
         UdsResponse.parse("7E1", did, "62$did$payload")
 
     @Test
+    fun freshnessExpiresIndependentlyAtTheConfiguredAgeBoundary() {
+        assertEquals(true, MazdaCx5Protocol.isFresh(1_000L, 5_000L, 4_000L))
+        assertEquals(false, MazdaCx5Protocol.isFresh(1_000L, 5_001L, 4_000L))
+        assertEquals(false, MazdaCx5Protocol.isFresh(null, 5_000L, 4_000L))
+        assertEquals(false, MazdaCx5Protocol.isFresh(5_001L, 5_000L, 4_000L))
+    }
+
+    @Test
     fun decodesVehicleObservedForwardGearValuesOneThroughFive() {
         assertEquals("1", MazdaCx5Protocol.parseGear(response("1E12", "01")))
         assertEquals("2", MazdaCx5Protocol.parseGear(response("1E12", "02")))
