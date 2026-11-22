@@ -136,7 +136,7 @@ private fun DashboardContent(
         }
 
         ConnectionStatusBar(state = connectionState)
-        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it, data.ambientTempC) }
+        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it, data.ambientTempC, prefs) }
         HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(20.dp))
 
@@ -460,7 +460,7 @@ private fun DashboardContent(
 }
 
 @Composable
-private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientTempC: Int?) {
+private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientTempC: Int?, prefs: UserPreferences) {
     var clusterTemperatureF by rememberSaveable { mutableStateOf("") }
     val transmission = data.transmission
     val gearAgeMs = data.gearCapturedAtMs?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
@@ -489,6 +489,25 @@ private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientT
                         fontFamily = FontFamily.Monospace, fontSize = 8.sp,
                         color = if (temperatureAgeMs == null || temperatureAgeMs > 8_000L) NeonYellow else TextSecondary)
                 }
+            }
+            HorizontalDivider(color = SurfaceBorder)
+            Text("INDIVIDUAL WHEEL SPEEDS", fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonCyan)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                StatItem("FRONT LEFT", transmission.frontLeftWheelSpeedKph?.let {
+                    "${"%.0f".format(UnitConverter.speed(it, prefs.speedUnit))} ${prefs.speedUnit.symbol}"
+                } ?: "--", NeonCyan)
+                StatItem("FRONT RIGHT", transmission.frontRightWheelSpeedKph?.let {
+                    "${"%.0f".format(UnitConverter.speed(it, prefs.speedUnit))} ${prefs.speedUnit.symbol}"
+                } ?: "--", NeonCyan)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                StatItem("REAR LEFT", transmission.rearLeftWheelSpeedKph?.let {
+                    "${"%.0f".format(UnitConverter.speed(it, prefs.speedUnit))} ${prefs.speedUnit.symbol}"
+                } ?: "--", NeonOrange)
+                StatItem("REAR RIGHT", transmission.rearRightWheelSpeedKph?.let {
+                    "${"%.0f".format(UnitConverter.speed(it, prefs.speedUnit))} ${prefs.speedUnit.symbol}"
+                } ?: "--", NeonOrange)
             }
             HorizontalDivider(color = SurfaceBorder)
             Text("AMBIENT TEMPERATURE COMPARISON", fontFamily = FontFamily.Monospace,
