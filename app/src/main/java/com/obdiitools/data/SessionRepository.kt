@@ -143,6 +143,7 @@ class SessionRepository @Inject constructor(
                 engineLoadPercent = data.engineLoadPercent,
                 mafGramsPerSec = data.mafGramsPerSec,
                 batteryVoltage = data.batteryVoltage,
+                ambientTempC = data.ambientTempC,
             )
         } else {
             dao.insertDataPoint(
@@ -156,12 +157,26 @@ class SessionRepository @Inject constructor(
                     engineLoadPercent = data.engineLoadPercent,
                     mafGramsPerSec = data.mafGramsPerSec,
                     batteryVoltage = data.batteryVoltage,
+                    ambientTempC = data.ambientTempC,
                     latitude = null,
                     longitude = null,
                     accuracy = null,
                 )
             )
         }
+    }
+
+    suspend fun recordDiagnosticEvent(eventType: String, detail: String? = null) = mutex.withLock {
+        val sessionId = currentSessionId ?: return@withLock
+        val now = System.currentTimeMillis()
+        dao.insertDataPoint(
+            SessionDataPoint(
+                sessionId = sessionId,
+                timestampMs = now,
+                diagnosticEventType = eventType.take(64),
+                diagnosticEventDetail = detail?.take(512),
+            )
+        )
     }
 
     suspend fun recordMazdaTcmData(gear: String?, transmissionTemperatureC: Double?) = mutex.withLock {
