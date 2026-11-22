@@ -76,9 +76,15 @@ object MazdaCx5Protocol {
     fun parseGear(response: UdsResponse): String? {
         if (!response.isSuccess || response.did.uppercase() != GEAR_DID) return null
         val raw = response.dataBytes.firstOrNull() ?: return null
-        // Forward gear values 1 through 6 have been observed on this vehicle.
-        // Other encodings remain unknown; do not infer P/R/N from unverified bytes.
-        return raw.takeIf { it in 1..6 }?.toString()
+        // Forward gear values 1 and 2 and selector values P/R/N were observed
+        // directly on this vehicle. Forward gears 3–6 remain catalogue-based.
+        return when (raw) {
+            0x46 -> "P"
+            0x3C -> "R"
+            0x32 -> "N"
+            in 1..6 -> raw.toString()
+            else -> null
+        }
     }
 
     fun parseTransmissionTemperatureC(response: UdsResponse): Double? {
