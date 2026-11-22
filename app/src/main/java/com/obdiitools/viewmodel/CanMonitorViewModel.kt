@@ -16,6 +16,7 @@ import com.obdiitools.util.CanDecoder
 import com.obdiitools.util.DbcParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,8 @@ class CanMonitorViewModel @Inject constructor(
     private val _dbcLoaded    = MutableStateFlow(false)
     private val _decodedMap   = MutableStateFlow<Map<String, DecodedSignal>>(emptyMap())
     private val _captureCount = MutableStateFlow(0)
+    private val _monitorStatus = MutableStateFlow("Stopped")
+    val monitorStatus: StateFlow<String> = _monitorStatus.asStateFlow()
 
     val captureCount: StateFlow<Int> = _captureCount.asStateFlow()
     private val captureLock = Any()
@@ -119,9 +122,6 @@ class CanMonitorViewModel @Inject constructor(
         if (activePauseLease == lease) {
             activePauseLease = null
             _isMonitoring.value = false
-            synchronized(captureLock) {
-                finishCapture()
-            }
             repository.resumePolling()
         }
     }
@@ -147,8 +147,8 @@ class CanMonitorViewModel @Inject constructor(
 
     private fun beginCapture() {
         synchronized(captureLock) {
-            runCatching { captureWriter?.close() }
-            captureFile?.delete()
+            // Keep one capture open across repeated monitor start/stop cycles.
+            if (captureWriter != null) return
             captureStartedAtMs = System.currentTimeMillis()
             captureStartedElapsedMs = SystemClock.elapsedRealtime()
             _captureElapsedMs.value = 0L
@@ -219,6 +219,7 @@ class CanMonitorViewModel @Inject constructor(
     fun startMonitoring() {
         if (_isMonitoring.value) return
         _isMonitoring.value = true
+        _monitorStatus.value = "Listening"
         beginCapture()
         val pauseLease = acquirePollingPause()
         monitorJob = viewModelScope.launch(Dispatchers.IO) {
@@ -251,8 +252,13 @@ class CanMonitorViewModel @Inject constructor(
                         }
                     }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _monitorStatus.value = "Monitor ended: ${error.message ?: error.javaClass.simpleName}"
             } finally {
                 elapsedTicker.cancel()
+                if (_monitorStatus.value == "Listening") _monitorStatus.value = "Stream ended"
                 finishMonitoring(pauseLease)
             }
         }
@@ -262,12 +268,13 @@ class CanMonitorViewModel @Inject constructor(
         monitorJob?.cancel()
         monitorJob = null
         _isMonitoring.value = false
+        if (_monitorStatus.value == "Listening") _monitorStatus.value = "Stopped"
         releaseActivePollingPause()
-        finishCapture()
     }
 
     override fun onCleared() {
         stopMonitoring()
+        finishCapture()
         super.onCleared()
     }
 }
