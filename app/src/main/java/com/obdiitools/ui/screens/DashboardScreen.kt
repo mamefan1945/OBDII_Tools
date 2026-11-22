@@ -20,6 +20,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberSaveable
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -130,7 +135,7 @@ private fun DashboardContent(
         }
 
         ConnectionStatusBar(state = connectionState)
-        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it) }
+        mazdaCx5Data?.let { MazdaTransmissionDashboardCard(it, ambientTempC) }
         HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(20.dp))
 
@@ -331,7 +336,7 @@ private fun DashboardContent(
                 )
                 if ("0146" in confirmedPids) StatItem(
                     label = "AMBIENT",
-                    value = data.ambientTempC?.let { UnitConverter.formatTemp(it, prefs.temperatureUnit) + prefs.temperatureUnit.symbol } ?: "--",
+                    value = ambientTempC?.let { UnitConverter.formatTemp(it, prefs.temperatureUnit) + prefs.temperatureUnit.symbol } ?: "--",
                     color = NeonCyan,
                 )
                 if ("0133" in confirmedPids) StatItem(
@@ -454,41 +459,66 @@ private fun DashboardContent(
 }
 
 @Composable
-private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData) {
+private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientTempC: Int?) {
+    var clusterTemperatureF by rememberSaveable { mutableStateOf("") }
     val transmission = data.transmission
-    if (transmission.gear == null && transmission.transmissionTemperatureC == null) return
+    val gearAgeMs = data.gearCapturedAtMs?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
+    val temperatureAgeMs = data.temperatureCapturedAtMs?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
+    val clusterF = clusterTemperatureF.toFloatOrNull()
+
     Spacer(Modifier.height(16.dp))
     GlassCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         accentColor = NeonOrange,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "MAZDA CX-5 TRANSMISSION",
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 10.sp,
-                color = NeonOrange,
-                letterSpacing = 1.5.sp,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround,
-            ) {
-                transmission.gear?.let { StatItem("SELECTED GEAR", it, NeonCyan) }
-                transmission.transmissionTemperatureC?.let {
-                    StatItem("ATF TEMP", "%.1f °C".format(it), NeonOrange)
+            Text("MAZDA CX-5 TRANSMISSION", fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonOrange,
+                letterSpacing = 1.5.sp)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    StatItem("SELECTED GEAR", transmission.gear ?: "--", NeonCyan)
+                    Text(gearAgeMs?.let { "age \${"%.1f".format(it / 1000.0)}s" } ?: "no reading",
+                        fontFamily = FontFamily.Monospace, fontSize = 8.sp,
+                        color = if (gearAgeMs == null || gearAgeMs > 4_000L) NeonYellow else TextSecondary)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    StatItem("ATF TEMP", transmission.transmissionTemperatureC?.let { "%.1f °C".format(it) } ?: "--", NeonOrange)
+                    Text(temperatureAgeMs?.let { "age \${"%.1f".format(it / 1000.0)}s" } ?: "no reading",
+                        fontFamily = FontFamily.Monospace, fontSize = 8.sp,
+                        color = if (temperatureAgeMs == null || temperatureAgeMs > 8_000L) NeonYellow else TextSecondary)
                 }
             }
-            Text(
-                "Read-only TCM data · updated ${java.time.Instant.ofEpochMilli(data.capturedAtMs)}",
-                fontFamily = FontFamily.Monospace,
-                fontSize = 8.sp,
-                color = TextSecondary,
+            HorizontalDivider(color = SurfaceBorder)
+            Text("AMBIENT TEMPERATURE COMPARISON", fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonCyan)
+            Text("OBD-II PID 46: \${ambientTempC?.let { "%.0f °F".format(it * 9f / 5f + 32f) } ?: "--"}",
+                fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
+            OutlinedTextField(
+                value = clusterTemperatureF,
+                onValueChange = { value ->
+                    if (value.length <= 6 && (value.isEmpty() || value.matches(Regex("-?\\\\d{0,3}(\\\\.\\\\d{0,1})?")))) {
+                        clusterTemperatureF = value
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Instrument cluster reading (°F)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
+            val pid46F = ambientTempC?.let { it * 9f / 5f + 32f }
+            val difference = if (pid46F != null && clusterF != null) pid46F - clusterF else null
+            Text(
+                difference?.let { "PID 46 minus cluster: \${if (it > 0) "+" else ""}\${"%.1f".format(it)} °F" }
+                    ?: "Enter the cluster temperature to calculate the difference",
+                fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                color = if (difference != null && kotlin.math.abs(difference) >= 3f) NeonYellow else TextSecondary)
+            Text("Read-only TCM data · individual signal ages shown above",
+                fontFamily = FontFamily.Monospace, fontSize = 8.sp, color = TextSecondary)
         }
     }
 }
+
 
 @Composable
 private fun StatItem(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
