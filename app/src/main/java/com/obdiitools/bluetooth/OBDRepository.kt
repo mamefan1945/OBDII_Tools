@@ -80,6 +80,7 @@ class OBDRepository @Inject constructor(
     private var lastMazdaGearFailureAtMs = 0L
     private var lastMazdaTemperatureFailureAtMs = 0L
     private var lastMazdaWheelSpeedPollAtMs = 0L
+    private var nextMazdaWheelSpeedDidIndex = 0
     private var lastMazdaWheelSpeedFailureAtMs = mutableMapOf<String, Long>()
     private var mazdaWheelSpeedCapturedAtMs = mutableMapOf<String, Long>()
     // Keep repeated identical TCM failures from creating hundreds of duplicate session rows.
@@ -122,6 +123,7 @@ class OBDRepository @Inject constructor(
             lastMazdaGearFailureAtMs = 0L
             lastMazdaTemperatureFailureAtMs = 0L
             lastMazdaWheelSpeedPollAtMs = 0L
+            nextMazdaWheelSpeedDidIndex = 0
             lastMazdaWheelSpeedFailureAtMs.clear()
             mazdaWheelSpeedCapturedAtMs.clear()
             lastMazdaDiagnosticEventAtMs.clear()
@@ -1086,9 +1088,14 @@ class OBDRepository @Inject constructor(
                 com.obdiitools.obd.MazdaCx5Protocol.REAR_LEFT_WHEEL_SPEED_DID,
                 com.obdiitools.obd.MazdaCx5Protocol.REAR_RIGHT_WHEEL_SPEED_DID,
             )
-            for (did in wheelDids) {
-                if (pollingPaused) break
-                if (now - (lastMazdaWheelSpeedFailureAtMs[did] ?: 0L) < MAZDA_FAILED_READ_RETRY_MS) continue
+            val nextDid = (0 until wheelDids.size)
+                .map { (nextMazdaWheelSpeedDidIndex + it) % wheelDids.size }
+                .firstOrNull { index ->
+                    now - (lastMazdaWheelSpeedFailureAtMs[wheelDids[index]] ?: 0L) >= MAZDA_FAILED_READ_RETRY_MS
+                }
+            if (nextDid != null) {
+                val did = wheelDids[nextDid]
+                nextMazdaWheelSpeedDidIndex = (nextDid + 1) % wheelDids.size
                 try {
                     val raw = conn.queryUds(com.obdiitools.obd.MazdaCx5Protocol.DSC_REQUEST_ID, did)
                     val parsed = UdsResponse.parse(
@@ -1504,7 +1511,7 @@ class OBDRepository @Inject constructor(
     companion object {
         private const val MAZDA_GEAR_POLL_INTERVAL_MS = 1_000L
         private const val MAZDA_TEMPERATURE_POLL_INTERVAL_MS = 2_500L
-        private const val MAZDA_WHEEL_SPEED_POLL_INTERVAL_MS = 1_000L
+        private const val MAZDA_WHEEL_SPEED_POLL_INTERVAL_MS = 250L
         private const val MAZDA_FAILED_READ_RETRY_MS = 5_000L
         private const val MAZDA_DIAGNOSTIC_EVENT_INTERVAL_MS = 60_000L
         private const val MAZDA_DATA_STALE_AFTER_MS = 10_000L
