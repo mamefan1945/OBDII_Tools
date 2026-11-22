@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SessionEntity::class, SessionDataPoint::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class OBDDatabase : RoomDatabase() {
@@ -43,6 +43,14 @@ abstract class OBDDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE session_data_points ADD COLUMN cvtPrimaryPressureMpa REAL")
                 database.execSQL("ALTER TABLE session_data_points ADD COLUMN cvtSecondaryPressureMpa REAL")
                 database.execSQL("ALTER TABLE session_data_points ADD COLUMN cvtTargetSecondaryPressureMpa REAL")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE session_data_points ADD COLUMN ambientTempC INTEGER")
+                database.execSQL("ALTER TABLE session_data_points ADD COLUMN diagnosticEventType TEXT")
+                database.execSQL("ALTER TABLE session_data_points ADD COLUMN diagnosticEventDetail TEXT")
             }
         }
 
