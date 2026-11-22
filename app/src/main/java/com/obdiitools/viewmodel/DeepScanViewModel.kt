@@ -39,6 +39,12 @@ class DeepScanViewModel @Inject constructor(
 
     data class SupportedPid(val code: String, val name: String)
 
+    data class RawPidCandidate(
+        val code: String,
+        val rawResponse: String,
+        val responseDataBytes: Int,
+    )
+
     data class EcuResult(
         val address: String,
         val addressHint: String?,
@@ -47,6 +53,7 @@ class DeepScanViewModel @Inject constructor(
         val ecuVin: String? = null,
         val identityStatus: String? = null,
         val validatedMode01Pids: List<SupportedPid> = emptyList(),
+        val rawMode01Candidates: List<RawPidCandidate> = emptyList(),
     ) {
         val totalPids get() = mode01Pids.size + mode09Pids.size
         val validatedCount get() = validatedMode01Pids.size
@@ -188,6 +195,37 @@ class DeepScanViewModel @Inject constructor(
                     }
                     if (!isActive) return@forEachIndexed
 
+                    // Capture raw responses for advertised standard PIDs that do not
+                    // yet have a decoder. Two positive reads of the same byte length
+                    // reduce false leads while preserving values for later analysis.
+                    val knownPidCodes = AllPidDefinitions.ALL.map { it.command }.toSet()
+                    val rawCandidates = mutableListOf<RawPidCandidate>()
+                    mode01.asSequence()
+                        .filter { it !in knownPidCodes }
+                        .sorted()
+                        .take(MAX_RAW_MODE01_CANDIDATES_PER_ECU)
+                        .forEach { pid ->
+                            if (!isActive) return@forEach
+                            _scanState.value = _scanState.value.copy(
+                                phase = "Capturing undecoded PID — ECU 0x$addr / $pid",
+                            )
+                            val firstRaw = repository.queryRawMode01Pid(addr, pid)
+                            if (!isPositiveMode01Response(firstRaw, pid)) return@forEach
+                            delay(100)
+                            val secondRaw = repository.queryRawMode01Pid(addr, pid)
+                            if (!isPositiveMode01Response(secondRaw, pid)) return@forEach
+                            val firstBytes = mode01ResponseDataBytes(firstRaw, pid)
+                            val secondBytes = mode01ResponseDataBytes(secondRaw, pid)
+                            if (firstBytes > 0 && firstBytes == secondBytes) {
+                                rawCandidates += RawPidCandidate(
+                                    code = pid,
+                                    rawResponse = secondRaw.take(180),
+                                    responseDataBytes = secondBytes,
+                                )
+                            }
+                        }
+                    if (!isActive) return@forEachIndexed
+
                     // Mode 09 is queried on the broadcast address and conventional
                     // engine request address. A response proves support, not ECU identity.
                     val mode09 = if (addr == "7DF" || addr.uppercase() == "7E0") {
@@ -228,6 +266,7 @@ class DeepScanViewModel @Inject constructor(
                                 }
                             },
                             validatedMode01Pids = validatedMode01,
+                            rawMode01Candidates = rawCandidates,
                         )
                     )
                     // Emit partial results as we go so the UI updates live
@@ -383,6 +422,26 @@ class DeepScanViewModel @Inject constructor(
     private fun mode09PidName(code: String) = MODE09_NAMES[code.uppercase()] ?: "Info ${code.takeLast(2)}"
 
     companion object {
+        private const val MAX_RAW_MODE01_CANDIDATES_PER_ECU = 12
+
+        private fun isPositiveMode01Response(raw: String, pid: String): Boolean {
+            val prefix = "41" + pid.takeLast(2)
+            return raw.split(Regex("[\\r\\n]+")).any { line ->
+                line.replace(Regex("[^0-9A-Fa-f]"), "")
+                    .uppercase()
+                    .let { it.startsWith(prefix) && it.length >= prefix.length + 2 }
+            }
+        }
+
+        private fun mode01ResponseDataBytes(raw: String, pid: String): Int {
+            val prefix = "41" + pid.takeLast(2)
+            val line = raw.split(Regex("[\\r\\n]+"))
+                .map { it.replace(Regex("[^0-9A-Fa-f]"), "").uppercase() }
+                .firstOrNull { it.startsWith(prefix) && it.length >= prefix.length + 2 }
+                ?: return 0
+            return (line.length - prefix.length) / 2
+        }
+
         private val MODE09_NAMES = mapOf(
             "0901" to "VIN Message Count",
             "0902" to "Vehicle Identification Number (VIN)",
