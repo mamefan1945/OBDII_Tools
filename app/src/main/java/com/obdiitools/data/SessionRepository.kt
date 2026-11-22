@@ -179,16 +179,25 @@ class SessionRepository @Inject constructor(
         )
     }
 
-    suspend fun recordMazdaTcmData(gear: String?, transmissionTemperatureC: Double?) = mutex.withLock {
+    suspend fun recordMazdaTcmData(
+        gear: String?,
+        transmissionTemperatureC: Double?,
+        frontLeftWheelSpeedKph: Int? = null,
+        frontRightWheelSpeedKph: Int? = null,
+        rearLeftWheelSpeedKph: Int? = null,
+        rearRightWheelSpeedKph: Int? = null,
+    ) = mutex.withLock {
         val sessionId = currentSessionId ?: return@withLock
-        if (gear == null && transmissionTemperatureC == null) return@withLock
+        if (gear == null && transmissionTemperatureC == null &&
+            frontLeftWheelSpeedKph == null && frontRightWheelSpeedKph == null &&
+            rearLeftWheelSpeedKph == null && rearRightWheelSpeedKph == null) return@withLock
         val now = System.currentTimeMillis()
         // Prefer attaching TCM values to the nearest standard OBD sample. If none
         // exists, merge with a nearby Mazda-only sample before creating another row.
         val nearbyPoint = dao.findNearbyObdPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
             ?: dao.findNearbyMazdaOnlyPoint(sessionId, now, SESSION_POINT_MATCH_WINDOW_MS)
         if (nearbyPoint != null) {
-            dao.updatePointWithMazdaTcm(nearbyPoint.id, gear, transmissionTemperatureC)
+            dao.updatePointWithMazdaTcm(nearbyPoint.id, gear, transmissionTemperatureC, frontLeftWheelSpeedKph, frontRightWheelSpeedKph, rearLeftWheelSpeedKph, rearRightWheelSpeedKph)
         } else {
             dao.insertDataPoint(
                 SessionDataPoint(
@@ -196,6 +205,10 @@ class SessionRepository @Inject constructor(
                     timestampMs = now,
                     mazdaSelectedGear = gear,
                     mazdaTransmissionTempC = transmissionTemperatureC,
+                    mazdaFrontLeftWheelSpeedKph = frontLeftWheelSpeedKph,
+                    mazdaFrontRightWheelSpeedKph = frontRightWheelSpeedKph,
+                    mazdaRearLeftWheelSpeedKph = rearLeftWheelSpeedKph,
+                    mazdaRearRightWheelSpeedKph = rearRightWheelSpeedKph,
                 )
             )
         }
