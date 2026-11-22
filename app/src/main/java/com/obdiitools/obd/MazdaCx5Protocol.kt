@@ -43,6 +43,9 @@ object MazdaCx5Protocol {
     const val GEAR_DID = "1E12"
     const val TRANSMISSION_TEMPERATURE_DID = "1E1C"
 
+    fun isFresh(capturedAtMs: Long?, nowMs: Long, maxAgeMs: Long): Boolean =
+        capturedAtMs != null && nowMs >= capturedAtMs && nowMs - capturedAtMs <= maxAgeMs
+
     fun parseGear(response: UdsResponse): String? {
         if (!response.isSuccess || response.did.uppercase() != GEAR_DID) return null
         val raw = response.dataBytes.firstOrNull() ?: return null
