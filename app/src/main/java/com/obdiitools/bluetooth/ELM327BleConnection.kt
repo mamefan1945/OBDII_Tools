@@ -275,7 +275,7 @@ class ELM327BleConnection(
             drainRxChannel()
             sendRaw("22$did")
             // Preserve indexed continuation lines for the UDS parser.
-            readResponseLines(3000).joinToString("\\n")
+            readResponseLines(3000).joinToString("\n")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } finally {
