@@ -478,13 +478,13 @@ private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientT
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     StatItem("SELECTED GEAR", transmission.gear ?: "--", NeonCyan)
-                    Text(gearAgeMs?.let { "age \${"%.1f".format(it / 1000.0)}s" } ?: "no reading",
+                    Text(gearAgeMs?.let { "age ${"%.1f".format(it / 1000.0)}s" } ?: "no reading",
                         fontFamily = FontFamily.Monospace, fontSize = 8.sp,
                         color = if (gearAgeMs == null || gearAgeMs > 4_000L) NeonYellow else TextSecondary)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     StatItem("ATF TEMP", transmission.transmissionTemperatureC?.let { "%.1f °C".format(it) } ?: "--", NeonOrange)
-                    Text(temperatureAgeMs?.let { "age \${"%.1f".format(it / 1000.0)}s" } ?: "no reading",
+                    Text(temperatureAgeMs?.let { "age ${"%.1f".format(it / 1000.0)}s" } ?: "no reading",
                         fontFamily = FontFamily.Monospace, fontSize = 8.sp,
                         color = if (temperatureAgeMs == null || temperatureAgeMs > 8_000L) NeonYellow else TextSecondary)
                 }
@@ -492,7 +492,7 @@ private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientT
             HorizontalDivider(color = SurfaceBorder)
             Text("AMBIENT TEMPERATURE COMPARISON", fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonCyan)
-            Text("OBD-II PID 46: \${ambientTempC?.let { "%.0f °F".format(it * 9f / 5f + 32f) } ?: "--"}",
+            Text("OBD-II PID 46: ${ambientTempC?.let { "%.0f °F".format(it * 9f / 5f + 32f) } ?: "--"}",
                 fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
             OutlinedTextField(
                 value = clusterTemperatureF,
@@ -509,7 +509,7 @@ private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientT
             val pid46F = ambientTempC?.let { it * 9f / 5f + 32f }
             val difference = if (pid46F != null && clusterF != null) pid46F - clusterF else null
             Text(
-                difference?.let { "PID 46 minus cluster: \${if (it > 0) "+" else ""}\${"%.1f".format(it)} °F" }
+                difference?.let { "PID 46 minus cluster: ${if (it > 0) "+" else ""}${"%.1f".format(it)} °F" }
                     ?: "Enter the cluster temperature to calculate the difference",
                 fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                 color = if (difference != null && kotlin.math.abs(difference) >= 3f) NeonYellow else TextSecondary)
