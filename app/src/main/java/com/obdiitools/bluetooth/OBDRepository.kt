@@ -1007,7 +1007,11 @@ class OBDRepository @Inject constructor(
         if (!gearFresh) gear = null
         if (!temperatureFresh) temperatureC = null
 
-        if (receivedValidData || _mazdaCx5DashboardData.value != null) {
+        val previousDashboard = _mazdaCx5DashboardData.value
+        val staleValueExpired =
+            previousDashboard?.transmission?.gear != gear ||
+                previousDashboard?.transmission?.transmissionTemperatureC != temperatureC
+        if (receivedValidData || gearDue || temperatureDue || staleValueExpired) {
             val data = MazdaCx5TransmissionData(
                 gear = gear,
                 transmissionTemperatureC = temperatureC,
