@@ -44,6 +44,7 @@ import com.obdiitools.ui.components.CircularGauge
 import com.obdiitools.ui.components.ConnectionStatusBar
 import com.obdiitools.ui.components.ConnectDevicePrompt
 import com.obdiitools.ui.components.GlassCard
+import com.obdiitools.ui.components.ShifterPositionCard
 import com.obdiitools.ui.components.LinearGauge
 import com.obdiitools.ui.theme.BackgroundDeep
 import com.obdiitools.ui.theme.NeonCyan
@@ -476,6 +477,17 @@ private fun MazdaTransmissionDashboardCard(data: MazdaCx5DashboardData, ambientT
             Text("MAZDA CX-5 TRANSMISSION", fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold, fontSize = 10.sp, color = NeonOrange,
                 letterSpacing = 1.5.sp)
+            val gearIsFresh = gearAgeMs != null && gearAgeMs <= 4_000L
+            val selector = transmission.gear?.let { value ->
+                when (value) { "P", "R", "N" -> value; else -> "D" }
+            }
+            ShifterPositionCard(
+                title = "MAZDA CX-5 • AUTOMATIC SELECTOR",
+                positions = listOf("P", "R", "N", "D"),
+                selectedPosition = selector.takeIf { gearIsFresh },
+                detailText = transmission.gear?.takeIf { it.toIntOrNull() != null }?.let { "DRIVE · GEAR $it" },
+                statusText = if (gearIsFresh) "Live TCM position" else "No current selector reading",
+            )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     StatItem("SELECTED GEAR", transmission.gear ?: "--", NeonCyan)
