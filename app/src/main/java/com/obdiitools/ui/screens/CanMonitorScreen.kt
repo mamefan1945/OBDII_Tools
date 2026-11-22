@@ -86,6 +86,8 @@ fun CanMonitorScreen(
     val captureCount   by viewModel.captureCount.collectAsState()
     val captureElapsedMs by viewModel.captureElapsedMs.collectAsState()
     val monitorStatus by viewModel.monitorStatus.collectAsState()
+    val lastFrameAgeMs by viewModel.lastFrameAgeMs.collectAsState()
+    val quietGapCount by viewModel.quietGapCount.collectAsState()
 
     val saveCaptureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
@@ -102,7 +104,9 @@ fun CanMonitorScreen(
     }
 
     val captureSeconds = captureElapsedMs / 1000
-    val subtitle = if (showDecoded) "${decodedSignals.size} signals · $monitorStatus" else "${filteredFrames.size} shown / $captureCount captured · ${captureSeconds}s · $monitorStatus"
+    val frameAgeText = lastFrameAgeMs?.let { "last frame ${it / 1000}s" } ?: "no frames yet"
+    val diagnosticText = "$frameAgeText · gaps $quietGapCount"
+    val subtitle = if (showDecoded) "${decodedSignals.size} signals · $monitorStatus · $diagnosticText" else "${filteredFrames.size} shown / $captureCount captured · ${captureSeconds}s · $monitorStatus · $diagnosticText"
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
