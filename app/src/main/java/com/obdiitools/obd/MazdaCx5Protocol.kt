@@ -12,6 +12,10 @@ data class MazdaCx5TransmissionData(
     val transmissionTemperatureC: Double?,
     val rawGearResponse: String = "",
     val rawTemperatureResponse: String = "",
+    val frontLeftWheelSpeedKph: Int? = null,
+    val frontRightWheelSpeedKph: Int? = null,
+    val rearLeftWheelSpeedKph: Int? = null,
+    val rearRightWheelSpeedKph: Int? = null,
 )
 
 data class MazdaDidCandidate(val did: String, val description: String, val vehicleVerified: Boolean = false)
@@ -21,6 +25,10 @@ data class MazdaCx5DashboardData(
     val capturedAtMs: Long,
     val gearCapturedAtMs: Long? = null,
     val temperatureCapturedAtMs: Long? = null,
+    val frontLeftWheelSpeedCapturedAtMs: Long? = null,
+    val frontRightWheelSpeedCapturedAtMs: Long? = null,
+    val rearLeftWheelSpeedCapturedAtMs: Long? = null,
+    val rearRightWheelSpeedCapturedAtMs: Long? = null,
 )
 
 /**
@@ -42,6 +50,25 @@ object MazdaCx5Protocol {
     const val TCM_REQUEST_ID = "7E1"
     const val GEAR_DID = "1E12"
     const val TRANSMISSION_TEMPERATURE_DID = "1E1C"
+    const val DSC_REQUEST_ID = "760"
+    const val FRONT_RIGHT_WHEEL_SPEED_DID = "2B06"
+    const val FRONT_LEFT_WHEEL_SPEED_DID = "2B07"
+    const val REAR_RIGHT_WHEEL_SPEED_DID = "2B08"
+    const val REAR_LEFT_WHEEL_SPEED_DID = "2B09"
+    val WHEEL_SPEED_DIDS = listOf(
+        FRONT_LEFT_WHEEL_SPEED_DID,
+        FRONT_RIGHT_WHEEL_SPEED_DID,
+        REAR_LEFT_WHEEL_SPEED_DID,
+        REAR_RIGHT_WHEEL_SPEED_DID,
+    )
+
+    /** The DSC DIDs return one unsigned byte directly in km/h (0..200). */
+    fun parseWheelSpeedKph(response: UdsResponse, did: String): Int? {
+        if (!response.isSuccess || response.did.uppercase() != did.uppercase() ||
+            did.uppercase() !in WHEEL_SPEED_DIDS) return null
+        val value = response.dataBytes.firstOrNull() ?: return null
+        return value.takeIf { it in 0..200 }
+    }
 
     fun isFresh(capturedAtMs: Long?, nowMs: Long, maxAgeMs: Long): Boolean =
         capturedAtMs != null && nowMs >= capturedAtMs && nowMs - capturedAtMs <= maxAgeMs
