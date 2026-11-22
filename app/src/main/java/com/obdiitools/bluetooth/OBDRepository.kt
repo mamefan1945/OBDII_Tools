@@ -83,6 +83,8 @@ class OBDRepository @Inject constructor(
     private var mazdaTemperatureCapturedAtMs: Long? = null
 
     fun updateMazdaCx5DashboardData(data: MazdaCx5TransmissionData?, capturedAtMs: Long) {
+        mazdaGearCapturedAtMs = capturedAtMs.takeIf { data?.gear != null }
+        mazdaTemperatureCapturedAtMs = capturedAtMs.takeIf { data?.transmissionTemperatureC != null }
         _mazdaCx5DashboardData.value = data?.let {
             MazdaCx5DashboardData(
                 transmission = it,
