@@ -38,6 +38,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -164,12 +165,10 @@ fun SessionScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundDeep),
-    ) {
-        TopAppBar(
+    Scaffold(
+        containerColor = BackgroundDeep,
+        topBar = {
+            TopAppBar(
             title = {
                 Column {
                     Text(
@@ -218,10 +217,16 @@ fun SessionScreen(
                     }
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundDeep),
-        )
-
-        HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundDeep),
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            HorizontalDivider(color = SurfaceBorder, modifier = Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(12.dp))
 
         if (selectedSession != null) {
@@ -238,6 +243,7 @@ fun SessionScreen(
                 onDelete = { viewModel.deleteSession(it.id) },
             )
         }
+    }
     }
 
     if (showShareDialog) {
