@@ -87,7 +87,7 @@ object SessionExporter {
         val columns = mutableListOf("timestamp_ms", "elapsed_sec")
         if (options.includeObdTelemetry) columns += listOf(
             "rpm", "speed_kph", "coolant_c", "throttle_pct", "engine_load_pct",
-            "maf_g_s", "battery_v",
+            "maf_g_s", "battery_v", "ambient_temp_c",
         )
         if (options.includeCvtTelemetry) columns += listOf(
             "cvt_speed_kph", "cvt_engine_rpm", "cvt_slip_rpm", "cvt_slip_raw_hex",
@@ -96,6 +96,7 @@ object SessionExporter {
             "cvt_target_secondary_pressure_mpa",
         )
         if (options.includeMazdaTcmTelemetry) columns += listOf("mazda_selected_gear", "mazda_transmission_temp_c")
+        columns += listOf("diagnostic_event_type", "diagnostic_event_detail")
         if (options.includeGps) columns += listOf("latitude", "longitude", "gps_accuracy_m")
         sb.appendLine(columns.joinToString(","))
 
@@ -111,6 +112,7 @@ object SessionExporter {
                 pt.engineLoadPercent?.let { "%.1f".format(Locale.US, it) }.orEmpty(),
                 pt.mafGramsPerSec?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
                 pt.batteryVoltage?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
+                pt.ambientTempC?.toString().orEmpty(),
             )
             if (options.includeCvtTelemetry) row += listOf(
                 pt.cvtSpeedKph?.toString().orEmpty(),
@@ -127,6 +129,10 @@ object SessionExporter {
             if (options.includeMazdaTcmTelemetry) row += listOf(
                 pt.mazdaSelectedGear.orEmpty(),
                 pt.mazdaTransmissionTempC?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
+            )
+            row += listOf(
+                pt.diagnosticEventType?.let(::csvSafeCell).orEmpty(),
+                pt.diagnosticEventDetail?.let(::csvSafeCell).orEmpty(),
             )
             if (options.includeGps) row += listOf(
                 pt.latitude?.let { "%.7f".format(Locale.US, it) }.orEmpty(),
