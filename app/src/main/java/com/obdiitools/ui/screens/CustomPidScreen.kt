@@ -1,6 +1,7 @@
 package com.obdiitools.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +79,7 @@ fun CustomPidScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(
+        windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Column {
                         Text(
