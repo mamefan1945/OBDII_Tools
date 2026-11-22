@@ -55,4 +55,7 @@ data class SessionDataPoint(
     val accuracy: Float? = null,
     val mazdaSelectedGear: String? = null,
     val mazdaTransmissionTempC: Double? = null,
+    val ambientTempC: Int? = null,
+    val diagnosticEventType: String? = null,
+    val diagnosticEventDetail: String? = null,
 )
