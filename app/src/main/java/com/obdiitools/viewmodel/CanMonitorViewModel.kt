@@ -3,6 +3,7 @@ package com.obdiitools.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
@@ -54,7 +55,9 @@ class CanMonitorViewModel @Inject constructor(
     private var captureFile: File? = null
     private var captureWriter: BufferedWriter? = null
     private var captureStartedAtMs = 0L
-    private var firstFrameNanos: Long? = null
+    private var captureStartedElapsedMs = 0L
+    private val _captureElapsedMs = MutableStateFlow(0L)
+    val captureElapsedMs: StateFlow<Long> = _captureElapsedMs.asStateFlow()
 
     val filterText:   StateFlow<String>  = _filterText.asStateFlow()
     val isMonitoring: StateFlow<Boolean> = _isMonitoring.asStateFlow()
@@ -117,8 +120,7 @@ class CanMonitorViewModel @Inject constructor(
             activePauseLease = null
             _isMonitoring.value = false
             synchronized(captureLock) {
-                runCatching { captureWriter?.flush(); captureWriter?.close() }
-                captureWriter = null
+                finishCapture()
             }
             repository.resumePolling()
         }
@@ -148,7 +150,8 @@ class CanMonitorViewModel @Inject constructor(
             runCatching { captureWriter?.close() }
             captureFile?.delete()
             captureStartedAtMs = System.currentTimeMillis()
-            firstFrameNanos = null
+            captureStartedElapsedMs = SystemClock.elapsedRealtime()
+            _captureElapsedMs.value = 0L
             _captureCount.value = 0
             val file = File(context.filesDir, "can_capture_${captureStartedAtMs}.csv")
             captureFile = file
@@ -159,17 +162,34 @@ class CanMonitorViewModel @Inject constructor(
         }
     }
 
+    private fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
+
     private fun recordCaptureFrame(frame: CanFrame) {
         synchronized(captureLock) {
             val writer = captureWriter ?: return
-            val first = firstFrameNanos ?: frame.receivedAt.also { firstFrameNanos = it }
-            val elapsedMs = ((frame.receivedAt - first) / 1_000_000L).coerceAtLeast(0L)
+            // Measure from START, not from the first frame. This makes quiet periods
+            // and delayed first frames visible in the exported timeline.
+            val elapsedMs = (SystemClock.elapsedRealtime() - captureStartedElapsedMs).coerceAtLeast(0L)
             val timestampMs = captureStartedAtMs + elapsedMs
             val bytes = frame.data.joinToString(" ") { "%02X".format(it) }
-            fun csv(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
             writer.append("$timestampMs,$elapsedMs,${frame.id},${frame.data.size},${frame.dataHex},${csv(bytes)},${csv(frame.rawLine)}\n")
             _captureCount.value += 1
             if (_captureCount.value % 128 == 0) writer.flush()
+        }
+    }
+
+    private fun finishCapture() {
+        synchronized(captureLock) {
+            val writer = captureWriter ?: return
+            val elapsedMs = (SystemClock.elapsedRealtime() - captureStartedElapsedMs).coerceAtLeast(0L)
+            _captureElapsedMs.value = elapsedMs
+            val summary = "duration_ms=$elapsedMs,valid_frames=${_captureCount.value}"
+            runCatching {
+                writer.append("SUMMARY,$elapsedMs,,,,,${csv(summary)}\n")
+                writer.flush()
+                writer.close()
+            }
+            captureWriter = null
         }
     }
 
@@ -202,6 +222,12 @@ class CanMonitorViewModel @Inject constructor(
         beginCapture()
         val pauseLease = acquirePollingPause()
         monitorJob = viewModelScope.launch(Dispatchers.IO) {
+            val elapsedTicker = launch {
+                while (true) {
+                    _captureElapsedMs.value = (SystemClock.elapsedRealtime() - captureStartedElapsedMs).coerceAtLeast(0L)
+                    kotlinx.coroutines.delay(250)
+                }
+            }
             try {
                 repository.canMonitorFlow().collect { frame ->
                     recordCaptureFrame(frame)
@@ -226,6 +252,7 @@ class CanMonitorViewModel @Inject constructor(
                     }
                 }
             } finally {
+                elapsedTicker.cancel()
                 finishMonitoring(pauseLease)
             }
         }
@@ -236,10 +263,7 @@ class CanMonitorViewModel @Inject constructor(
         monitorJob = null
         _isMonitoring.value = false
         releaseActivePollingPause()
-        synchronized(captureLock) {
-            runCatching { captureWriter?.flush(); captureWriter?.close() }
-            captureWriter = null
-        }
+        finishCapture()
     }
 
     override fun onCleared() {
