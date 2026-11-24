@@ -78,6 +78,27 @@ class CVTViewModel @Inject constructor(
 
     private var pollJob: Job? = null
 
+    init {
+        viewModelScope.launch {
+            repository.nissanCvt7Data.collect { _cvtData.value = it }
+        }
+        viewModelScope.launch {
+            repository.nissanCvt7Status.collect { _sourceDescription.value = it }
+        }
+        viewModelScope.launch {
+            repository.nissanCvt7Diagnostics.collect { _livePollDiagnostics.value = it }
+        }
+        viewModelScope.launch {
+            repository.nissanCvt7EcuAddress.collect { address ->
+                nissanCvt7EcuAddress = address
+                nissanCvt7Detected = address != null
+                _transmissionModel.value = if (address != null) "Jatco CVT7" else "Not identified"
+                _transmissionPartNumber.value = if (address != null) "31036-4AT0C" else null
+                _transmissionEcuAddress.value = address
+            }
+        }
+    }
+
     private var pauseGeneration = 0L
     private var activePauseLease: Long? = null
 
@@ -120,30 +141,9 @@ class CVTViewModel @Inject constructor(
     private data class Sample(val rpm: Int, val speed: Int)
     private val window = ArrayDeque<Sample>(WINDOW_SIZE + 1)
 
-    fun start() {
-        if (!repository.isConnected || pollJob?.isActive == true) return
-        pollJob?.cancel()
-        pollJob = viewModelScope.launch {
-            try {
-                if (!probeComplete) {
-                    // Discovery changes ELM protocol/header settings. Pause ordinary
-                    // polling only for this one-time transaction, then let both
-                    // polling loops run; SerializedOBDConnection prevents I/O overlap.
-                    val pauseLease = acquirePollingPause()
-                    try {
-                        delay(350) // let the main polling loop wind down
-                        probe()
-                        probeComplete = true
-                    } finally {
-                        releasePollingPause(pauseLease)
-                    }
-                }
-                poll()
-            } finally {
-                releaseActivePollingPause()
-            }
-        }
-    }
+    // Acquisition is owned by OBDRepository and follows the connection/session
+    // lifecycle. This screen only observes its StateFlows.
+    fun start() = Unit
 
     fun stop() {
         pollJob?.cancel()
@@ -158,17 +158,8 @@ class CVTViewModel @Inject constructor(
         _cvtDtcStatus.value = "Not scanned yet."
         _cvtDeterioration.value = null
         _cvtDeteriorationStatus.value = "Not read yet."
-        probeComplete = false
-        nissanCvt7Detected = false
-        nissanCvt7EcuAddress = null
-        _transmissionModel.value = "Not identified"
-        _transmissionPartNumber.value = null
-        _transmissionEcuAddress.value = null
-        inputShaftPid = null
-        cvtTempPid = null
-        window.clear()
-        _cvtData.value = CVTData()
-        _livePollDiagnostics.value = "Waiting for first live poll…"
+        // Do not stop or clear Nissan acquisition here. It must continue while
+        // a trip is recording even after this screen leaves the navigation stack.
         releaseActivePollingPause()
     }
 
