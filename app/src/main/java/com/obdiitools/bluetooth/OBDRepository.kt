@@ -74,6 +74,18 @@ class OBDRepository @Inject constructor(
     private val _mazdaCx5DashboardData = MutableStateFlow<MazdaCx5DashboardData?>(null)
     val mazdaCx5DashboardData: StateFlow<MazdaCx5DashboardData?> = _mazdaCx5DashboardData.asStateFlow()
 
+    private val _nissanCvt7Data = MutableStateFlow(com.obdiitools.obd.CVTData())
+    val nissanCvt7Data: StateFlow<com.obdiitools.obd.CVTData> = _nissanCvt7Data.asStateFlow()
+    private val _nissanCvt7Status = MutableStateFlow("Waiting for Nissan vehicle identification…")
+    val nissanCvt7Status: StateFlow<String> = _nissanCvt7Status.asStateFlow()
+    private val _nissanCvt7Diagnostics = MutableStateFlow("Waiting for first live poll…")
+    val nissanCvt7Diagnostics: StateFlow<String> = _nissanCvt7Diagnostics.asStateFlow()
+    private val _nissanCvt7EcuAddress = MutableStateFlow<String?>(null)
+    val nissanCvt7EcuAddress: StateFlow<String?> = _nissanCvt7EcuAddress.asStateFlow()
+    @Volatile private var isNissanVehicle = false
+    private var nissanCvt7PollingJob: Job? = null
+    private var lastNissanCvt7FailureEventAtMs = 0L
+
     @Volatile private var mazdaCx5PollingEnabled = false
     private var lastMazdaGearPollAtMs = 0L
     private var lastMazdaTemperaturePollAtMs = 0L
@@ -130,6 +142,13 @@ class OBDRepository @Inject constructor(
             mazdaGearCapturedAtMs = null
             mazdaTemperatureCapturedAtMs = null
             _mazdaCx5DashboardData.value = null
+        }
+
+        isNissanVehicle = make.equals("Nissan", ignoreCase = true)
+        if (isNissanVehicle && connection?.isConnected == true) {
+            startNissanCvt7SessionPolling()
+        } else {
+            stopNissanCvt7SessionPolling()
         }
     }
 
@@ -772,6 +791,7 @@ class OBDRepository @Inject constructor(
                 _lastTripSummary.value = null
                 activeSessionId = sessionRepository.startSession(deviceInfo.name)
                 startPolling()
+                if (isNissanVehicle) startNissanCvt7SessionPolling()
                 candidateConnection = null
             } catch (cancelled: CancellationException) {
                 candidateConnection?.let { candidate ->
@@ -790,6 +810,7 @@ class OBDRepository @Inject constructor(
     }
 
     fun disconnect() {
+        stopNissanCvt7SessionPolling()
         mazdaCx5PollingEnabled = false
         scope.launch { sessionRepository.recordDiagnosticEvent("OBD_DISCONNECTED", "Adapter disconnected") }
         pollingJob?.cancel()
@@ -823,6 +844,128 @@ class OBDRepository @Inject constructor(
         if (endingSessionId != null) {
             scope.launch { _lastTripSummary.value = sessionRepository.endSession(endingSessionId) }
         }
+    }
+
+
+    /**
+     * Owns Nissan CVT7 acquisition at the OBD connection/session level, not at
+     * the CVT screen lifecycle. Leaving the monitor screen must never stop
+     * transmission samples from being written to an active trip.
+     */
+    private fun startNissanCvt7SessionPolling() {
+        if (!isNissanVehicle || connection?.isConnected != true || nissanCvt7PollingJob?.isActive == true) return
+        val connectedAdapter = connection ?: return
+        nissanCvt7PollingJob = scope.launch {
+            _nissanCvt7Status.value = "Searching for the Nissan CVT7 transmission controller…"
+            var discovery: com.obdiitools.obd.NissanCvt7DiscoveryResult? = null
+            while (isActive && connection === connectedAdapter && connectedAdapter.isConnected && discovery == null) {
+                if (pollingPaused) {
+                    delay(250)
+                    continue
+                }
+                discovery = try {
+                    discoverNissanCvt7 { progress -> _nissanCvt7Status.value = progress }
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    _nissanCvt7Status.value = "Nissan CVT7 discovery error: ${error.message ?: error.javaClass.simpleName}"
+                    null
+                }
+                if (discovery == null && connection === connectedAdapter && connectedAdapter.isConnected) {
+                    sessionRepository.recordDiagnosticEvent(
+                        "NISSAN_CVT7_DISCOVERY_FAILED",
+                        _nissanCvt7Status.value,
+                    )
+                    delay(30_000)
+                }
+            }
+            val confirmed = discovery ?: return@launch
+            if (connection !== connectedAdapter || !connectedAdapter.isConnected) return@launch
+
+            _nissanCvt7EcuAddress.value = confirmed.ecuAddress
+            _nissanCvt7Status.value = "Nissan CVT7 controller confirmed at ${confirmed.ecuAddress}. Live acquisition continues during session recording, even when the CVT screen is closed."
+            confirmed.liveData?.let { sample ->
+                val decoded = toNissanCvtData(sample)
+                _nissanCvt7Data.value = decoded
+                sessionRepository.recordCvtData(decoded)
+            }
+
+            while (isActive && connection === connectedAdapter && connectedAdapter.isConnected) {
+                if (pollingPaused) {
+                    delay(250)
+                    continue
+                }
+                val result = queryNissanCvt7LiveData(confirmed.ecuAddress)
+                val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+                val sample = result.sample
+                _nissanCvt7Diagnostics.value = buildString {
+                    append("Last poll: ").append(time).append(" — ").append(result.parseStatus)
+                    append("\nRaw 2101: ").append(result.rawResponse.ifBlank { "(empty)" })
+                }
+                if (sample != null) {
+                    val decoded = toNissanCvtData(sample)
+                    _nissanCvt7Data.value = decoded
+                    sessionRepository.recordCvtData(decoded)
+                } else {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastNissanCvt7FailureEventAtMs >= 60_000L) {
+                        lastNissanCvt7FailureEventAtMs = now
+                        sessionRepository.recordDiagnosticEvent(
+                            "NISSAN_CVT7_POLL_FAILED",
+                            result.parseStatus + " | " + result.rawResponse.take(300),
+                        )
+                    }
+                }
+                delay(1_500)
+            }
+        }
+    }
+
+    private fun stopNissanCvt7SessionPolling() {
+        nissanCvt7PollingJob?.cancel()
+        nissanCvt7PollingJob = null
+        _nissanCvt7Data.value = com.obdiitools.obd.CVTData()
+        _nissanCvt7Status.value = "Nissan CVT7 monitor is not active."
+        _nissanCvt7Diagnostics.value = "Waiting for first live poll…"
+        _nissanCvt7EcuAddress.value = null
+        lastNissanCvt7FailureEventAtMs = 0L
+    }
+
+    private fun toNissanCvtData(
+        sample: com.obdiitools.obd.NissanCvt7LiveData,
+    ): com.obdiitools.obd.CVTData {
+        fun measured(value: Float) =
+            com.obdiitools.obd.CVTReading(value, com.obdiitools.obd.CVTDataSource.SENSOR)
+        return com.obdiitools.obd.CVTData(
+            speedKph = com.obdiitools.obd.CVTReading(sample.vehicleSpeedKph),
+            engineRpm = com.obdiitools.obd.CVTReading(sample.engineRpm),
+            inputShaftRpm = com.obdiitools.obd.CVTReading(null),
+            slipRpm = com.obdiitools.obd.CVTReading(sample.slipRpm, com.obdiitools.obd.CVTDataSource.SENSOR),
+            lockupState = com.obdiitools.obd.CVTReading(
+                com.obdiitools.obd.LockupState.UNKNOWN,
+                com.obdiitools.obd.CVTDataSource.UNAVAILABLE,
+            ),
+            cvtTempC = com.obdiitools.obd.CVTReading(sample.fluidTemperatureC),
+            cvtRatio = measured(sample.gearRatio),
+            primaryPressureMpa = measured(sample.primaryPressureMpa),
+            secondaryPressureMpa = measured(sample.secondaryPressureMpa),
+            targetSecondaryPressureMpa = measured(sample.targetSecondaryPressureMpa),
+            linePressureMpa = measured(sample.linePressureMpa),
+            accelerator = measured(sample.accelerator),
+            torqueConverterRatio = measured(sample.torqueConverterRatio),
+            cvtTemperatureCount = com.obdiitools.obd.CVTReading(sample.cvtTemperatureCount),
+            batteryVoltage = measured(sample.batteryVoltage),
+            lockupCurrentAmps = measured(sample.lockupCurrentAmps),
+            luPressureMpa = measured(sample.luPressureMpa),
+            selectorPosition = com.obdiitools.obd.CVTReading(sample.selectorPosition),
+            virtualGear = com.obdiitools.obd.CVTReading(sample.virtualGear),
+            dGearRatio = measured(sample.dGearRatio),
+            gForce = measured(sample.gForce),
+            engineTorqueNm = measured(sample.engineTorqueNm),
+            enginePowerHp = com.obdiitools.obd.CVTReading(sample.enginePowerHp),
+            outputTorqueNm = com.obdiitools.obd.CVTReading(sample.outputTorqueNm),
+            selectorStatusFlag = com.obdiitools.obd.CVTReading(sample.selectorStatusFlag),
+        )
     }
 
     private fun startPolling() {
