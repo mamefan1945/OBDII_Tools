@@ -78,27 +78,6 @@ class CVTViewModel @Inject constructor(
 
     private var pollJob: Job? = null
 
-    init {
-        viewModelScope.launch {
-            repository.nissanCvt7Data.collect { _cvtData.value = it }
-        }
-        viewModelScope.launch {
-            repository.nissanCvt7Status.collect { _sourceDescription.value = it }
-        }
-        viewModelScope.launch {
-            repository.nissanCvt7Diagnostics.collect { _livePollDiagnostics.value = it }
-        }
-        viewModelScope.launch {
-            repository.nissanCvt7EcuAddress.collect { address ->
-                nissanCvt7EcuAddress = address
-                nissanCvt7Detected = address != null
-                _transmissionModel.value = if (address != null) "Jatco CVT7" else "Not identified"
-                _transmissionPartNumber.value = if (address != null) "31036-4AT0C" else null
-                _transmissionEcuAddress.value = address
-            }
-        }
-    }
-
     private var pauseGeneration = 0L
     private var activePauseLease: Long? = null
 
@@ -136,6 +115,27 @@ class CVTViewModel @Inject constructor(
     val transmissionPartNumber: StateFlow<String?> = _transmissionPartNumber.asStateFlow()
     private val _transmissionEcuAddress = MutableStateFlow<String?>(null)
     val transmissionEcuAddress: StateFlow<String?> = _transmissionEcuAddress.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repository.nissanCvt7Data.collect { _cvtData.value = it }
+        }
+        viewModelScope.launch {
+            repository.nissanCvt7Status.collect { _sourceDescription.value = it }
+        }
+        viewModelScope.launch {
+            repository.nissanCvt7Diagnostics.collect { _livePollDiagnostics.value = it }
+        }
+        viewModelScope.launch {
+            repository.nissanCvt7EcuAddress.collect { address ->
+                nissanCvt7EcuAddress = address
+                nissanCvt7Detected = address != null
+                _transmissionModel.value = if (address != null) "Jatco CVT7" else "Not identified"
+                _transmissionPartNumber.value = if (address != null) "31036-4AT0C" else null
+                _transmissionEcuAddress.value = address
+            }
+        }
+    }
 
     // Lockup inference — rolling window of (rpm, speed) samples
     private data class Sample(val rpm: Int, val speed: Int)
