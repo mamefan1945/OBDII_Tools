@@ -780,22 +780,11 @@ class OBDRepository @Inject constructor(
                 _confirmedPids.value = emptySet()
                 val supported = conn.querySupportedPids().toMutableSet()
 
-                // Some ECUs return useful live data for PIDs omitted from their
-                // support bitmap. Confirm these two fuel PIDs with two direct,
-                // read-only requests before deciding not to poll them.
+                // Always keep the two standard fuel-economy inputs in the poll
+                // schedule, even when an ECU omits them from its support bitmap.
+                // Actual values are still validated by the normal response parser
+                // and capability tracker before the Dashboard enables their gauges.
                 connection = conn
-                for (fuelPid in listOf(ELM327Protocol.PID.MAF, ELM327Protocol.PID.FUEL_LEVEL)) {
-                    if (fuelPid !in supported) {
-                        val confirmed = try {
-                            validateMode01Pid("7DF", fuelPid)
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) {
-                            false
-                        }
-                        if (confirmed) supported.add(fuelPid)
-                    }
-                }
                 _supportedPids.value = supported
 
                 // Refresh EIA gas price at the start of every session
