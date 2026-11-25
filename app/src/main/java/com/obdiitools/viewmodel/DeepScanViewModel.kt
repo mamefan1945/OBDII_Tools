@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.data.SessionRepository
+import com.obdiitools.data.VehicleDiscoveryRepository
+import com.obdiitools.data.VehicleDiscoveryItem
 import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.obd.ConnectionState
 import com.obdiitools.obd.MazdaCx5Protocol
@@ -34,6 +36,7 @@ import javax.inject.Inject
 class DeepScanViewModel @Inject constructor(
     private val repository: OBDRepository,
     private val sessionRepository: SessionRepository,
+    private val vehicleDiscoveryRepository: VehicleDiscoveryRepository,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -275,6 +278,14 @@ class DeepScanViewModel @Inject constructor(
                     _scanState.value = _scanState.value.copy(results = results.toList())
                 }
 
+                val profileItems = results.flatMap { ecu ->
+                    buildList {
+                        ecu.validatedMode01Pids.forEach { pid -> add(VehicleDiscoveryItem("${ecu.address}:01:${pid.code}",pid.name,ecu.address,"Mode 01",true,"Validated (two successful reads)")) }
+                        ecu.mode09Pids.forEach { pid -> add(VehicleDiscoveryItem("${ecu.address}:09:${pid.code}",pid.name,ecu.address,"Mode 09",true,"Advertised by ECU")) }
+                        ecu.rawMode01Candidates.forEach { raw -> add(VehicleDiscoveryItem("${ecu.address}:01:${raw.code}","Undecoded PID ${raw.code}",ecu.address,"Mode 01",false,"Positive response; decoder unknown",raw.rawResponse)) }
+                    }
+                }
+                vehicleDiscoveryRepository.recordScan(results.firstNotNullOfOrNull { it.ecuVin },profileItems,results.count { it.address != "7DF" })
                 val total = results.sumOf { it.totalPids }
                 _scanState.value = _scanState.value.copy(
                     isScanning = false,
@@ -386,6 +397,15 @@ class DeepScanViewModel @Inject constructor(
                             requestCommand = "22${candidate.did}",
                             capturedAtMs = capturedAt,
                         )
+                        if (status.startsWith("POSITIVE RESPONSE")) {
+                            vehicleDiscoveryRepository.recordMazdaDids(listOf(VehicleDiscoveryItem(
+                                "0x${MazdaCx5Protocol.TCM_REQUEST_ID}:22:${candidate.did}",candidate.description,
+                                MazdaCx5Protocol.TCM_REQUEST_ID,"Manufacturer-specific UDS DID",
+                                candidate.did.uppercase() in setOf("1E12","1E1C"),
+                                if(candidate.did.uppercase() in setOf("1E12","1E1C")) "Positive response; decoder available" else "Positive response; raw only",
+                                raw,capturedAt
+                            )))
+                        }
                         saveMazdaDidResults(results)
                         _scanState.value = _scanState.value.copy(
                             mazdaDidProgress = (index + 1) to MazdaCx5Protocol.TCM_DISCOVERY_CANDIDATES.size,

@@ -64,6 +64,7 @@ import com.obdiitools.viewmodel.DeepScanViewModel
 @Composable
 fun DeepScanScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToVehicleDiscovery: () -> Unit = {},
     viewModel: DeepScanViewModel = hiltViewModel(),
 ) {
     val scanState by viewModel.scanState.collectAsState()
@@ -167,6 +168,13 @@ fun DeepScanScreen(
 
                 if (scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids) {
                     item { MazdaDidDiscoveryCard(scanState.mazdaDidResults, scanState.mazdaDidProgress) }
+                }
+
+                item {
+                    OutlinedButton(onClick = onNavigateToVehicleDiscovery, modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan)) {
+                        Text("VEHICLE DISCOVERY / PROFILES", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    }
                 }
 
                 // ECU result cards

@@ -64,6 +64,7 @@ import com.obdiitools.ui.screens.CVTScreen
 import com.obdiitools.ui.screens.CustomPidScreen
 import com.obdiitools.ui.screens.DashboardScreen
 import com.obdiitools.ui.screens.DeepScanScreen
+import com.obdiitools.ui.screens.VehicleDiscoveryScreen
 import com.obdiitools.ui.screens.DTCScreen
 import com.obdiitools.ui.screens.FreezeFrameScreen
 import com.obdiitools.ui.screens.GlossaryScreen
@@ -253,8 +254,9 @@ fun OBDIIApp(viewModel: MainViewModel) {
                 CustomPidScreen(onBack = { navController.navigateUp() })
             }
             composable("deep_scan") {
-                DeepScanScreen(onNavigateBack = { navController.navigateUp() })
+                DeepScanScreen(onNavigateBack = { navController.navigateUp() }, onNavigateToVehicleDiscovery = { navController.navigate("vehicle_discovery") })
             }
+            composable("vehicle_discovery") { VehicleDiscoveryScreen(onBack = { navController.navigateUp() }) }
             composable("glossary") {
                 GlossaryScreen(onNavigateBack = { navController.navigateUp() })
             }
