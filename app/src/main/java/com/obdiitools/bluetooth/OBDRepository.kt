@@ -205,6 +205,7 @@ class OBDRepository @Inject constructor(
 
     private var connection: OBDConnection? = null
     @Volatile private var activeSessionId: Long? = null
+    private val pendingFuelProbeDiagnostics = mutableListOf<String>()
     private var pollingJob: Job? = null
     private val adaptivePidScheduler = com.obdiitools.obd.AdaptivePidPollingScheduler(maxRequestsPerPass = 4)
     private val lastAdaptivePollAtMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -703,31 +704,43 @@ class OBDRepository @Inject constructor(
      * This is read-only and is used by Deep Scan to distinguish advertised
      * support from a value this ECU actually returns.
      */
-    suspend fun validateMode01Pid(ecuAddress: String, pid: String): Boolean {
+    suspend fun validateMode01Pid(ecuAddress: String, pid: String, diagnosticLabel: String? = null): Boolean {
         val conn = connection ?: return false
         val address = ecuAddress.uppercase()
         val command = pid.uppercase()
-        if (!address.matches(Regex("^[0-9A-F]{3}$")) ||
-            !command.matches(Regex("^01[0-9A-F]{2}$"))) return false
+        if (!address.matches(Regex("^[0-9A-F]{3}$")) || !command.matches(Regex("^01[0-9A-F]{2}$"))) return false
         return conn.withTransaction {
             try {
                 query("ATSH $address", 300)
-                val first = ELM327Protocol.parseResponse(command, query(command, 1200))
+                suspend fun readAttempt(attempt: Int): Float? {
+                    val raw = try { query(command, 1200) } catch (e: Exception) {
+                        if (diagnosticLabel != null) recordFuelProbeDiagnostic(diagnosticLabel + " PID=" + command + " attempt=" + attempt + " raw=<exception> parsed=null plausible=false error=" + e.message.orEmpty().take(120))
+                        throw e
+                    }
+                    val parsed = ELM327Protocol.parseResponse(command, raw)
+                    val plausible = isPlausibleMode01Value(command, parsed)
+                    if (diagnosticLabel != null) recordFuelProbeDiagnostic(diagnosticLabel + " PID=" + command + " attempt=" + attempt + " raw=" + raw.ifBlank { "<empty>" }.take(220) + " parsed=" + (parsed?.toString() ?: "null") + " plausible=" + plausible)
+                    return parsed.takeIf { plausible }
+                }
+                val first = readAttempt(1)
                 delay(80)
-                val second = ELM327Protocol.parseResponse(command, query(command, 1200))
-                val firstValid = isPlausibleMode01Value(command, first)
-                val secondValid = isPlausibleMode01Value(command, second)
+                val second = readAttempt(2)
                 if (address == "7DF") {
-                    capabilityTracker.record(command, first.takeIf { firstValid })
-                    capabilityTracker.record(command, second.takeIf { secondValid })
+                    capabilityTracker.record(command, first)
+                    capabilityTracker.record(command, second)
                     _confirmedPids.value = capabilityTracker.confirmedPids
                     persistCapabilityProfile()
                 }
-                firstValid && secondValid
+                first != null && second != null
             } finally {
                 withContext(NonCancellable) { runCatching { query("ATSH 7DF", 300) } }
             }
         }
+    }
+
+    private suspend fun recordFuelProbeDiagnostic(detail: String) {
+        if (activeSessionId == null) pendingFuelProbeDiagnostics.add(detail.take(512))
+        else sessionRepository.recordDiagnosticEvent("FUEL_PID_PROBE", detail)
     }
 
     val isConnected: Boolean
@@ -786,17 +799,17 @@ class OBDRepository @Inject constructor(
                 // plausible direct reads before adding either PID to the
                 // vehicle's supported set. This is read-only Mode 01 polling.
                 connection = conn
+                pendingFuelProbeDiagnostics.clear()
                 for (fuelPid in listOf(ELM327Protocol.PID.MAF, ELM327Protocol.PID.FUEL_LEVEL)) {
-                    if (fuelPid !in supported) {
-                        val confirmed = try {
-                            validateMode01Pid("7DF", fuelPid)
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) {
-                            false
-                        }
-                        if (confirmed) supported.add(fuelPid)
+                    val confirmed = try {
+                        validateMode01Pid("7DF", fuelPid, diagnosticLabel = "CONNECT_PROBE")
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        recordFuelProbeDiagnostic("CONNECT_PROBE PID=" + fuelPid + " validation_exception=" + error.message.orEmpty().take(160))
+                        false
                     }
+                    if (confirmed) supported.add(fuelPid)
                 }
                 _supportedPids.value = supported
 
@@ -811,6 +824,10 @@ class OBDRepository @Inject constructor(
                 _connectionState.value = ConnectionState.Connected(deviceInfo.name, deviceInfo.address)
                 _lastTripSummary.value = null
                 activeSessionId = sessionRepository.startSession(deviceInfo.name)
+                pendingFuelProbeDiagnostics.toList().forEach { detail ->
+                    sessionRepository.recordDiagnosticEvent("FUEL_PID_PROBE", detail)
+                }
+                pendingFuelProbeDiagnostics.clear()
                 startPolling()
                 if (isNissanVehicle) startNissanCvt7SessionPolling()
                 candidateConnection = null
