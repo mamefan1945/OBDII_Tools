@@ -770,7 +770,9 @@ class OBDRepository @Inject constructor(
                 val initialized = conn.initialize()
                 if (!initialized) {
                     conn.close()
-                    _connectionState.value = ConnectionState.Error("ELM327 initialization failed")
+                    _connectionState.value = ConnectionState.Error(
+                        "Connected to ${deviceInfo.name}, but the OBD adapter did not respond. Check that it is powered on and fully plugged into the vehicle, then try again."
+                    )
                     return@withContext
                 }
 
@@ -821,7 +823,34 @@ class OBDRepository @Inject constructor(
                     candidate.close()
                     if (connection === candidate) connection = null
                 }
-                _connectionState.value = ConnectionState.Error(e.message ?: "Connection failed")
+                _connectionState.value = ConnectionState.Error(
+                    friendlyBluetoothConnectionError(deviceInfo.name, e)
+                )
+            }
+        }
+    }
+
+    private fun friendlyBluetoothConnectionError(deviceName: String, error: Exception): String {
+        val detail = error.message.orEmpty()
+        val normalized = detail.lowercase()
+        val device = deviceName.ifBlank { "the selected adapter" }
+
+        return when {
+            normalized.contains("read failed") ||
+                normalized.contains("socket might closed") ||
+                normalized.contains("timeout") ||
+                normalized.contains("ret: -1") ||
+                normalized.contains("connection refused") ||
+                normalized.contains("host is down") ||
+                normalized.contains("software caused connection abort") ||
+                error is java.io.IOException -> {
+                "Couldn't connect to $device. The adapter may be out of range, switched off, or already connected to another device. Move closer, check its power and vehicle connection, disconnect it from any other phone or app, then try again."
+            }
+            normalized.contains("device not found") -> {
+                "Couldn't find $device. Make sure it is powered on, nearby, and still paired with this phone. Scan again and retry."
+            }
+            else -> {
+                "Couldn't connect to $device. Check that Bluetooth is on and the adapter is nearby and powered, then try again. ${detail.take(120)}"
             }
         }
     }
