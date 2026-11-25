@@ -61,6 +61,17 @@ object ELM327Protocol {
         (FAST_PIDS + SLOW_PIDS).associateBy { it.takeLast(2).uppercase() }
     }
 
+    /**
+     * The support bitmap is advisory on some ECUs. Continue sampling the two
+     * standard fuel-economy inputs even when omitted; only decoded live samples
+     * can confirm them for the Dashboard.
+     */
+    fun filterSupportedPids(requestedPids: List<String>, supportedPids: Set<String>): List<String> {
+        if (supportedPids.isEmpty()) return requestedPids
+        val alwaysProbe = setOf(PID.MAF, PID.FUEL_LEVEL)
+        return requestedPids.filter { it in supportedPids || it in alwaysProbe }
+    }
+
     fun buildMultiPidCommand(pids: List<String>): String =
         "01 " + pids.joinToString(" ") { it.takeLast(2) }
 
