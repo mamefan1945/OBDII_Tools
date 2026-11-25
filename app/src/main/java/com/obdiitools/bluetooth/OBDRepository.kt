@@ -712,7 +712,7 @@ class OBDRepository @Inject constructor(
         return conn.withTransaction {
             try {
                 query("ATSH $address", 300)
-                suspend fun readAttempt(attempt: Int): Float? {
+                suspend fun readAttempt(attempt: Int): Any? {
                     val raw = try { query(command, 1200) } catch (e: Exception) {
                         if (diagnosticLabel != null) recordFuelProbeDiagnostic(diagnosticLabel + " PID=" + command + " attempt=" + attempt + " raw=<exception> parsed=null plausible=false error=" + e.message.orEmpty().take(120))
                         throw e
