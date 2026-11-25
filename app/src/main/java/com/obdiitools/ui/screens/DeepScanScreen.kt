@@ -133,6 +133,13 @@ fun DeepScanScreen(
                         Spacer(Modifier.height(16.dp))
                         Text("Connect to a device", color = TextSecondary, fontFamily = FontFamily.Monospace, fontSize = 15.sp)
                         Text("to run a deep scan", color = TextSecondary.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        Spacer(Modifier.height(18.dp))
+                        OutlinedButton(
+                            onClick = onNavigateToVehicleDiscovery,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                        ) {
+                            Text("VIEW SAVED VEHICLE PROFILES", fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                        }
                     }
                 }
                 return@Scaffold
