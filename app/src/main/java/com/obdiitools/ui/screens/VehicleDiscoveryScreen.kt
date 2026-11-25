@@ -41,7 +41,7 @@ import java.util.Locale
   Column(Modifier.fillMaxWidth().padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
    Text(listOf(p.year,p.make,p.model).filter{it.isNotBlank()}.joinToString(" ").ifBlank{"Unidentified vehicle"},color=TextPrimary,fontFamily=FontFamily.Monospace,fontWeight=FontWeight.Bold,fontSize=14.sp)
    Text(if(p.vin.isNotBlank())"VIN: ${p.vin}" else "VIN unavailable — this scan is not merged with other vehicles",color=TextSecondary,fontSize=10.sp)
-   Text("Last scan: ${SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.getDefault()).format(Date(p.lastSeenMs))} • ${p.ecuCount} ECUs",color=TextSecondary,fontSize=10.sp)
+   Text("Last scan: ${SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(Date(p.lastSeenMs))} • ${p.ecuCount} ECUs",color=TextSecondary,fontSize=10.sp)
    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Count("KNOWN",p.knownCount,NeonGreen,Modifier.weight(1f));Count("UNKNOWN",p.unknownCount,NeonOrange,Modifier.weight(1f));Count("TOTAL",p.items.size,NeonCyan,Modifier.weight(1f))}
    TextButton(onClick={expanded=!expanded},modifier=Modifier.align(Alignment.End)){Text(if(expanded)"HIDE ITEMS" else "VIEW ITEMS",color=NeonCyan,fontFamily=FontFamily.Monospace,fontSize=10.sp)}
    if(expanded){HorizontalDivider(color=SurfaceBorder);p.items.sortedWith(compareBy<VehicleDiscoveryItem>{!it.known}.thenBy{it.category}.thenBy{it.key}).forEach { x ->
