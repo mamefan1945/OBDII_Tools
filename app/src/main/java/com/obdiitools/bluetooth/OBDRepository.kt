@@ -1071,7 +1071,7 @@ class OBDRepository @Inject constructor(
         val supported = _supportedPids.value
 
         fun filterPids(pids: List<String>) =
-            if (supported.isEmpty()) pids else pids.filter { supported.contains(it.uppercase()) }
+            ELM327Protocol.filterSupportedPids(pids, supported)
 
         // --- Fast PIDs every cycle ---
         val fastPids = filterPids(ELM327Protocol.FAST_PIDS)
