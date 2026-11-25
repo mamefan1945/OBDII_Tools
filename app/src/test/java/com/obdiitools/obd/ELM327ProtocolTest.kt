@@ -41,6 +41,28 @@ class ELM327ProtocolTest {
     }
 
     @Test
+    fun fuelEconomyPidsAreStillPolledWhenOmittedFromSupportBitmap() {
+        val requested = listOf(
+            ELM327Protocol.PID.RPM,
+            ELM327Protocol.PID.MAF,
+            ELM327Protocol.PID.FUEL_LEVEL,
+            ELM327Protocol.PID.OIL_TEMP,
+        )
+        val supported = setOf(ELM327Protocol.PID.RPM, ELM327Protocol.PID.OIL_TEMP)
+
+        assertEquals(
+            listOf(ELM327Protocol.PID.RPM, ELM327Protocol.PID.MAF, ELM327Protocol.PID.FUEL_LEVEL, ELM327Protocol.PID.OIL_TEMP),
+            ELM327Protocol.filterSupportedPids(requested, supported),
+        )
+    }
+
+    @Test
+    fun supportedPidFilterPreservesAllRequestsWhenBitmapIsEmpty() {
+        val requested = listOf(ELM327Protocol.PID.RPM, ELM327Protocol.PID.MAF)
+        assertEquals(requested, ELM327Protocol.filterSupportedPids(requested, emptySet()))
+    }
+
+    @Test
     fun parsesConcatenatedMultiPidResponsesOnOneLine() {
         val values = ELM327Protocol.parseMultiPidResponse(
             listOf("410C1AF8410D3241111A41054A41042B41101234")
