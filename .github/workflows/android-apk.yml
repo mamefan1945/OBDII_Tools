@@ -19,6 +19,8 @@ jobs:
     name: Validate, test, and build optimized signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

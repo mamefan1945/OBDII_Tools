@@ -12,6 +12,13 @@ val localProperties = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
+val buildNumber = providers.environmentVariable("BUILD_NUMBER")
+    .orElse("0")
+    .get()
+    .toIntOrNull()
+    ?.coerceAtLeast(0)
+    ?: 0
+
 val gitHash: String = try {
     val process = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
         .redirectErrorStream(true)
@@ -29,8 +36,9 @@ android {
         applicationId = "com.obdiitools"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0"
+        // Keep versionCode increasing for each CI build so Android accepts upgrades.
+        versionCode = 2_000_000 + buildNumber
+        versionName = "2.0.$buildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
