@@ -776,7 +776,24 @@ class OBDRepository @Inject constructor(
 
                 capabilityTracker.reset()
                 _confirmedPids.value = emptySet()
-                val supported = conn.querySupportedPids()
+                val supported = conn.querySupportedPids().toMutableSet()
+
+                // Some ECUs return useful live data for PIDs omitted from their
+                // support bitmap. Confirm these two fuel PIDs with two direct,
+                // read-only requests before deciding not to poll them.
+                connection = conn
+                for (fuelPid in listOf(ELM327Protocol.PID.MAF, ELM327Protocol.PID.FUEL_LEVEL)) {
+                    if (fuelPid !in supported) {
+                        val confirmed = try {
+                            validateMode01Pid("7DF", fuelPid)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            false
+                        }
+                        if (confirmed) supported.add(fuelPid)
+                    }
+                }
                 _supportedPids.value = supported
 
                 // Refresh EIA gas price at the start of every session
@@ -916,7 +933,9 @@ class OBDRepository @Inject constructor(
                         )
                     }
                 }
-                delay(1_500)
+                // Keep transmission sampling useful without monopolizing the
+                // serialized adapter transaction needed by standard OBD PIDs.
+                delay(10_000)
             }
         }
     }
