@@ -8,4 +8,5 @@ import kotlinx.coroutines.flow.StateFlow
 @HiltViewModel
 class VehicleDiscoveryViewModel @Inject constructor(repository:VehicleDiscoveryRepository):ViewModel() {
  val profiles:StateFlow<List<VehicleDiscoveryProfile>> = repository.profiles
+ fun deleteProfile(id:String) = repository.deleteProfile(id)
 }
