@@ -20,6 +20,9 @@ class VehicleDiscoveryRepository @Inject constructor(@ApplicationContext context
     private val prefs=context.getSharedPreferences("vehicle_discovery_profiles",Context.MODE_PRIVATE)
     private val _profiles=MutableStateFlow(load())
     val profiles:StateFlow<List<VehicleDiscoveryProfile>> = _profiles.asStateFlow()
+    @Synchronized fun deleteProfile(id:String) {
+        save(_profiles.value.filterNot { it.id == id })
+    }
     @Synchronized fun recordScan(vin:String?,items:List<VehicleDiscoveryItem>,ecuCount:Int) {
         val valid=vin.orEmpty().uppercase().takeIf{it.matches(Regex("^[A-HJ-NPR-Z0-9]{17}$"))}.orEmpty()
         val id=valid.ifBlank{"UNVERIFIED-${System.currentTimeMillis()}"}
