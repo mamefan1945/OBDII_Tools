@@ -163,15 +163,15 @@ final class BluetoothLEManager: NSObject, ObservableObject {
     }
 
     func queryUDS(ecuAddress: String, did: String) async -> String {
-        let header = await query("ATSH \\(ecuAddress)", timeout: 1.0)
+        let header = await query("ATSH \(ecuAddress)", timeout: 1.0)
         guard !header.isEmpty else { return "" }
-        let response = await query("22\\(did)", timeout: 3.0)
+        let response = await query("22\(did)", timeout: 3.0)
         _ = await query("ATSH 7DF", timeout: 1.0)
         return response
     }
 
     func pingECU(address: String) async -> String {
-        _ = await query("ATSH \\(address)", timeout: 1.0)
+        _ = await query("ATSH \(address)", timeout: 1.0)
         let response = await query("1001", timeout: 1.5)
         if response.localizedCaseInsensitiveContains("5001") ||
             response.localizedCaseInsensitiveContains("7F10") {
