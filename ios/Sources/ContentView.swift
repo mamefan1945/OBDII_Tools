@@ -61,6 +61,19 @@ private struct DashboardView: View {
                     if bluetooth.isInitialized {
                         LabeledContent("VIN", value: bluetooth.vehicleVIN ?? bluetooth.vinStatus)
                     }
+                    if let session = bluetooth.activeSession {
+                        Section("Session adapter fingerprint") {
+                            LabeledContent("Transport", value: session.transport)
+                            LabeledContent("Adapter", value: session.adapterName)
+                            LabeledContent("Bluetooth identifier", value: session.peripheralIdentifier)
+                            LabeledContent("MAC address", value: session.macAddress ?? "Not exposed by iOS")
+                            LabeledContent("Manufacturer data", value: session.manufacturerDataHex.isEmpty ? "Not advertised" : session.manufacturerDataHex)
+                            LabeledContent("Services", value: session.serviceUUIDs.isEmpty ? "Not advertised" : session.serviceUUIDs.joined(separator: ", "))
+                            LabeledContent("ATI", value: session.atiResponse.isEmpty ? "No response" : session.atiResponse)
+                            LabeledContent("AT@1", value: session.adapterDescription.isEmpty ? "No response" : session.adapterDescription)
+                            LabeledContent("Model", value: session.adapterModel.isEmpty ? "Not identified" : session.adapterModel)
+                        }
+                    }
                     if bluetooth.connectedName == nil {
                         Button {
                             bluetooth.startScan()
