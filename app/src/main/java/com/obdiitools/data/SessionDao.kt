@@ -24,7 +24,7 @@ interface SessionDao {
           AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
           AND (rpm IS NOT NULL OR speedKph IS NOT NULL OR coolantTempC IS NOT NULL
                OR throttlePercent IS NOT NULL OR engineLoadPercent IS NOT NULL
-               OR mafGramsPerSec IS NOT NULL OR batteryVoltage IS NOT NULL OR ambientTempC IS NOT NULL)
+               OR mafGramsPerSec IS NOT NULL OR fuelLevelPercent IS NOT NULL OR batteryVoltage IS NOT NULL OR ambientTempC IS NOT NULL)
         ORDER BY ABS(timestampMs - :timestampMs) ASC
         LIMIT 1
     """)
@@ -36,7 +36,7 @@ interface SessionDao {
           AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
           AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
           AND throttlePercent IS NULL AND engineLoadPercent IS NULL
-          AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL AND ambientTempC IS NULL
+          AND mafGramsPerSec IS NULL AND fuelLevelPercent IS NULL AND batteryVoltage IS NULL AND ambientTempC IS NULL
           AND (mazdaSelectedGear IS NOT NULL OR mazdaTransmissionTempC IS NOT NULL
                OR mazdaFrontLeftWheelSpeedKph IS NOT NULL OR mazdaFrontRightWheelSpeedKph IS NOT NULL
                OR mazdaRearLeftWheelSpeedKph IS NOT NULL OR mazdaRearRightWheelSpeedKph IS NOT NULL)
@@ -51,7 +51,7 @@ interface SessionDao {
           AND ABS(timestampMs - :timestampMs) <= :maxDeltaMs
           AND rpm IS NULL AND speedKph IS NULL AND coolantTempC IS NULL
           AND throttlePercent IS NULL AND engineLoadPercent IS NULL
-          AND mafGramsPerSec IS NULL AND batteryVoltage IS NULL
+          AND mafGramsPerSec IS NULL AND fuelLevelPercent IS NULL AND batteryVoltage IS NULL
           AND (
                latitude IS NOT NULL AND longitude IS NOT NULL
                OR cvtSpeedKph IS NOT NULL OR cvtEngineRpm IS NOT NULL OR cvtSlipRpm IS NOT NULL
@@ -68,14 +68,14 @@ interface SessionDao {
         UPDATE session_data_points SET
             rpm = :rpm, speedKph = :speedKph, coolantTempC = :coolantTempC,
             throttlePercent = :throttlePercent, engineLoadPercent = :engineLoadPercent,
-            mafGramsPerSec = :mafGramsPerSec, batteryVoltage = :batteryVoltage,
+            mafGramsPerSec = :mafGramsPerSec, fuelLevelPercent = :fuelLevelPercent, batteryVoltage = :batteryVoltage,
             ambientTempC = :ambientTempC
         WHERE id = :id
     """)
     suspend fun updatePointWithObd(
         id: Long, rpm: Int?, speedKph: Int?, coolantTempC: Int?,
         throttlePercent: Float?, engineLoadPercent: Float?, mafGramsPerSec: Float?,
-        batteryVoltage: Float?, ambientTempC: Int?,
+        fuelLevelPercent: Float?, batteryVoltage: Float?, ambientTempC: Int?,
     )
 
     @Query("""
