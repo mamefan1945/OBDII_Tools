@@ -3,19 +3,33 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var bluetooth = BluetoothLEManager()
     @StateObject private var vehicleStore = VehicleDiscoveryStore()
+    @State private var selectedTab: String
+
+    init() {
+        let args = ProcessInfo.processInfo.arguments
+        let requested = args.firstIndex(of: "-screenshot-tab").flatMap { index in
+            args.indices.contains(index + 1) ? args[index + 1] : nil
+        }
+        _selectedTab = State(initialValue: requested ?? "dashboard")
+    }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             DashboardView(bluetooth: bluetooth)
                 .tabItem { Label("Dashboard", systemImage: "gauge.with.dots.needle.67percent") }
+                .tag("dashboard")
             VehiclesView(store: vehicleStore)
                 .tabItem { Label("Vehicles", systemImage: "car.side") }
+                .tag("vehicles")
             LiveDataView()
                 .tabItem { Label("Live Data", systemImage: "waveform.path.ecg") }
+                .tag("live-data")
             DiagnosticsView()
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
+                .tag("diagnostics")
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
+                .tag("more")
         }
         .tint(.blue)
     }
