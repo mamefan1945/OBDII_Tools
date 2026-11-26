@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.viewModelScope
 import com.obdiitools.bluetooth.OBDRepository
 import com.obdiitools.data.SessionRepository
+import com.obdiitools.data.VinRepository
 import com.obdiitools.data.VehicleDiscoveryRepository
 import com.obdiitools.data.VehicleDiscoveryItem
 import com.obdiitools.obd.AllPidDefinitions
@@ -36,6 +37,7 @@ import javax.inject.Inject
 class DeepScanViewModel @Inject constructor(
     private val repository: OBDRepository,
     private val sessionRepository: SessionRepository,
+    private val vinRepository: VinRepository,
     private val vehicleDiscoveryRepository: VehicleDiscoveryRepository,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -78,6 +80,8 @@ class DeepScanViewModel @Inject constructor(
         val phase: String = "",
         val progress: Pair<Int, Int>? = null,
         val results: List<EcuResult> = emptyList(),
+        val vehicleVin: String? = null,
+        val vehicleVinSource: String? = null,
         val isProbingMazda: Boolean = false,
         val mazdaProbeStatus: String? = null,
         val mazdaTransmission: MazdaCx5TransmissionData? = null,
@@ -140,11 +144,23 @@ class DeepScanViewModel @Inject constructor(
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             scanMutex.withLock {
+                // Reuse the VIN already fetched on Bluetooth connection. If the cache
+                // is empty, VinRepository performs the same Mode 09 PID 02 read used
+                // by the connection flow before falling back to UDS F190.
+                val connectedVehicle = try {
+                    vinRepository.fetchAndDecodeVin()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
                 repository.pausePolling()
                 val previous = _scanState.value
                 _scanState.value = ScanState(
                     isScanning = true,
-                    phase = "Discovering ECUs on CAN bus…",
+                    phase = if (!connectedVehicle?.vin.isNullOrBlank()) "VIN reused — discovering ECUs on CAN bus…" else "Discovering ECUs on CAN bus…",
+                    vehicleVin = connectedVehicle?.vin,
+                    vehicleVinSource = connectedVehicle?.vin?.let { "Shared connection VIN reader (Mode 09 PID 02 / UDS fallback)" },
                     mazdaProbeStatus = previous.mazdaProbeStatus,
                     mazdaTransmission = previous.mazdaTransmission,
                     mazdaProbeCapturedAtMs = previous.mazdaProbeCapturedAtMs,
@@ -285,7 +301,18 @@ class DeepScanViewModel @Inject constructor(
                         ecu.rawMode01Candidates.forEach { raw -> add(VehicleDiscoveryItem("${ecu.address}:01:${raw.code}","Undecoded PID ${raw.code}",ecu.address,"Mode 01",false,"Positive response; decoder unknown",raw.rawResponse)) }
                     }
                 }
-                vehicleDiscoveryRepository.recordScan(results.firstNotNullOfOrNull { it.ecuVin },profileItems,results.count { it.address != "7DF" })
+                // Prefer an ECU VIN if one was independently read; otherwise use the
+                // VIN obtained by the normal connection flow. This keeps Deep Scan
+                // attached to the existing vehicle profile when F190 is unavailable.
+                val scanVin = results.firstNotNullOfOrNull { it.ecuVin } ?: connectedVehicle?.vin
+                vehicleDiscoveryRepository.recordScan(
+                    vin = scanVin,
+                    items = profileItems,
+                    ecuCount = results.count { it.address != "7DF" },
+                    make = connectedVehicle?.make.orEmpty(),
+                    model = connectedVehicle?.model.orEmpty(),
+                    year = connectedVehicle?.year.orEmpty(),
+                )
                 val total = results.sumOf { it.totalPids }
                 _scanState.value = _scanState.value.copy(
                     isScanning = false,
