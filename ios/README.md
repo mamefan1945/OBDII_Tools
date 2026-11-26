@@ -32,7 +32,11 @@ xcodebuild -project ios/OBDIITools.xcodeproj -scheme OBDIITools \
 
 The `iOS CI` workflow runs on GitHub-hosted macOS. It generates the Xcode project, builds for the iOS Simulator, runs unit tests, and uploads the simulator app as a workflow artifact.
 
-The initial artifact is **not an installable iPhone IPA**. Physical-device installation requires Apple code signing and provisioning. No Apple Developer credentials or signing secrets are stored in this repository at this stage.
+The simulator artifact is **not an installable iPhone IPA**. Physical-device installation requires Apple code signing and provisioning. No Apple Developer credentials or signing secrets are stored in this repository at this stage.
+
+## Implemented connection and VIN identification
+
+The iOS app discovers compatible BLE UART adapters using Core Bluetooth, initializes the ELM327 with BLE-safe commands, and reads the VIN using SAE Mode 09 PID 02 first with UDS DID F190 as a fallback. A valid 17-character VIN is saved into the existing vehicle profile store. Bluetooth Classic SPP adapters are not supported through Core Bluetooth; use a BLE-capable adapter or an Apple-supported MFi accessory.
 
 ## Architecture direction
 
