@@ -1,0 +1,45 @@
+name: OBDIITools
+options:
+  bundleIdPrefix: com.obdiitools
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  OBDIITools:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.obdiitools.ios
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: OBDII Tools
+        INFOPLIST_KEY_NS BluetoothAlwaysUsageDescription: "OBDII Tools uses Bluetooth to communicate with compatible vehicle diagnostic adapters."
+        INFOPLIST_KEY_NS BluetoothPeripheralUsageDescription: "OBDII Tools uses Bluetooth to communicate with compatible vehicle diagnostic adapters."
+        CODE_SIGNING_ALLOWED: NO
+  OBDIIToolsTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: OBDIITools
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.obdiitools.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  OBDIITools:
+    build:
+      targets:
+        OBDIITools: all
+    test:
+      targets:
+        - OBDIIToolsTests
