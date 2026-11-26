@@ -409,7 +409,26 @@ private fun SessionRow(
                 fontSize = 11.sp,
                 color = TextSecondary,
             )
-            session.vin?.takeIf { it.isNotBlank() }?.let { vin ->
+            if (session.adapterManufacturer.isNotBlank() || session.adapterModel.isNotBlank() ||
+            session.adapterAti.isNotBlank() || session.adapterDescription.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text("ADAPTER FINGERPRINT", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                fontSize = 10.sp, color = NeonGreen, letterSpacing = 1.5.sp)
+            val adapterIdentity = listOf(session.adapterManufacturer, session.adapterModel)
+                .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Unidentified adapter" }
+            Text("$adapterIdentity · ${session.adapterModelConfidence.uppercase()}",
+                fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
+            if (session.adapterIdentificationEvidence.isNotBlank()) {
+                Text("Evidence: ${session.adapterIdentificationEvidence}", fontSize = 10.sp, color = TextSecondary)
+            }
+            if (session.adapterAti.isNotBlank()) Text("ATI: ${session.adapterAti}",
+                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
+            if (session.adapterDescription.isNotBlank()) Text("AT@1: ${session.adapterDescription}",
+                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
+            if (session.adapterManufacturerData.isNotBlank()) Text("Manufacturer data: ${session.adapterManufacturerData}",
+                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
+        }
+        session.vin?.takeIf { it.isNotBlank() }?.let { vin ->
                 Text(
                     "VIN: $vin",
                     fontFamily = FontFamily.Monospace,
