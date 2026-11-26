@@ -15,7 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView(bluetooth: bluetooth)
+            DashboardView(bluetooth: bluetooth, vehicleStore: vehicleStore)
                 .tabItem { Label("Dashboard", systemImage: "gauge.with.dots.needle.67percent") }
                 .tag("dashboard")
             VehiclesView(store: vehicleStore)
@@ -37,6 +37,7 @@ struct ContentView: View {
 
 private struct DashboardView: View {
     @ObservedObject var bluetooth: BluetoothLEManager
+    @ObservedObject var vehicleStore: VehicleDiscoveryStore
 
     var body: some View {
         NavigationStack {
@@ -56,6 +57,9 @@ private struct DashboardView: View {
                                 .foregroundStyle(.green)
                                 .accessibilityLabel("BLE UART characteristics ready")
                         }
+                    }
+                    if bluetooth.isInitialized {
+                        LabeledContent("VIN", value: bluetooth.vehicleVIN ?? bluetooth.vinStatus)
                     }
                     if bluetooth.connectedName == nil {
                         Button {
@@ -102,12 +106,23 @@ private struct DashboardView: View {
                     NavigationLink("Deep scan", destination: PlaceholderDetail(title: "Deep scan"))
                 }
                 Section {
-                    Text("This initial connection layer discovers BLE UART-style adapters. Bluetooth Classic SPP adapters are not generally accessible to third-party iOS apps. Actual ELM327 command/query transport is the next implementation step.")
+                    Text("BLE UART adapters are supported. Bluetooth Classic SPP adapters generally require an Apple-supported accessory/MFi path and cannot be accessed through Core Bluetooth.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("OBDII Tools")
+        }
+        .task(id: bluetooth.isInitialized) {
+            guard bluetooth.isInitialized else { return }
+            if let vin = await bluetooth.identifyVehicle() {
+                vehicleStore.recordScan(
+                    vin: vin,
+                    items: [],
+                    ecuCount: 0,
+                    make: VehicleDiscoveryStore.makeFromVIN(vin)
+                )
+            }
         }
     }
 }
