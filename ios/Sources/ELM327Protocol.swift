@@ -130,6 +130,63 @@ enum ELM327Protocol {
         }
     }
 
+
+    static func parseMode09VIN(_ rawResponse: String) -> String? {
+        let lines = rawResponse.uppercased().components(separatedBy: .newlines)
+            .map { $0.filter { $0.isHexDigit || $0 == ":" } }
+            .filter { !$0.isEmpty }
+        let frames = lines.compactMap { line -> (Int, String)? in
+            guard let colon = line.firstIndex(of: ":"),
+                  let index = Int(line[..<colon], radix: 16) else { return nil }
+            return (index, String(line[line.index(after: colon)...]))
+        }
+        let payload: String
+        if !frames.isEmpty {
+            payload = frames.sorted { $0.0 < $1.0 }.map { frame in
+                if frame.0 == 0 && frame.1.hasPrefix("4902") {
+                    return String(frame.1.dropFirst(4))
+                }
+                return frame.0 == 0 ? "" : frame.1
+            }.joined()
+        } else {
+            let compact = rawResponse.uppercased().filter { $0.isHexDigit }
+            guard let range = compact.range(of: "4902") else { return nil }
+            payload = String(compact[range.upperBound...])
+        }
+        return vinFromHexBytes(payload)
+    }
+
+    static func parseUDSVIN(_ rawResponse: String) -> String? {
+        let compact = rawResponse.uppercased().filter { $0.isHexDigit }
+        let payload: String
+        if let range = compact.range(of: "62F190") {
+            payload = String(compact[range.upperBound...])
+        } else {
+            payload = compact
+        }
+        return vinFromHexBytes(payload)
+    }
+
+    static func isValidVIN(_ vin: String) -> Bool {
+        vin.range(of: #"^[A-HJ-NPR-Z0-9]{17}$"#, options: .regularExpression) != nil
+            && vin != "00000000000000000"
+    }
+
+    private static func vinFromHexBytes(_ hex: String) -> String? {
+        let chars = Array(hex)
+        var decoded = ""
+        var offset = 0
+        while offset + 1 < chars.count && decoded.count < 17 {
+            let byteText = String(chars[offset...offset + 1])
+            if let byte = UInt8(byteText, radix: 16), (0x20...0x7E).contains(byte),
+               let scalar = UnicodeScalar(byte) {
+                decoded.append(Character(scalar))
+            }
+            offset += 2
+        }
+        return isValidVIN(decoded) ? decoded : nil
+    }
+
     static func parseDTCs(_ rawResponse: String, isPending: Bool = false) -> [DiagnosticTroubleCode] {
         let cleaned = rawResponse.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.localizedCaseInsensitiveContains("NODATA"),
