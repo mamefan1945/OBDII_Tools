@@ -52,11 +52,23 @@ class SessionRepository @Inject constructor(
 
     val allSessions: Flow<List<SessionEntity>> = dao.getAllSessions()
 
-    suspend fun startSession(deviceName: String): Long = lifecycleMutex.withLock {
+    suspend fun startSession(
+        deviceName: String,
+        deviceAddress: String = "",
+        transport: String = "unknown",
+        adapterAti: String = "",
+        adapterDescription: String = "",
+        adapterManufacturerData: String = "",
+    ): Long = lifecycleMutex.withLock {
         if (currentSessionId != null) endSessionLocked()
         val now = System.currentTimeMillis()
         dao.getOpenSessions().forEach { orphan -> dao.updateSession(orphan.copy(endTimeMs = now)) }
-        val session = SessionEntity(startTimeMs = System.currentTimeMillis(), deviceName = deviceName)
+        val session = SessionEntity(
+            startTimeMs = System.currentTimeMillis(), deviceName = deviceName,
+            deviceAddress = deviceAddress, transport = transport,
+            adapterAti = adapterAti, adapterDescription = adapterDescription,
+            adapterManufacturerData = adapterManufacturerData,
+        )
         val id = dao.insertSession(session)
         currentSessionId = id
         sessionMaxRpm = null
