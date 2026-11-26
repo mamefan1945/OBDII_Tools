@@ -75,10 +75,36 @@ jobs:
           test -n "$APP_PATH"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" build/OBDIITools-iOS-Simulator.zip
 
+      - name: Capture app UI screenshots
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available | grep -m 1 -E 'iPhone .*\(' | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/')
+          test -n "$DEVICE_ID"
+          APP_PATH=$(find build/ios-derived/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' -print -quit)
+          mkdir -p build/ui-screenshots
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          for TAB in dashboard vehicles live-data diagnostics more; do
+            xcrun simctl terminate "$DEVICE_ID" com.obdiitools.ios 2>/dev/null || true
+            xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+            xcrun simctl launch "$DEVICE_ID" com.obdiitools.ios -screenshot-tab "$TAB"
+            sleep 3
+            xcrun simctl io "$DEVICE_ID" screenshot "build/ui-screenshots/$TAB.png"
+          done
+          ditto -c -k --sequesterRsrc --keepParent build/ui-screenshots build/OBDIITools-iOS-UI-Screenshots.zip
+
       - name: Upload simulator app
         uses: actions/upload-artifact@v4
         with:
           name: OBDIITools-iOS-Simulator-${{ github.run_number }}
           path: build/OBDIITools-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBDIITools-iOS-UI-Screenshots-${{ github.run_number }}
+          path: build/OBDIITools-iOS-UI-Screenshots.zip
           if-no-files-found: error
           retention-days: 14
