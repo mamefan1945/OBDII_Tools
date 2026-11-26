@@ -267,8 +267,8 @@ extension BluetoothLEManager: CBCentralManagerDelegate {
         if let index = adapters.firstIndex(where: { $0.id == id }) {
             adapters[index].rssi = RSSI.intValue
         } else {
-            let manufacturerData = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data)?
-                .map { $0.map { String(format: "%02X", $0) }.joined() } ?? ""
+            let manufacturerBytes = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data()
+            let manufacturerData = manufacturerBytes.map { String(format: "%02X", $0) }.joined()
             let serviceUUIDs = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [])
                 .map { $0.uuidString }
             let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
