@@ -1455,7 +1455,11 @@ class OBDRepository @Inject constructor(
     private suspend fun pollSequential(conn: OBDConnection, pids: List<String>) {
         for (pid in pids) {
             if (pollingPaused) return
-            val raw = conn.query(pid)
+            // Match the 1.2 s timeout used by the successful connection-time
+            // validation for the two PIDs that were failing in normal polling.
+            val timeoutMs = if (pid == ELM327Protocol.PID.MAF ||
+                pid == ELM327Protocol.PID.FUEL_LEVEL) 1200L else 1000L
+            val raw = conn.query(pid, timeoutMs)
             val parsed = ELM327Protocol.parseResponse(pid, raw)
             if (pid == ELM327Protocol.PID.MAF || pid == ELM327Protocol.PID.FUEL_LEVEL) {
                 recordFuelPollDiagnostic(pid, "SEQUENTIAL", raw, parsed, true)
