@@ -1115,6 +1115,8 @@ class OBDRepository @Inject constructor(
                     pollMissingPidsIndividually(conn, fastPids, values, lines.joinToString(" | "))
                 } else {
                     multiPidCapable = false
+                    fastPids.filter { it == ELM327Protocol.PID.MAF || it == ELM327Protocol.PID.FUEL_LEVEL }
+                        .forEach { pid -> recordFuelPollDiagnostic(pid, "MULTI_EMPTY", lines.joinToString(" | "), null, false) }
                     pollSequential(conn, fastPids)
                 }
             } else {
@@ -1135,6 +1137,8 @@ class OBDRepository @Inject constructor(
                     val lines = conn.queryLines(ELM327Protocol.buildMultiPidCommand(chunk))
                     val values = ELM327Protocol.parseMultiPidResponse(lines)
                     if (values.isEmpty()) {
+                        chunk.filter { it == ELM327Protocol.PID.MAF || it == ELM327Protocol.PID.FUEL_LEVEL }
+                            .forEach { pid -> recordFuelPollDiagnostic(pid, "MULTI_EMPTY", lines.joinToString(" | "), null, false) }
                         pollSequential(conn, chunk)
                     } else {
                         pollMissingPidsIndividually(conn, chunk, values, lines.joinToString(" | "))
@@ -1505,9 +1509,10 @@ class OBDRepository @Inject constructor(
         presentInBatch: Boolean,
     ) {
         val now = SystemClock.elapsedRealtime()
-        val previous = lastFuelPidPollDiagnosticAtMs[pid] ?: 0L
+        val diagnosticKey = "$pid:$stage"
+        val previous = lastFuelPidPollDiagnosticAtMs[diagnosticKey] ?: 0L
         if (now - previous < 2_000L) return
-        lastFuelPidPollDiagnosticAtMs[pid] = now
+        lastFuelPidPollDiagnosticAtMs[diagnosticKey] = now
         val detail = "POLL PID=$pid stage=$stage batch_contains=$presentInBatch raw=${raw.ifBlank { "<empty>" }.take(260)} parsed=${parsed?.toString() ?: "null"} plausible=${isPlausibleMode01Value(pid, parsed)}"
         sessionRepository.recordDiagnosticEvent("FUEL_PID_POLL", detail)
     }
