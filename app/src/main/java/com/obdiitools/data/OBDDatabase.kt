@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SessionEntity::class, SessionDataPoint::class],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class OBDDatabase : RoomDatabase() {
@@ -56,6 +56,13 @@ abstract class OBDDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE sessions ADD COLUMN adapterManufacturerData TEXT NOT NULL DEFAULT ''")
                 database.execSQL("ALTER TABLE sessions ADD COLUMN adapterModel TEXT NOT NULL DEFAULT ''")
                 database.execSQL("ALTER TABLE sessions ADD COLUMN adapterModelConfidence TEXT NOT NULL DEFAULT 'unknown'")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE sessions ADD COLUMN adapterServiceUUIDs TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE sessions ADD COLUMN adapterRssi INTEGER")
             }
         }
 
