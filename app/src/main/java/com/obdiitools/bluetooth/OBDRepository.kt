@@ -834,6 +834,8 @@ class OBDRepository @Inject constructor(
                     adapterAti = adapterIdentity.first,
                     adapterDescription = adapterIdentity.second,
                     adapterManufacturerData = deviceInfo.manufacturerDataHex,
+                    adapterServiceUUIDs = deviceInfo.serviceUUIDs.joinToString(","),
+                    adapterRssi = deviceInfo.rssi,
                 )
                 pendingFuelProbeDiagnostics.toList().forEach { detail ->
                     sessionRepository.recordDiagnosticEvent("FUEL_PID_PROBE", detail)
