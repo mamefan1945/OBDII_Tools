@@ -142,6 +142,7 @@ class SessionRepository @Inject constructor(
                 throttlePercent = data.throttlePercent,
                 engineLoadPercent = data.engineLoadPercent,
                 mafGramsPerSec = data.mafGramsPerSec,
+                fuelLevelPercent = data.fuelLevelPercent,
                 batteryVoltage = data.batteryVoltage,
                 ambientTempC = data.ambientTempC,
             )
@@ -156,6 +157,7 @@ class SessionRepository @Inject constructor(
                     throttlePercent = data.throttlePercent,
                     engineLoadPercent = data.engineLoadPercent,
                     mafGramsPerSec = data.mafGramsPerSec,
+                    fuelLevelPercent = data.fuelLevelPercent,
                     batteryVoltage = data.batteryVoltage,
                     ambientTempC = data.ambientTempC,
                     latitude = null,
