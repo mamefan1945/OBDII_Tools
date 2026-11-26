@@ -1,0 +1,84 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [main, ios-foundation]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test iOS app
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$XCODE_PATH" ]; then
+            sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec ios/project.yml --project ios
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -project ios/OBDIITools.xcodeproj \
+            -scheme OBDIITools \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios-derived \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Run unit tests
+        run: |
+          DEVICE=$(xcrun simctl list devices available | grep -m 1 -E 'iPhone .*\(' | sed -E 's/^[[:space:]]*([^()]*) \(.*/\1/' | xargs)
+          if [ -z "$DEVICE" ]; then
+            echo "No available iPhone simulator found"
+            exit 1
+          fi
+          xcodebuild \
+            -project ios/OBDIITools.xcodeproj \
+            -scheme OBDIITools \
+            -destination "platform=iOS Simulator,name=$DEVICE" \
+            -derivedDataPath build/ios-derived \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+      - name: Package simulator build
+        run: |
+          APP_PATH=$(find build/ios-derived/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" build/OBDIITools-iOS-Simulator.zip
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBDIITools-iOS-Simulator-${{ github.run_number }}
+          path: build/OBDIITools-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
