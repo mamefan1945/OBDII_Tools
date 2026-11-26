@@ -168,8 +168,9 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
-          VERSION_NAME=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n1)
-          VERSION_NAME="${VERSION_NAME:-unknown}"
+          VERSION_NAME=$("$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" |
+            sed -nE "s/^package:.*versionName='([^']+)'.*/\\1/p" | head -n1)
+          test -n "$VERSION_NAME" || { echo "Could not read versionName from built APK"; exit 1; }
           BUILD_TIMESTAMP=$(date -u +'%Y%m%d-%H%M%S-UTC')
           SHORT_SHA="${COMMIT_SHA:0:7}"
           ASSET_NAME="OBDII_Tools-v${VERSION_NAME}-build${BUILD_NUMBER}-${BUILD_TIMESTAMP}-${SHORT_SHA}.apk"
