@@ -35,21 +35,24 @@ class VehicleDiscoveryRepository @Inject constructor(@ApplicationContext context
         // "unknown vehicle" profiles for every adapter connection.
         val valid=vin.orEmpty().uppercase().filter{it.isLetterOrDigit()}
             .takeIf{it.matches(Regex("^[A-HJ-NPR-Z0-9]{17}$")) && it!="00000000000000000"}
-            ?: return
-        val old=_profiles.value.firstOrNull{it.id==valid}
+        // Connection-only profile creation requires a real VIN. A Deep Scan
+        // without a VIN may still be saved as an explicitly unverified profile.
+        if (valid == null && items.isEmpty()) return
+        val id=valid ?: "UNVERIFIED-${System.currentTimeMillis()}"
+        val old=_profiles.value.firstOrNull{it.id==id}
         val mergedItems=(old?.items.orEmpty().associateBy{it.key}+items.associateBy{it.key})
             .values.sortedBy{it.key}
         val profile=VehicleDiscoveryProfile(
-            id=valid,
-            vin=valid,
-            make=make.takeIf{it.isNotBlank()}?:old?.make?.takeIf{it.isNotBlank()}?:makeFromVin(valid),
+            id=id,
+            vin=valid.orEmpty(),
+            make=make.takeIf{it.isNotBlank()}?:old?.make?.takeIf{it.isNotBlank()}?:makeFromVin(valid.orEmpty()),
             model=model.takeIf{it.isNotBlank()}?:old?.model.orEmpty(),
             year=year.takeIf{it.isNotBlank()}?:old?.year.orEmpty(),
             lastSeenMs=System.currentTimeMillis(),
             ecuCount=maxOf(old?.ecuCount?:0,ecuCount),
             items=mergedItems,
         )
-        save((_profiles.value.filterNot{it.id==valid}+profile).sortedByDescending{it.lastSeenMs})
+        save((_profiles.value.filterNot{it.id==id}+profile).sortedByDescending{it.lastSeenMs})
     }
     @Synchronized fun recordMazdaDids(items:List<VehicleDiscoveryItem>) {
         val old=_profiles.value.firstOrNull{it.make.equals("Mazda",true)}?:return
