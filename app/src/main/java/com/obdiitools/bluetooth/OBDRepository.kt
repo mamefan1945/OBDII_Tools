@@ -833,6 +833,7 @@ class OBDRepository @Inject constructor(
                     transport = if (deviceInfo.isBle) "BLE" else "Bluetooth Classic",
                     adapterAti = adapterIdentity.first,
                     adapterDescription = adapterIdentity.second,
+                    adapterManufacturerData = deviceInfo.manufacturerDataHex,
                 )
                 pendingFuelProbeDiagnostics.toList().forEach { detail ->
                     sessionRepository.recordDiagnosticEvent("FUEL_PID_PROBE", detail)
