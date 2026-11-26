@@ -39,7 +39,6 @@ struct DiagnosticSession: Codable, Identifiable {
     }
 }
 
-@MainActor
 final class SessionStore: ObservableObject {
     @Published private(set) var sessions: [DiagnosticSession] = []
     @Published private(set) var activeSession: DiagnosticSession?
