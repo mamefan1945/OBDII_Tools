@@ -87,7 +87,7 @@ object SessionExporter {
         val columns = mutableListOf("timestamp_ms", "elapsed_sec")
         if (options.includeObdTelemetry) columns += listOf(
             "rpm", "speed_kph", "coolant_c", "throttle_pct", "engine_load_pct",
-            "maf_g_s", "battery_v", "ambient_temp_c",
+            "maf_g_s", "fuel_level_pct", "battery_v", "ambient_temp_c",
         )
         if (options.includeCvtTelemetry) columns += listOf(
             "cvt_speed_kph", "cvt_engine_rpm", "cvt_slip_rpm", "cvt_slip_raw_hex",
@@ -115,6 +115,7 @@ object SessionExporter {
                 pt.throttlePercent?.let { "%.1f".format(Locale.US, it) }.orEmpty(),
                 pt.engineLoadPercent?.let { "%.1f".format(Locale.US, it) }.orEmpty(),
                 pt.mafGramsPerSec?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
+                pt.fuelLevelPercent?.let { "%.1f".format(Locale.US, it) }.orEmpty(),
                 pt.batteryVoltage?.let { "%.2f".format(Locale.US, it) }.orEmpty(),
                 pt.ambientTempC?.toString().orEmpty(),
             )
