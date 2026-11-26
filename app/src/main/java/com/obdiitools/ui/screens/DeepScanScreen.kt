@@ -278,7 +278,7 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
         state.vehicleVin?.let { add("Vehicle VIN: $it") }
         state.vehicleVinSource?.let { add("VIN source: $it") }
         if (state.vehicleVin != null) add("")
-    )
+    }
     state.mazdaProbeStatus?.let { status ->
         lines += "MAZDA TCM PROBE — 0x7E1"
         state.mazdaProbeCapturedAtMs?.let { lines += "Captured at: ${java.time.Instant.ofEpochMilli(it)}" }
