@@ -33,7 +33,7 @@ final class ELM327ProtocolTests: XCTestCase {
     }
 
     func testParsesVINFromMode09IndexedFrames() {
-        let response = "0:490201314847434d1:3832363333413030 2:34333532"
+        let response = "0:490201314847434d\n1:3832363333413030\n2:34333532"
         XCTAssertEqual(ELM327Protocol.parseMode09VIN(response), "1HGCM82633A004352")
     }
 
