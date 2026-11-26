@@ -116,6 +116,16 @@ class BluetoothDeviceScanner @Inject constructor(
                             address  = address,
                             isPaired = device.bondState == BluetoothDevice.BOND_BONDED,
                             isBle    = true,
+                            manufacturerDataHex = buildString {
+                                val data = result.scanRecord?.manufacturerSpecificData
+                                if (data != null) for (index in 0 until data.size()) {
+                                    append("companyId=")
+                                    append(data.keyAt(index).toString(16).uppercase())
+                                    append(":")
+                                    append(data.valueAt(index).joinToString("") { byte -> "%02X".format(byte) })
+                                    append(";")
+                                }
+                            },
                         )
                     )
                 }
