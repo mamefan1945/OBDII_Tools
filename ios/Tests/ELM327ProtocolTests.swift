@@ -32,6 +32,23 @@ final class ELM327ProtocolTests: XCTestCase {
         XCTAssertEqual(ELM327Protocol.parseDTCs("47010133", isPending: true).map(\.code), ["P0133"])
     }
 
+    func testParsesVINFromMode09IndexedFrames() {
+        let response = "0:490201314847434d3832363333413030343335321:323435"
+        XCTAssertEqual(ELM327Protocol.parseMode09VIN(response), "1HGCM82633A004352")
+    }
+
+    func testParsesVINFromUDSF190() {
+        XCTAssertEqual(
+            ELM327Protocol.parseUDSVIN("62F190314847434D383236333341303034333532"),
+            "1HGCM82633A004352"
+        )
+    }
+
+    func testRejectsInvalidVIN() {
+        XCTAssertNil(ELM327Protocol.parseMode09VIN("NO DATA"))
+        XCTAssertFalse(ELM327Protocol.isValidVIN("00000000000000000"))
+    }
+
     func testRejectsNoData() {
         XCTAssertNil(ELM327Protocol.parseResponse("010C", rawResponse: "NO DATA"))
         XCTAssertTrue(ELM327Protocol.parseDTCs("NO DATA").isEmpty)
