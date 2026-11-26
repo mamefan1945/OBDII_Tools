@@ -23,12 +23,33 @@ class VehicleDiscoveryRepository @Inject constructor(@ApplicationContext context
     @Synchronized fun deleteProfile(id:String) {
         save(_profiles.value.filterNot { it.id == id })
     }
-    @Synchronized fun recordScan(vin:String?,items:List<VehicleDiscoveryItem>,ecuCount:Int) {
-        val valid=vin.orEmpty().uppercase().takeIf{it.matches(Regex("^[A-HJ-NPR-Z0-9]{17}$"))}.orEmpty()
-        val id=valid.ifBlank{"UNVERIFIED-${System.currentTimeMillis()}"}
-        val old=_profiles.value.firstOrNull{it.id==id}
-        val profile=VehicleDiscoveryProfile(id,valid,old?.make?.takeIf{it.isNotBlank()}?:makeFromVin(valid),old?.model.orEmpty(),old?.year.orEmpty(),System.currentTimeMillis(),maxOf(old?.ecuCount?:0,ecuCount),(old?.items.orEmpty()+items).distinctBy{it.key})
-        save((_profiles.value.filterNot{it.id==id}+profile).sortedByDescending{it.lastSeenMs})
+    @Synchronized fun recordScan(
+        vin:String?,
+        items:List<VehicleDiscoveryItem>,
+        ecuCount:Int,
+        make:String="",
+        model:String="",
+        year:String="",
+    ) {
+        // A valid VIN is the stable identity key. Do not create duplicate
+        // "unknown vehicle" profiles for every adapter connection.
+        val valid=vin.orEmpty().uppercase().filter{it.isLetterOrDigit()}
+            .takeIf{it.matches(Regex("^[A-HJ-NPR-Z0-9]{17}$")) && it!="00000000000000000"}
+            ?: return
+        val old=_profiles.value.firstOrNull{it.id==valid}
+        val mergedItems=(old?.items.orEmpty().associateBy{it.key}+items.associateBy{it.key})
+            .values.sortedBy{it.key}
+        val profile=VehicleDiscoveryProfile(
+            id=valid,
+            vin=valid,
+            make=make.takeIf{it.isNotBlank()}?:old?.make?.takeIf{it.isNotBlank()}?:makeFromVin(valid),
+            model=model.takeIf{it.isNotBlank()}?:old?.model.orEmpty(),
+            year=year.takeIf{it.isNotBlank()}?:old?.year.orEmpty(),
+            lastSeenMs=System.currentTimeMillis(),
+            ecuCount=maxOf(old?.ecuCount?:0,ecuCount),
+            items=mergedItems,
+        )
+        save((_profiles.value.filterNot{it.id==valid}+profile).sortedByDescending{it.lastSeenMs})
     }
     @Synchronized fun recordMazdaDids(items:List<VehicleDiscoveryItem>) {
         val old=_profiles.value.firstOrNull{it.make.equals("Mazda",true)}?:return
