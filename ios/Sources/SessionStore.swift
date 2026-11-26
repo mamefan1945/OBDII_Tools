@@ -14,13 +14,16 @@ struct DiagnosticSession: Codable, Identifiable {
     let rssi: Int
     var atiResponse: String
     var adapterDescription: String
+    var adapterManufacturer: String?
+    var adapterIdentificationEvidence: String?
     var adapterModel: String
     var adapterModelConfidence: String
     var vin: String?
 
     init(adapterName: String, peripheralIdentifier: String,
          manufacturerDataHex: String, serviceUUIDs: [String], rssi: Int,
-         atiResponse: String, adapterDescription: String) {
+         atiResponse: String, adapterDescription: String,
+         identification: AdapterIdentification) {
         id = UUID()
         startedAt = Date()
         endedAt = nil
@@ -33,8 +36,10 @@ struct DiagnosticSession: Codable, Identifiable {
         self.rssi = rssi
         self.atiResponse = atiResponse
         self.adapterDescription = adapterDescription
-        adapterModel = ""
-        adapterModelConfidence = "unknown"
+        adapterManufacturer = identification.manufacturer.isEmpty ? nil : identification.manufacturer
+        adapterIdentificationEvidence = identification.evidence.isEmpty ? nil : identification.evidence
+        adapterModel = identification.model
+        adapterModelConfidence = identification.confidence
         vin = nil
     }
 }
@@ -57,6 +62,10 @@ final class SessionStore: ObservableObject {
                       manufacturerDataHex: String, serviceUUIDs: [String],
                       rssi: Int, atiResponse: String, adapterDescription: String) {
         endActiveSession()
+        let identification = AdapterFingerprintClassifier.identify(
+            advertisedName: adapterName, ati: atiResponse,
+            description: adapterDescription, manufacturerDataHex: manufacturerDataHex
+        )
         let session = DiagnosticSession(
             adapterName: adapterName,
             peripheralIdentifier: peripheralIdentifier,
@@ -64,7 +73,8 @@ final class SessionStore: ObservableObject {
             serviceUUIDs: serviceUUIDs,
             rssi: rssi,
             atiResponse: atiResponse,
-            adapterDescription: adapterDescription
+            adapterDescription: adapterDescription,
+            identification: identification
         )
         activeSession = session
         sessions.insert(session, at: 0)
