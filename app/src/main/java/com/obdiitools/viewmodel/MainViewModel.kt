@@ -25,6 +25,9 @@ import com.obdiitools.data.UserPreferences
 import com.obdiitools.data.SessionRepository
 import com.obdiitools.data.VinDiagnostic
 import com.obdiitools.data.VinInfo
+import com.obdiitools.data.VehicleDiscoveryRepository
+import com.obdiitools.data.VehicleDiscoveryItem
+import com.obdiitools.obd.AllPidDefinitions
 import com.obdiitools.data.VinRepository
 import com.obdiitools.obd.BluetoothDeviceInfo
 import com.obdiitools.obd.ConnectionState
@@ -49,6 +52,7 @@ class MainViewModel @Inject constructor(
     private val scanner: BluetoothDeviceScanner,
     private val prefsRepository: PreferencesRepository,
     private val vinRepository: VinRepository,
+    private val vehicleDiscoveryRepository: VehicleDiscoveryRepository,
     private val sessionRepository: SessionRepository,
     private val customPidRepository: CustomPidRepository,
     private val eiaRepository: EiaRepository,
@@ -115,6 +119,7 @@ class MainViewModel @Inject constructor(
     val vinDiagRunning: StateFlow<Boolean> = _vinDiagRunning
 
     private var vinFetchJob: Job? = null
+    private var profilePidJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -135,6 +140,43 @@ class MainViewModel @Inject constructor(
                                 if (info != null && (info.vin.isNotBlank() || info.make.isNotBlank() || info.model.isNotBlank())) {
                                     sessionRepository.updateCurrentSessionMakeModel(info.make, info.model, info.vin)
                                 }
+                                // Create/update the profile as soon as VIN decoding
+                                // identifies the vehicle; Deep Scan is not required.
+                                if (info != null && info.vin.isNotBlank()) {
+                                    vehicleDiscoveryRepository.recordScan(
+                                        vin = info.vin,
+                                        items = emptyList(),
+                                        ecuCount = 0,
+                                        make = info.make,
+                                        model = info.model,
+                                        year = info.year,
+                                    )
+                                    profilePidJob?.cancel()
+                                    profilePidJob = viewModelScope.launch {
+                                        repository.confirmedPids.collect { confirmed ->
+                                            val definitions = AllPidDefinitions.ALL
+                                                .filter { it.command in confirmed }
+                                            val items = definitions.map { definition ->
+                                                VehicleDiscoveryItem(
+                                                    key = "7DF:${definition.command}",
+                                                    name = definition.name,
+                                                    ecuAddress = "7DF",
+                                                    category = definition.category.label,
+                                                    known = true,
+                                                    status = "Confirmed by normal live polling",
+                                                )
+                                            }
+                                            vehicleDiscoveryRepository.recordScan(
+                                                vin = info.vin,
+                                                items = items,
+                                                ecuCount = 0,
+                                                make = info.make,
+                                                model = info.model,
+                                                year = info.year,
+                                            )
+                                        }
+                                    }
+                                }
                             } finally {
                                 _vinLoading.value = false
                             }
@@ -142,6 +184,8 @@ class MainViewModel @Inject constructor(
                     }
                     is ConnectionState.Disconnected -> {
                         vinFetchJob?.cancel()
+                        profilePidJob?.cancel()
+                        profilePidJob = null
                         repository.setVehicleIdentity(null)
                         _vinInfo.value = null
                         _vinLoading.value = false
