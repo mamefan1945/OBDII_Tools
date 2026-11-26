@@ -178,9 +178,8 @@ enum ELM327Protocol {
         var offset = 0
         while offset + 1 < chars.count && decoded.count < 17 {
             let byteText = String(chars[offset...offset + 1])
-            if let byte = UInt8(byteText, radix: 16), (0x20...0x7E).contains(byte),
-               let scalar = UnicodeScalar(byte) {
-                decoded.append(Character(scalar))
+            if let byte = UInt8(byteText, radix: 16), (0x20...0x7E).contains(byte) {
+                decoded.append(Character(UnicodeScalar(byte)))
             }
             offset += 2
         }
