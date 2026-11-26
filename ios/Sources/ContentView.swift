@@ -72,6 +72,11 @@ private struct DashboardView: View {
                             LabeledContent("ATI", value: session.atiResponse.isEmpty ? "No response" : session.atiResponse)
                             LabeledContent("AT@1", value: session.adapterDescription.isEmpty ? "No response" : session.adapterDescription)
                             LabeledContent("Model", value: session.adapterModel.isEmpty ? "Not identified" : session.adapterModel)
+                            LabeledContent("Manufacturer", value: session.adapterManufacturer ?? "Not identified")
+                            LabeledContent("Identification confidence", value: session.adapterModelConfidence.capitalized)
+                            if let evidence = session.adapterIdentificationEvidence, !evidence.isEmpty {
+                                LabeledContent("Identification evidence", value: evidence)
+                            }
                         }
                     }
                     if bluetooth.connectedName == nil {
