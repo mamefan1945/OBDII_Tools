@@ -9,8 +9,10 @@ final class BluetoothLEManager: NSObject, ObservableObject {
     struct Adapter: Identifiable {
         let peripheral: CBPeripheral
         var id: UUID { peripheral.identifier }
-        var name: String { peripheral.name ?? "Unnamed OBD adapter" }
+        var name: String
         var rssi: Int
+        var manufacturerDataHex: String
+        var serviceUUIDs: [String]
     }
 
     @Published private(set) var adapters: [Adapter] = []
@@ -21,6 +23,9 @@ final class BluetoothLEManager: NSObject, ObservableObject {
     @Published private(set) var isInitialized = false
     @Published private(set) var vehicleVIN: String?
     @Published private(set) var vinStatus = "VIN not read"
+    @Published private(set) var activeSession: DiagnosticSession?
+    private let sessionStore = SessionStore()
+    private var connectedAdapter: Adapter?
 
     private var central: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -77,6 +82,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         writeCharacteristic = nil
         notifyCharacteristic = nil
         connectedPeripheral = adapter.peripheral
+        connectedAdapter = adapter
         adapter.peripheral.delegate = self
         central.connect(adapter.peripheral, options: nil)
     }
@@ -148,6 +154,8 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         if let vin = ELM327Protocol.parseMode09VIN(mode09) {
             vehicleVIN = vin
             vinStatus = "VIN read successfully using Mode 09 PID 02"
+            sessionStore.updateVIN(vin)
+            activeSession = sessionStore.activeSession
             return vin
         }
         vinStatus = "Mode 09 unavailable; trying UDS F190…"
@@ -155,9 +163,13 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         if let vin = ELM327Protocol.parseUDSVIN(uds) {
             vehicleVIN = vin
             vinStatus = "VIN read successfully using UDS F190"
+            sessionStore.updateVIN(vin)
+            activeSession = sessionStore.activeSession
             return vin
         }
         vehicleVIN = nil
+        sessionStore.updateVIN(nil)
+        activeSession = sessionStore.activeSession
         vinStatus = "VIN could not be read from this adapter/vehicle"
         return nil
     }
@@ -181,6 +193,22 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         let fallback = await query("0100", timeout: 1.5)
         _ = await query("ATSH 7DF", timeout: 1.0)
         return fallback
+    }
+
+    private func captureAdapterFingerprint() async {
+        guard let adapter = connectedAdapter else { return }
+        let ati = (await query("ATI", timeout: 1.5)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = (await query("AT@1", timeout: 1.5)).trimmingCharacters(in: .whitespacesAndNewlines)
+        sessionStore.startSession(
+            adapterName: adapter.name,
+            peripheralIdentifier: adapter.id.uuidString,
+            manufacturerDataHex: adapter.manufacturerDataHex,
+            serviceUUIDs: adapter.serviceUUIDs,
+            rssi: adapter.rssi,
+            atiResponse: String(ati.prefix(256)),
+            adapterDescription: String(description.prefix(256))
+        )
+        activeSession = sessionStore.activeSession
     }
 
     private func finishPendingResponse() {
@@ -211,6 +239,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
                     self.status = success
                         ? "Connected and ELM327 initialized"
                         : "BLE connected, but ELM327 initialization did not complete"
+                    if success { await self.captureAdapterFingerprint() }
                 }
             }
         } else if canWrite && canNotify {
@@ -238,7 +267,16 @@ extension BluetoothLEManager: CBCentralManagerDelegate {
         if let index = adapters.firstIndex(where: { $0.id == id }) {
             adapters[index].rssi = RSSI.intValue
         } else {
-            adapters.append(Adapter(peripheral: peripheral, rssi: RSSI.intValue))
+            let manufacturerData = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data)?
+                .map { $0.map { String(format: "%02X", $0) }.joined() } ?? ""
+            let serviceUUIDs = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [])
+                .map { $0.uuidString }
+            let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+                ?? peripheral.name ?? "Unnamed OBD adapter"
+            adapters.append(Adapter(
+                peripheral: peripheral, name: advertisedName, rssi: RSSI.intValue,
+                manufacturerDataHex: manufacturerData, serviceUUIDs: serviceUUIDs
+            ))
             adapters.sort { $0.rssi > $1.rssi }
         }
     }
@@ -263,6 +301,9 @@ extension BluetoothLEManager: CBCentralManagerDelegate {
                         error: Error?) {
         connectedPeripheral = nil
         connectedName = nil
+        connectedAdapter = nil
+        sessionStore.endActiveSession()
+        activeSession = nil
         isInitialized = false
         vehicleVIN = nil
         writeCharacteristic = nil
