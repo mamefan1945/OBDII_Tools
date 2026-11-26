@@ -19,6 +19,13 @@ data class SessionEntity(
     val model: String = "",
     val totalFuelLitres: Float? = null,
     val vin: String? = null,
+    val deviceAddress: String = "",
+    val transport: String = "unknown",
+    val adapterAti: String = "",
+    val adapterDescription: String = "",
+    val adapterManufacturerData: String = "",
+    val adapterModel: String = "",
+    val adapterModelConfidence: String = "unknown",
 )
 
 @Entity(
