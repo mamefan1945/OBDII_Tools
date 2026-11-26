@@ -60,6 +60,8 @@ class SessionRepository @Inject constructor(
         adapterAti: String = "",
         adapterDescription: String = "",
         adapterManufacturerData: String = "",
+        adapterServiceUUIDs: String = "",
+        adapterRssi: Int? = null,
     ): Long = lifecycleMutex.withLock {
         if (currentSessionId != null) endSessionLocked()
         val now = System.currentTimeMillis()
@@ -77,6 +79,8 @@ class SessionRepository @Inject constructor(
             adapterManufacturerData = adapterManufacturerData,
             adapterManufacturer = fingerprint.manufacturer,
             adapterIdentificationEvidence = fingerprint.evidence,
+            adapterServiceUUIDs = adapterServiceUUIDs,
+            adapterRssi = adapterRssi,
             adapterModel = fingerprint.model,
             adapterModelConfidence = fingerprint.confidence,
         )
