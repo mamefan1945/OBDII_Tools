@@ -41,3 +41,8 @@ The iOS app discovers compatible BLE UART adapters using Core Bluetooth, initial
 ## Architecture direction
 
 Keep platform-specific Bluetooth, persistence and UI implementations native to iOS. Port and test protocol/domain behavior against the Android source and existing protocol tests. Avoid copying Android framework code into the iOS target.
+
+
+## Adapter fingerprint classification
+
+The iOS session store applies the same conservative signature rules as Android for VEEPEAK OBDCheck BLE/BLE+, OBDLink MX+/CX/LX/EX, Vgate iCar Pro, vLinker MC+/FD+/BM+/FS, Carista EVO, BlueDriver, and BAFX. It stores the matched manufacturer/model, evidence source, and confidence alongside the original advertisement and ELM responses. Exact product text in `AT@1` is marked **confirmed** (self-reported by the adapter); an advertised-name match is **probable**; generic ELM327 strings and unmapped manufacturer data remain **unknown**. The iOS CoreBluetooth peripheral UUID is not a MAC address, and neither platform infers a model from a MAC/OUI or generic BLE service UUID.
