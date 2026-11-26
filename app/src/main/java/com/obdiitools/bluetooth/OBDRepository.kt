@@ -1104,24 +1104,13 @@ class OBDRepository @Inject constructor(
         fun filterPids(pids: List<String>) =
             ELM327Protocol.filterSupportedPids(pids, supported)
 
-        // --- Fast PIDs every cycle ---
+        // Mode 01 requests contain exactly one PID byte after the service byte.
+        // Concatenating several PID bytes (for example "01 0C 0D 11") is not a
+        // valid multi-PID request. Some ECUs respond with fragmented/partial data,
+        // which can poison the following reads. Query each PID independently.
         val fastPids = filterPids(ELM327Protocol.FAST_PIDS)
         if (fastPids.isNotEmpty()) {
-            if (multiPidCapable != false) {
-                val lines = conn.queryLines(ELM327Protocol.buildMultiPidCommand(fastPids))
-                val values = ELM327Protocol.parseMultiPidResponse(lines)
-                if (values.isNotEmpty()) {
-                    multiPidCapable = true
-                    pollMissingPidsIndividually(conn, fastPids, values, lines.joinToString(" | "))
-                } else {
-                    multiPidCapable = false
-                    fastPids.filter { it == ELM327Protocol.PID.MAF || it == ELM327Protocol.PID.FUEL_LEVEL }
-                        .forEach { pid -> recordFuelPollDiagnostic(pid, "MULTI_EMPTY", lines.joinToString(" | "), null, false) }
-                    pollSequential(conn, fastPids)
-                }
-            } else {
-                pollSequential(conn, fastPids)
-            }
+            pollSequential(conn, fastPids)
         }
 
         // --- Mazda CX-5 TCM data (serialized with all other adapter I/O) ---
@@ -1133,19 +1122,7 @@ class OBDRepository @Inject constructor(
             val slowPids = filterPids(ELM327Protocol.SLOW_PIDS)
             slowPids.chunked(6).forEach { chunk ->
                 if (pollingPaused) return
-                if (multiPidCapable == true) {
-                    val lines = conn.queryLines(ELM327Protocol.buildMultiPidCommand(chunk))
-                    val values = ELM327Protocol.parseMultiPidResponse(lines)
-                    if (values.isEmpty()) {
-                        chunk.filter { it == ELM327Protocol.PID.MAF || it == ELM327Protocol.PID.FUEL_LEVEL }
-                            .forEach { pid -> recordFuelPollDiagnostic(pid, "MULTI_EMPTY", lines.joinToString(" | "), null, false) }
-                        pollSequential(conn, chunk)
-                    } else {
-                        pollMissingPidsIndividually(conn, chunk, values, lines.joinToString(" | "))
-                    }
-                } else {
-                    pollSequential(conn, chunk)
-                }
+                pollSequential(conn, chunk)
             }
 
             // Poll additional sensors from the learned capability set. The
