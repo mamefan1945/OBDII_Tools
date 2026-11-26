@@ -2,12 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var bluetooth = BluetoothLEManager()
+    @StateObject private var vehicleStore = VehicleDiscoveryStore()
 
     var body: some View {
         TabView {
             DashboardView(bluetooth: bluetooth)
                 .tabItem { Label("Dashboard", systemImage: "gauge.with.dots.needle.67percent") }
-            VehiclesView()
+            VehiclesView(store: vehicleStore)
                 .tabItem { Label("Vehicles", systemImage: "car.side") }
             LiveDataView()
                 .tabItem { Label("Live Data", systemImage: "waveform.path.ecg") }
@@ -98,16 +99,126 @@ private struct DashboardView: View {
 }
 
 private struct VehiclesView: View {
+    @ObservedObject var store: VehicleDiscoveryStore
+
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(
-                "No saved vehicles",
-                systemImage: "car.side",
-                description: Text("Vehicle discovery and saved profiles will be implemented here.")
-            )
+            List {
+                if store.profiles.isEmpty {
+                    ContentUnavailableView(
+                        "No saved vehicles",
+                        systemImage: "car.side",
+                        description: Text("Profiles are saved when a vehicle scan discovers a VIN or records diagnostic data.")
+                    )
+                } else {
+                    ForEach(store.profiles) { profile in
+                        NavigationLink {
+                            VehicleProfileDetail(profile: profile)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text([profile.year, profile.make, profile.model]
+                                    .filter { !$0.isEmpty }.joined(separator: " ")
+                                    .ifEmpty(profile.make.isEmpty ? "Unverified vehicle" : profile.make))
+                                    .font(.headline)
+                                Text(profile.vin.isEmpty ? "VIN not verified" : profile.vin)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 12) {
+                                    Label("\(profile.ecuCount) ECUs", systemImage: "cpu")
+                                    Label("\(profile.knownCount) known", systemImage: "checkmark.circle")
+                                    Label("\(profile.unknownCount) unknown", systemImage: "questionmark.circle")
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 3)
+                        }
+                        .swipeActions {
+                            Button("Delete", role: .destructive) {
+                                store.deleteProfile(id: profile.id)
+                            }
+                        }
+                    }
+                }
+            }
             .navigationTitle("Vehicles")
+            .toolbar {
+                if !store.profiles.isEmpty { EditButton() }
+            }
         }
     }
+}
+
+private struct VehicleProfileDetail: View {
+    let profile: VehicleDiscoveryProfile
+
+    var body: some View {
+        List {
+            Section("Vehicle") {
+                LabeledContent("Make", value: profile.make.isEmpty ? "Unknown" : profile.make)
+                LabeledContent("Model", value: profile.model.isEmpty ? "Unknown" : profile.model)
+                LabeledContent("Year", value: profile.year.isEmpty ? "Unknown" : profile.year)
+                LabeledContent("VIN", value: profile.vin.isEmpty ? "Unverified" : profile.vin)
+                LabeledContent("ECUs discovered", value: "\(profile.ecuCount)")
+                LabeledContent("Last scanned", value: Date(timeIntervalSince1970: Double(profile.lastSeenMs) / 1000).formatted(date: .abbreviated, time: .shortened))
+            }
+            Section("Discovery summary") {
+                LabeledContent("Total entries", value: "\(profile.items.count)")
+                LabeledContent("Known", value: "\(profile.knownCount)")
+                LabeledContent("Unknown", value: "\(profile.unknownCount)")
+            }
+            Section("Discovered items") {
+                if profile.items.isEmpty {
+                    Text("No discovery entries recorded.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(profile.items) { item in
+                        NavigationLink {
+                            VehicleDiscoveryItemDetail(item: item)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.name.isEmpty ? item.key : item.name)
+                                Text("\(item.key) · ECU \(item.ecuAddress) · \(item.category)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text(item.known ? "Known" : "Unknown")
+                                    .font(.caption2)
+                                    .foregroundStyle(item.known ? .green : .secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(profile.make.isEmpty ? "Vehicle profile" : profile.make)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct VehicleDiscoveryItemDetail: View {
+    let item: VehicleDiscoveryItem
+
+    var body: some View {
+        List {
+            LabeledContent("Name", value: item.name.isEmpty ? "—" : item.name)
+            LabeledContent("Key", value: item.key)
+            LabeledContent("ECU address", value: item.ecuAddress)
+            LabeledContent("Category", value: item.category)
+            LabeledContent("Status", value: item.status)
+            LabeledContent("Classification", value: item.known ? "Known" : "Unknown")
+            Section("Raw response") {
+                Text(item.rawResponse.isEmpty ? "No raw response saved" : item.rawResponse)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+        }
+        .navigationTitle("Discovery detail")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private extension String {
+    func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
 }
 
 private struct LiveDataView: View {
