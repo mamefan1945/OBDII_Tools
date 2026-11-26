@@ -126,6 +126,8 @@ class BluetoothDeviceScanner @Inject constructor(
                                     append(";")
                                 }
                             },
+                            serviceUUIDs = result.scanRecord?.serviceUuids?.map { it.uuid.toString() } ?: emptyList(),
+                            rssi = result.rssi,
                         )
                     )
                 }
