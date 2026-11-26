@@ -206,6 +206,7 @@ class OBDRepository @Inject constructor(
     private var connection: OBDConnection? = null
     @Volatile private var activeSessionId: Long? = null
     private val pendingFuelProbeDiagnostics = mutableListOf<String>()
+    private val lastFuelPidPollDiagnosticAtMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private var pollingJob: Job? = null
     private val adaptivePidScheduler = com.obdiitools.obd.AdaptivePidPollingScheduler(maxRequestsPerPass = 4)
     private val lastAdaptivePollAtMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -1111,7 +1112,7 @@ class OBDRepository @Inject constructor(
                 val values = ELM327Protocol.parseMultiPidResponse(lines)
                 if (values.isNotEmpty()) {
                     multiPidCapable = true
-                    pollMissingPidsIndividually(conn, fastPids, values)
+                    pollMissingPidsIndividually(conn, fastPids, values, lines.joinToString(" | "))
                 } else {
                     multiPidCapable = false
                     pollSequential(conn, fastPids)
@@ -1136,7 +1137,7 @@ class OBDRepository @Inject constructor(
                     if (values.isEmpty()) {
                         pollSequential(conn, chunk)
                     } else {
-                        pollMissingPidsIndividually(conn, chunk, values)
+                        pollMissingPidsIndividually(conn, chunk, values, lines.joinToString(" | "))
                     }
                 } else {
                     pollSequential(conn, chunk)
@@ -1448,14 +1449,24 @@ class OBDRepository @Inject constructor(
         conn: OBDConnection,
         requestedPids: List<String>,
         batchValues: Map<String, Any?>,
+        batchRaw: String = "",
     ) {
         val resolved = batchValues.toMutableMap()
+        val watchedPids = setOf(ELM327Protocol.PID.MAF, ELM327Protocol.PID.FUEL_LEVEL)
+        requestedPids.filter { it in watchedPids }.forEach { pid ->
+            recordFuelPollDiagnostic(pid, "MULTI", batchRaw, batchValues[pid], batchValues.containsKey(pid))
+        }
         val missingOrMalformed = requestedPids.filter { pid ->
             !batchValues.containsKey(pid) || batchValues[pid] == null
         }
         for (pid in missingOrMalformed) {
             if (pollingPaused) return
-            resolved[pid] = ELM327Protocol.parseResponse(pid, conn.query(pid))
+            val raw = conn.query(pid)
+            val parsed = ELM327Protocol.parseResponse(pid, raw)
+            if (pid == ELM327Protocol.PID.MAF || pid == ELM327Protocol.PID.FUEL_LEVEL) {
+                recordFuelPollDiagnostic(pid, "INDIVIDUAL_RETRY", raw, parsed, true)
+            }
+            resolved[pid] = parsed
         }
         applyPidValues(resolved)
     }
@@ -1463,7 +1474,12 @@ class OBDRepository @Inject constructor(
     private suspend fun pollSequential(conn: OBDConnection, pids: List<String>) {
         for (pid in pids) {
             if (pollingPaused) return
-            applyPidValues(mapOf(pid to ELM327Protocol.parseResponse(pid, conn.query(pid))))
+            val raw = conn.query(pid)
+            val parsed = ELM327Protocol.parseResponse(pid, raw)
+            if (pid == ELM327Protocol.PID.MAF || pid == ELM327Protocol.PID.FUEL_LEVEL) {
+                recordFuelPollDiagnostic(pid, "SEQUENTIAL", raw, parsed, true)
+            }
+            applyPidValues(mapOf(pid to parsed))
         }
     }
 
@@ -1479,6 +1495,21 @@ class OBDRepository @Inject constructor(
             results[pid.id] = pid.evaluate(raw)
         }
         _customPidValues.value = results
+    }
+
+    private suspend fun recordFuelPollDiagnostic(
+        pid: String,
+        stage: String,
+        raw: String,
+        parsed: Any?,
+        presentInBatch: Boolean,
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastFuelPidPollDiagnosticAtMs[pid] ?: 0L
+        if (now - previous < 2_000L) return
+        lastFuelPidPollDiagnosticAtMs[pid] = now
+        val detail = "POLL PID=$pid stage=$stage batch_contains=$presentInBatch raw=${raw.ifBlank { "<empty>" }.take(260)} parsed=${parsed?.toString() ?: "null"} plausible=${isPlausibleMode01Value(pid, parsed)}"
+        sessionRepository.recordDiagnosticEvent("FUEL_PID_POLL", detail)
     }
 
     private fun isPlausibleMode01Value(pid: String, value: Any?): Boolean {
