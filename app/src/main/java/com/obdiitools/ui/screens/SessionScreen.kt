@@ -410,7 +410,8 @@ private fun SessionRow(
                 color = TextSecondary,
             )
             if (session.adapterManufacturer.isNotBlank() || session.adapterModel.isNotBlank() ||
-            session.adapterAti.isNotBlank() || session.adapterDescription.isNotBlank()) {
+            session.adapterAti.isNotBlank() || session.adapterDescription.isNotBlank() ||
+            session.adapterManufacturerData.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
             Text("ADAPTER FINGERPRINT", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
                 fontSize = 10.sp, color = NeonGreen, letterSpacing = 1.5.sp)
@@ -418,6 +419,8 @@ private fun SessionRow(
                 .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Unidentified adapter" }
             Text("$adapterIdentity · ${session.adapterModelConfidence.uppercase()}",
                 fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
+            Text("Transport: ${session.transport} · Bluetooth ID: ${session.deviceAddress.ifBlank { "Unavailable" }}",
+                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
             if (session.adapterIdentificationEvidence.isNotBlank()) {
                 Text("Evidence: ${session.adapterIdentificationEvidence}", fontSize = 10.sp, color = TextSecondary)
             }
