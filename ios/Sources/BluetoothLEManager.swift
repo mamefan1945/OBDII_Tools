@@ -1,3 +1,4 @@
+import Combine
 import CoreBluetooth
 import Foundation
 
@@ -174,14 +175,14 @@ extension BluetoothLEManager: CBPeripheralDelegate {
         }
         for characteristic in characteristics {
             let uuid = characteristic.uuid.uuidString.uppercased()
-            if writeIDs.contains(uuid),
-               characteristic.properties.contains(.write) ||
-                characteristic.properties.contains(.writeWithoutResponse) {
+            if writeIDs.contains(uuid) &&
+                (characteristic.properties.contains(.write) ||
+                 characteristic.properties.contains(.writeWithoutResponse)) {
                 writeCharacteristic = characteristic
             }
-            if notifyIDs.contains(uuid),
-               characteristic.properties.contains(.notify) ||
-                characteristic.properties.contains(.indicate) {
+            if notifyIDs.contains(uuid) &&
+                (characteristic.properties.contains(.notify) ||
+                 characteristic.properties.contains(.indicate)) {
                 notifyCharacteristic = characteristic
                 peripheral.setNotifyValue(true, for: characteristic)
             }
