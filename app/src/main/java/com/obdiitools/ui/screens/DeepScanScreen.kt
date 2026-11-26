@@ -274,6 +274,10 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
         "ECUs reported: ${state.results.size}",
         "Supported PID entries: ${state.results.sumOf { it.totalPids }}",
         "",
+    ).apply {
+        state.vehicleVin?.let { add("Vehicle VIN: $it") }
+        state.vehicleVinSource?.let { add("VIN source: $it") }
+        if (state.vehicleVin != null) add("")
     )
     state.mazdaProbeStatus?.let { status ->
         lines += "MAZDA TCM PROBE — 0x7E1"
@@ -348,7 +352,7 @@ private fun DeepScanInfoPanel(
             )
             InfoLine("1", "Scans 136 candidate 11-bit request addresses (0x700–0x77F and 0x7E0–0x7E7) for responding modules.")
             InfoLine("2", "Reads each ECU’s Mode 01 support bitmask, then validates advertised PIDs with two real responses and successful decoding. The report separates advertised from verified readings.")
-            InfoLine("3", "Checks Mode 09 support and attempts read-only UDS VIN DID F190 on each individually responding ECU. Unsupported identifiers are reported, not guessed.")
+            InfoLine("3", "Reuses the VIN retrieved during Bluetooth connection (standard Mode 09 PID 02, with UDS F190 fallback), then independently probes F190 on responding ECUs. Unsupported identifiers are reported, not guessed.")
             InfoLine("4", "Also samples up to 12 advertised Mode 01 PIDs per ECU that have no decoder yet. Two positive responses with matching payload lengths are saved as raw discovery leads.")
             Text(
                 "This takes 2–5 minutes depending on how many ECUs respond.",
