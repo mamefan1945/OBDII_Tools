@@ -20,8 +20,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.obdiitools.ios
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: OBDII Tools
-        INFOPLIST_KEY_NS BluetoothAlwaysUsageDescription: "OBDII Tools uses Bluetooth to communicate with compatible vehicle diagnostic adapters."
-        INFOPLIST_KEY_NS BluetoothPeripheralUsageDescription: "OBDII Tools uses Bluetooth to communicate with compatible vehicle diagnostic adapters."
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "OBDII Tools uses Bluetooth to communicate with compatible vehicle diagnostic adapters."
         CODE_SIGNING_ALLOWED: NO
   OBDIIToolsTests:
     type: bundle.unit-test
