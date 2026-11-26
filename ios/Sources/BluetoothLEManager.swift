@@ -18,6 +18,9 @@ final class BluetoothLEManager: NSObject, ObservableObject {
     @Published private(set) var connectedName: String?
     @Published private(set) var isScanning = false
     @Published private(set) var isReadyForELM = false
+    @Published private(set) var isInitialized = false
+    @Published private(set) var vehicleVIN: String?
+    @Published private(set) var vinStatus = "VIN not read"
 
     private var central: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -66,6 +69,9 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         status = "Connecting to \(adapter.name)…"
         connectedName = nil
         isReadyForELM = false
+        isInitialized = false
+        vehicleVIN = nil
+        vinStatus = "Waiting for adapter initialization"
         initializationStarted = false
         notificationsActive = false
         writeCharacteristic = nil
@@ -103,7 +109,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         queryInProgress = true
         defer { queryInProgress = false }
         responseBuffer = ""
-        let payload = (command.trimmingCharacters(in: .whitespacesAndNewlines) + "\\r")
+        let payload = (command.trimmingCharacters(in: .whitespacesAndNewlines) + "\r")
         guard let data = payload.data(using: .ascii) else { return "" }
 
         return await withCheckedContinuation { continuation in
@@ -125,9 +131,35 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         let commands = ["ATE0", "ATL0", "ATS0", "ATH0", "ATAT2", "ATSP0"]
         for command in commands {
             let response = await query(command, timeout: 2.0)
-            if response.isEmpty { return false }
+            if response.isEmpty {
+                isInitialized = false
+                return false
+            }
         }
+        isInitialized = true
         return true
+    }
+
+    /// Reads VIN using Mode 09 PID 02, then UDS DID F190 as a fallback.
+    func identifyVehicle() async -> String? {
+        guard isInitialized else { return nil }
+        vinStatus = "Reading VIN (Mode 09 PID 02)…"
+        let mode09 = await query("0902", timeout: 6.0)
+        if let vin = ELM327Protocol.parseMode09VIN(mode09) {
+            vehicleVIN = vin
+            vinStatus = "VIN read successfully using Mode 09 PID 02"
+            return vin
+        }
+        vinStatus = "Mode 09 unavailable; trying UDS F190…"
+        let uds = await queryUDS(ecuAddress: "7E0", did: "F190")
+        if let vin = ELM327Protocol.parseUDSVIN(uds) {
+            vehicleVIN = vin
+            vinStatus = "VIN read successfully using UDS F190"
+            return vin
+        }
+        vehicleVIN = nil
+        vinStatus = "VIN could not be read from this adapter/vehicle"
+        return nil
     }
 
     func queryUDS(ecuAddress: String, did: String) async -> String {
@@ -231,6 +263,8 @@ extension BluetoothLEManager: CBCentralManagerDelegate {
                         error: Error?) {
         connectedPeripheral = nil
         connectedName = nil
+        isInitialized = false
+        vehicleVIN = nil
         writeCharacteristic = nil
         notifyCharacteristic = nil
         isReadyForELM = false
