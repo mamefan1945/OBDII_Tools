@@ -66,4 +66,6 @@ data class BluetoothDeviceInfo(
     val isPaired: Boolean = false,
     val isBle: Boolean = false,
     val manufacturerDataHex: String = "",
+    val serviceUUIDs: List<String> = emptyList(),
+    val rssi: Int? = null,
 )
