@@ -27,6 +27,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
     private var pendingResponse: CheckedContinuation<String, Never>?
     private var queryInProgress = false
     private var initializationStarted = false
+    private var notificationsActive = false
 
     private let uartServiceIDs: [CBUUID] = [
         CBUUID(string: "FFE0"),
@@ -66,6 +67,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         connectedName = nil
         isReadyForELM = false
         initializationStarted = false
+        notificationsActive = false
         writeCharacteristic = nil
         notifyCharacteristic = nil
         connectedPeripheral = adapter.peripheral
@@ -166,7 +168,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
             writeCharacteristic.properties.contains(.writeWithoutResponse)
         let canNotify = notifyCharacteristic.properties.contains(.notify) ||
             notifyCharacteristic.properties.contains(.indicate)
-        isReadyForELM = canWrite && canNotify
+        isReadyForELM = canWrite && canNotify && notificationsActive
         if isReadyForELM {
             status = "BLE UART connected; initializing ELM327…"
             if !initializationStarted {
@@ -179,6 +181,8 @@ final class BluetoothLEManager: NSObject, ObservableObject {
                         : "BLE connected, but ELM327 initialization did not complete"
                 }
             }
+        } else if canWrite && canNotify {
+            status = "BLE UART found; enabling adapter notifications…"
         } else {
             status = "Connected, but no compatible ELM327 UART characteristics were found"
         }
@@ -292,6 +296,7 @@ extension BluetoothLEManager: CBPeripheralDelegate {
             status = "Adapter notification setup failed: \(error.localizedDescription)"
             isReadyForELM = false
         } else {
+            notificationsActive = characteristic.isNotifying
             updateELMReadiness()
         }
     }
