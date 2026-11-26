@@ -421,6 +421,9 @@ private fun SessionRow(
                 fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextPrimary)
             Text("Transport: ${session.transport} · Bluetooth ID: ${session.deviceAddress.ifBlank { "Unavailable" }}",
                 fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
+            if (session.adapterRssi != null) Text("RSSI: ${session.adapterRssi} dBm", fontSize = 10.sp, color = TextSecondary)
+            if (session.adapterServiceUUIDs.isNotBlank()) Text("BLE services: ${session.adapterServiceUUIDs}",
+                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextSecondary)
             if (session.adapterIdentificationEvidence.isNotBlank()) {
                 Text("Evidence: ${session.adapterIdentificationEvidence}", fontSize = 10.sp, color = TextSecondary)
             }
