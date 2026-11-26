@@ -41,6 +41,7 @@ data class SessionDataPoint(
     val throttlePercent: Float? = null,
     val engineLoadPercent: Float? = null,
     val mafGramsPerSec: Float? = null,
+    val fuelLevelPercent: Float? = null,
     val batteryVoltage: Float? = null,
     val cvtSpeedKph: Int? = null,
     val cvtEngineRpm: Int? = null,
