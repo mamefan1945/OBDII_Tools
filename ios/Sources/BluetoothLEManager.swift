@@ -23,6 +23,10 @@ final class BluetoothLEManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral?
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
+    private var responseBuffer = ""
+    private var pendingResponse: CheckedContinuation<String, Never>?
+    private var queryInProgress = false
+    private var initializationStarted = false
 
     private let uartServiceIDs: [CBUUID] = [
         CBUUID(string: "FFE0"),
@@ -61,6 +65,7 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         status = "Connecting to \(adapter.name)…"
         connectedName = nil
         isReadyForELM = false
+        initializationStarted = false
         writeCharacteristic = nil
         notifyCharacteristic = nil
         connectedPeripheral = adapter.peripheral
@@ -86,6 +91,72 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         }
     }
 
+    /// Sends one ELM327 command and waits for the adapter prompt or timeout.
+    /// Callers must serialize commands; overlapping requests are rejected.
+    func query(_ command: String, timeout: TimeInterval = 1.5) async -> String {
+        guard !queryInProgress,
+              let peripheral = connectedPeripheral,
+              let characteristic = writeCharacteristic,
+              isReadyForELM else { return "" }
+        queryInProgress = true
+        defer { queryInProgress = false }
+        responseBuffer = ""
+        let payload = (command.trimmingCharacters(in: .whitespacesAndNewlines) + "\\r")
+        guard let data = payload.data(using: .ascii) else { return "" }
+
+        return await withCheckedContinuation { continuation in
+            pendingResponse = continuation
+            let writeType: CBCharacteristicWriteType =
+                characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+            peripheral.writeValue(data, for: characteristic, type: writeType)
+            Task { [weak self] in
+                let nanos = UInt64(max(0.1, timeout) * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                self?.finishPendingResponse()
+            }
+        }
+    }
+
+    /// BLE-specific initialization intentionally omits ATZ: some HM-10 adapters
+    /// reset their BLE radio when the ELM chip receives ATZ.
+    func initializeAdapter() async -> Bool {
+        let commands = ["ATE0", "ATL0", "ATS0", "ATH0", "ATAT2", "ATSP0"]
+        for command in commands {
+            let response = await query(command, timeout: 2.0)
+            if response.isEmpty { return false }
+        }
+        return true
+    }
+
+    func queryUDS(ecuAddress: String, did: String) async -> String {
+        let header = await query("ATSH \\(ecuAddress)", timeout: 1.0)
+        guard !header.isEmpty else { return "" }
+        let response = await query("22\\(did)", timeout: 3.0)
+        _ = await query("ATSH 7DF", timeout: 1.0)
+        return response
+    }
+
+    func pingECU(address: String) async -> String {
+        _ = await query("ATSH \\(address)", timeout: 1.0)
+        let response = await query("1001", timeout: 1.5)
+        if response.localizedCaseInsensitiveContains("5001") ||
+            response.localizedCaseInsensitiveContains("7F10") {
+            _ = await query("ATSH 7DF", timeout: 1.0)
+            return response
+        }
+        let fallback = await query("0100", timeout: 1.5)
+        _ = await query("ATSH 7DF", timeout: 1.0)
+        return fallback
+    }
+
+    private func finishPendingResponse() {
+        guard let continuation = pendingResponse else { return }
+        pendingResponse = nil
+        let response = responseBuffer
+        responseBuffer = ""
+        continuation.resume(returning: response)
+    }
+
     private func updateELMReadiness() {
         guard let writeCharacteristic, let notifyCharacteristic else {
             isReadyForELM = false
@@ -96,9 +167,21 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         let canNotify = notifyCharacteristic.properties.contains(.notify) ||
             notifyCharacteristic.properties.contains(.indicate)
         isReadyForELM = canWrite && canNotify
-        status = isReadyForELM
-            ? "BLE link ready — ELM327 command transport next"
-            : "Connected, but no compatible ELM327 UART characteristics were found"
+        if isReadyForELM {
+            status = "BLE UART connected; initializing ELM327…"
+            if !initializationStarted {
+                initializationStarted = true
+                Task { [weak self] in
+                    guard let self else { return }
+                    let success = await self.initializeAdapter()
+                    self.status = success
+                        ? "Connected and ELM327 initialized"
+                        : "BLE connected, but ELM327 initialization did not complete"
+                }
+            }
+        } else {
+            status = "Connected, but no compatible ELM327 UART characteristics were found"
+        }
     }
 }
 
@@ -188,6 +271,18 @@ extension BluetoothLEManager: CBPeripheralDelegate {
             }
         }
         updateELMReadiness()
+    }
+
+    func peripheral(_ peripheral: CBPeripheral,
+                    didUpdateValueFor characteristic: CBCharacteristic,
+                    error: Error?) {
+        guard error == nil, characteristic.uuid == notifyCharacteristic?.uuid,
+              let data = characteristic.value,
+              let chunk = String(data: data, encoding: .ascii) else { return }
+        responseBuffer += chunk
+        if responseBuffer.contains(">") {
+            finishPendingResponse()
+        }
     }
 
     func peripheral(_ peripheral: CBPeripheral,
