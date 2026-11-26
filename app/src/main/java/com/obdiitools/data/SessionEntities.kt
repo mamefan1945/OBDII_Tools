@@ -26,6 +26,8 @@ data class SessionEntity(
     val adapterManufacturerData: String = "",
     val adapterManufacturer: String = "",
     val adapterIdentificationEvidence: String = "",
+    val adapterServiceUUIDs: String = "",
+    val adapterRssi: Int? = null,
     val adapterModel: String = "",
     val adapterModelConfidence: String = "unknown",
 )
