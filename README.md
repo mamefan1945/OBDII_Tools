@@ -51,3 +51,10 @@ Android application that connects to a vehicle's OBD-II port via an ELM327 Bluet
 - `gradle/` – Gradle version catalog and wrapper settings
 - `settings.gradle.kts` / `build.gradle.kts` – project configuration
 
+
+
+### Adapter fingerprinting
+
+Each diagnostic session stores the adapter's advertised name, transport, Bluetooth address when Android exposes it, BLE manufacturer data when available, and the ELM responses to `ATI` and `AT@1`. A conservative local signature matcher recognizes explicit product strings for VEEPEAK OBDCheck BLE/BLE+, OBDLink MX+/CX/LX/EX, Vgate iCar Pro, vLinker MC+/FD+/BM+/FS, Carista EVO, BlueDriver, and BAFX. It records manufacturer, model, evidence source, and confidence with the session.
+
+Confidence is deliberately cautious: an exact product string returned by `AT@1` is marked **confirmed** (the adapter still self-reports this string); a matching advertised name is **probable**; generic `ELM327` responses and unmapped manufacturer data remain **unknown**. No model is inferred from a Bluetooth MAC/OUI or a generic service UUID. Raw fingerprint fields remain saved so signatures can be improved without losing original evidence.
