@@ -36,7 +36,7 @@ The simulator artifact is **not an installable iPhone IPA**. Physical-device ins
 
 ## Implemented connection and VIN identification
 
-The iOS app discovers compatible BLE UART adapters using Core Bluetooth, initializes the ELM327 with BLE-safe commands, and reads the VIN using SAE Mode 09 PID 02 first with UDS DID F190 as a fallback. A valid 17-character VIN is saved into the existing vehicle profile store. Bluetooth Classic SPP adapters are not supported through Core Bluetooth; use a BLE-capable adapter or an Apple-supported MFi accessory.
+The iOS app discovers compatible BLE UART adapters using Core Bluetooth, initializes the ELM327 with BLE-safe commands, and reads the VIN using SAE Mode 09 PID 02 first with UDS DID F190 as a fallback. A valid 17-character VIN is saved into the existing vehicle profile store. When the ELM327 initializes, the app creates a persistent diagnostic session and records the advertised adapter name, CoreBluetooth peripheral UUID, BLE manufacturer data and service UUIDs when advertised, RSSI, and the responses to `ATI` and `AT@1`. VIN is attached to the active session. Disconnecting closes the session. iOS does not expose the BLE MAC address, so the peripheral UUID is stored as a distinct identifier and the MAC field remains unavailable. Adapter model remains unconfirmed unless a future identification rule can establish it. Bluetooth Classic SPP adapters are not supported through Core Bluetooth; use a BLE-capable adapter or an Apple-supported MFi accessory.
 
 ## Architecture direction
 
