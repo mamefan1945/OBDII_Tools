@@ -824,7 +824,16 @@ class OBDRepository @Inject constructor(
                 connection = conn
                 _connectionState.value = ConnectionState.Connected(deviceInfo.name, deviceInfo.address)
                 _lastTripSummary.value = null
-                activeSessionId = sessionRepository.startSession(deviceInfo.name)
+                val adapterIdentity = conn.withTransaction {
+                    query("ATI", 1200).trim().take(256) to query("AT@1", 1200).trim().take(256)
+                }
+                activeSessionId = sessionRepository.startSession(
+                    deviceName = deviceInfo.name,
+                    deviceAddress = deviceInfo.address,
+                    transport = if (deviceInfo.isBle) "BLE" else "Bluetooth Classic",
+                    adapterAti = adapterIdentity.first,
+                    adapterDescription = adapterIdentity.second,
+                )
                 pendingFuelProbeDiagnostics.toList().forEach { detail ->
                     sessionRepository.recordDiagnosticEvent("FUEL_PID_PROBE", detail)
                 }
