@@ -1,5 +1,6 @@
 package com.obdiitools.data
 
+import com.obdiitools.bluetooth.AdapterFingerprintClassifier
 import com.obdiitools.obd.OBDData
 import com.obdiitools.obd.CVTData
 import com.obdiitools.util.UnitConverter
@@ -63,11 +64,21 @@ class SessionRepository @Inject constructor(
         if (currentSessionId != null) endSessionLocked()
         val now = System.currentTimeMillis()
         dao.getOpenSessions().forEach { orphan -> dao.updateSession(orphan.copy(endTimeMs = now)) }
+        val fingerprint = AdapterFingerprintClassifier.identify(
+            advertisedName = deviceName,
+            ati = adapterAti,
+            description = adapterDescription,
+            manufacturerDataHex = adapterManufacturerData,
+        )
         val session = SessionEntity(
             startTimeMs = System.currentTimeMillis(), deviceName = deviceName,
             deviceAddress = deviceAddress, transport = transport,
             adapterAti = adapterAti, adapterDescription = adapterDescription,
             adapterManufacturerData = adapterManufacturerData,
+            adapterManufacturer = fingerprint.manufacturer,
+            adapterIdentificationEvidence = fingerprint.evidence,
+            adapterModel = fingerprint.model,
+            adapterModelConfidence = fingerprint.confidence,
         )
         val id = dao.insertSession(session)
         currentSessionId = id
