@@ -162,10 +162,10 @@ struct DeepScanView: View {
         _ = await bluetooth.query("ATSH 7DF", timeout: 0.8)
         ecuAddresses = found
 
-        guard isScanning else { phase = "Cancelled"; return }
+        guard !Task.isCancelled else { phase = "Cancelled"; return }
         phase = "Reading standard OBD support…"
         for address in (["7DF"] + found).prefix(24) {
-            guard isScanning else { phase = "Cancelled"; return }
+            guard !Task.isCancelled else { phase = "Cancelled"; return }
             _ = await bluetooth.query("ATSH \(address)", timeout: 0.7)
             let raw = await bluetooth.query("0100", timeout: 1.2)
             guard !Task.isCancelled else { phase = "Cancelled"; return }
@@ -186,7 +186,7 @@ struct DeepScanView: View {
         if isConfirmed2016CX5 {
             phase = "2016 CX-5 confirmed — reading compatible TCM identifiers…"
             for (did, name) in mazdaDIDs {
-                guard isScanning else { phase = "Cancelled"; return }
+                guard !Task.isCancelled else { phase = "Cancelled"; return }
                 let raw = await bluetooth.queryUDS(ecuAddress: "7E1", did: did)
                 guard !Task.isCancelled else { phase = "Cancelled"; return }
                 let compact = raw.uppercased().filter { $0.isHexDigit }
@@ -202,7 +202,7 @@ struct DeepScanView: View {
         }
 
         _ = await bluetooth.query("ATSH 7DF", timeout: 0.8)
-        guard isScanning else { phase = "Cancelled"; return }
+        guard !Task.isCancelled else { phase = "Cancelled"; return }
         findings = items
         vehicleStore.recordScan(
             vin: vin, items: items, ecuCount: found.count,
