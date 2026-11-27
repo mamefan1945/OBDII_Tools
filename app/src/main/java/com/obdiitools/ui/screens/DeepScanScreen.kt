@@ -77,7 +77,7 @@ fun DeepScanScreen(
         ?.take(3) in setOf("JM1", "JM3", "3MZ")
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val report = buildDeepScanReport(scanState)
+    val report = buildDeepScanReport(scanState, includeMazdaDetails = isMazdaVehicle)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -173,13 +173,13 @@ fun DeepScanScreen(
                 }
 
                 val mazdaProbeStatus = scanState.mazdaProbeStatus
-                if (mazdaProbeStatus != null) {
+                if (isMazdaVehicle && mazdaProbeStatus != null) {
                     item {
                         MazdaTransmissionProbeCard(mazdaProbeStatus, scanState.mazdaTransmission)
                     }
                 }
 
-                if (scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids) {
+                if (isMazdaVehicle && (scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids)) {
                     item { MazdaDidDiscoveryCard(scanState.mazdaDidResults, scanState.mazdaDidProgress) }
                 }
 
@@ -199,7 +199,7 @@ fun DeepScanScreen(
             }
 
             // Bottom action bar
-            if (isConnected && (scanState.isScanning || scanState.results.isNotEmpty() || scanState.mazdaProbeStatus != null || scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids)) {
+            if (isConnected && (scanState.isScanning || scanState.results.isNotEmpty() || (isMazdaVehicle && (scanState.mazdaProbeStatus != null || scanState.mazdaDidResults.isNotEmpty() || scanState.isDiscoveringMazdaDids)))) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -275,7 +275,7 @@ fun DeepScanScreen(
     }
 }
 
-private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
+private fun buildDeepScanReport(state: DeepScanViewModel.ScanState, includeMazdaDetails: Boolean): String {
     val lines = mutableListOf(
         "OBDII TOOLS — DEEP SCAN REPORT",
         "Status: ${state.phase.ifBlank { if (state.isScanning) "Scanning" else "No scan status" }}",
@@ -287,7 +287,7 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
         state.vehicleVinSource?.let { add("VIN source: $it") }
         if (state.vehicleVin != null) add("")
     }
-    state.mazdaProbeStatus?.let { status ->
+    if (includeMazdaDetails) state.mazdaProbeStatus?.let { status ->
         lines += "MAZDA TCM PROBE — 0x7E1"
         state.mazdaProbeCapturedAtMs?.let { lines += "Captured at: ${java.time.Instant.ofEpochMilli(it)}" }
         lines += "Requests: 22${com.obdiitools.obd.MazdaCx5Protocol.GEAR_DID} and 22${com.obdiitools.obd.MazdaCx5Protocol.TRANSMISSION_TEMPERATURE_DID}"
@@ -303,7 +303,7 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState): String {
         }
         lines += ""
     }
-    if (state.mazdaDidResults.isNotEmpty()) {
+    if (includeMazdaDetails && state.mazdaDidResults.isNotEmpty()) {
         lines += "MAZDA TCM DID DISCOVERY — request address 0x7E1"
         lines += "Expected response address: 0x7E9"
         lines += "Requests use read-only UDS ReadDataByIdentifier (service 0x22)."
