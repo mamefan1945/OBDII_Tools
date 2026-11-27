@@ -21,7 +21,7 @@ struct ContentView: View {
             VehiclesView(store: vehicleStore)
                 .tabItem { Label("Vehicles", systemImage: "car.side") }
                 .tag("vehicles")
-            LiveDataView()
+            LiveDataView(bluetooth: bluetooth)
                 .tabItem { Label("Live Data", systemImage: "waveform.path.ecg") }
                 .tag("live-data")
             DiagnosticsView(bluetooth: bluetooth, vehicleStore: vehicleStore)
@@ -119,7 +119,7 @@ private struct DashboardView: View {
                     }
                 }
                 Section("Quick access") {
-                    NavigationLink("Live data", destination: LiveDataView())
+                    NavigationLink("Live data", destination: LiveDataView(bluetooth: bluetooth))
                     NavigationLink("Vehicle diagnostics", destination: DiagnosticsView(bluetooth: bluetooth, vehicleStore: vehicleStore))
                     NavigationLink("Deep scan", destination: DeepScanView(bluetooth: bluetooth, vehicleStore: vehicleStore))
                 }
@@ -269,15 +269,126 @@ private extension String {
 }
 
 private struct LiveDataView: View {
+    @ObservedObject var bluetooth: BluetoothLEManager
+    @State private var values: [String: Double] = [:]
+    @State private var isMonitoring = false
+    @State private var monitorTask: Task<Void, Never>?
+    @State private var lastUpdated: Date?
+    @State private var slowPIDIndex = 0
+
+    private let fastPIDs = [
+        ("010C", "Engine RPM", "rpm"),
+        ("010D", "Vehicle speed", "km/h"),
+        ("0111", "Throttle position", "%"),
+        ("0105", "Coolant temperature", "°C"),
+        ("0104", "Calculated engine load", "%"),
+        ("0110", "Mass air flow", "g/s")
+    ]
+    private let slowPIDs = [
+        ("010F", "Intake air temperature", "°C"),
+        ("010E", "Timing advance", "°"),
+        ("012F", "Fuel level", "%"),
+        ("0146", "Ambient air temperature", "°C"),
+        ("015C", "Engine oil temperature", "°C"),
+        ("0133", "Barometric pressure", "kPa"),
+        ("010A", "Fuel pressure", "kPa"),
+        ("0106", "Short-term fuel trim B1", "%"),
+        ("0107", "Long-term fuel trim B1", "%"),
+        ("0108", "Short-term fuel trim B2", "%"),
+        ("0109", "Long-term fuel trim B2", "%"),
+        ("0114", "O2 voltage B1S1", "V"),
+        ("0115", "O2 voltage B1S2", "V"),
+        ("0118", "O2 voltage B2S1", "V"),
+        ("0119", "O2 voltage B2S2", "V")
+    ]
+
     var body: some View {
-        NavigationStack {
-            ContentUnavailableView(
-                "No live data",
-                systemImage: "waveform.path.ecg",
-                description: Text("Connect to an OBD-II adapter to view supported vehicle data.")
-            )
-            .navigationTitle("Live Data")
+        List {
+            Section("Live monitoring") {
+                LabeledContent("Adapter", value: bluetooth.connectedName ?? "Not connected")
+                LabeledContent("Status", value: bluetooth.isReadyForELM ? (isMonitoring ? "Monitoring" : "Ready") : "Not ready")
+                if let lastUpdated {
+                    LabeledContent("Last update", value: lastUpdated.formatted(date: .omitted, time: .standard))
+                }
+                Button {
+                    if isMonitoring {
+                        stopMonitoring()
+                    } else {
+                        startMonitoring()
+                    }
+                } label: {
+                    Label(isMonitoring ? "Stop live data" : "Start live data",
+                          systemImage: isMonitoring ? "stop.circle" : "waveform")
+                }
+                .disabled(!bluetooth.isReadyForELM)
+                Text("Reads standard SAE Mode 01 PIDs. Values appear only when the vehicle responds; unsupported PIDs remain blank.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Engine and vehicle") {
+                ForEach(fastPIDs, id: \.0) { pid in
+                    pidRow(pid)
+                }
+            }
+            Section("Additional parameters") {
+                ForEach(slowPIDs, id: \.0) { pid in
+                    pidRow(pid)
+                }
+            }
         }
+        .navigationTitle("Live Data")
+        .onDisappear { stopMonitoring() }
+    }
+
+    @ViewBuilder
+    private func pidRow(_ pid: (String, String, String)) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(pid.1)
+                Text(pid.0).font(.caption2.monospaced()).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let value = values[pid.0] {
+                Text("\(value.formatted(.number.precision(.fractionLength(0...1)))) \(pid.2)")
+                    .font(.body.monospacedDigit())
+            } else {
+                Text("—").foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func startMonitoring() {
+        guard !isMonitoring, bluetooth.isReadyForELM else { return }
+        isMonitoring = true
+        monitorTask = Task {
+            while !Task.isCancelled {
+                for pid in fastPIDs {
+                    if Task.isCancelled { break }
+                    let raw = await bluetooth.query(pid.0, timeout: 1.0)
+                    if Task.isCancelled { break }
+                    if let value = ELM327Protocol.parseResponse(pid.0, rawResponse: raw) {
+                        values[pid.0] = value
+                    }
+                }
+                if Task.isCancelled { break }
+                let pid = slowPIDs[slowPIDIndex]
+                let raw = await bluetooth.query(pid.0, timeout: 1.0)
+                if let value = ELM327Protocol.parseResponse(pid.0, rawResponse: raw) {
+                    values[pid.0] = value
+                }
+                slowPIDIndex = (slowPIDIndex + 1) % slowPIDs.count
+                lastUpdated = Date()
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            isMonitoring = false
+            monitorTask = nil
+        }
+    }
+
+    private func stopMonitoring() {
+        monitorTask?.cancel()
+        monitorTask = nil
+        isMonitoring = false
     }
 }
 
