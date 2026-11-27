@@ -164,11 +164,6 @@ fun DeepScanScreen(
                     item {
                         DeepScanInfoPanel(
                             onStart = { viewModel.startScan() },
-                            onProbeMazda = { viewModel.probeMazdaCx5Transmission() },
-                            isProbingMazda = scanState.isProbingMazda,
-                            onDiscoverMazdaDids = { viewModel.discoverMazdaTcmDids() },
-                            isDiscoveringMazdaDids = scanState.isDiscoveringMazdaDids,
-                            showMazdaTools = isMazdaVehicle,
                         )
                     }
                 }
@@ -243,24 +238,7 @@ fun DeepScanScreen(
                             Text("CANCEL", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         }
                     } else {
-                        if (isMazdaVehicle) {
-                        OutlinedButton(
-                            onClick = { viewModel.probeMazdaCx5Transmission() },
-                            enabled = !scanState.isProbingMazda && !scanState.isDiscoveringMazdaDids,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
-                        ) {
-                            Text("MAZDA TCM", fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.discoverMazdaTcmDids() },
-                            enabled = !scanState.isDiscoveringMazdaDids && !scanState.isProbingMazda,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonYellow),
-                        ) {
-                            Text("DID DISCOVERY", fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                        }
-                        }
+
                         Button(
                             onClick = { viewModel.startScan() },
                             modifier = Modifier.weight(1f),
@@ -344,11 +322,6 @@ private fun buildDeepScanReport(state: DeepScanViewModel.ScanState, includeMazda
 @Composable
 private fun DeepScanInfoPanel(
     onStart: () -> Unit,
-    onProbeMazda: () -> Unit,
-    isProbingMazda: Boolean,
-    onDiscoverMazdaDids: () -> Unit,
-    isDiscoveringMazdaDids: Boolean,
-    showMazdaTools: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -363,41 +336,13 @@ private fun DeepScanInfoPanel(
             InfoLine("1", "Scans 136 candidate 11-bit request addresses (0x700–0x77F and 0x7E0–0x7E7) for responding modules.")
             InfoLine("2", "Reads each ECU’s Mode 01 support bitmask, then validates advertised PIDs with two real responses and successful decoding. The report separates advertised from verified readings.")
             InfoLine("3", "Reuses the VIN retrieved during Bluetooth connection (standard Mode 09 PID 02, with UDS F190 fallback), then independently probes F190 on responding ECUs. Unsupported identifiers are reported, not guessed.")
-            InfoLine("4", "Also samples up to 12 advertised Mode 01 PIDs per ECU that have no decoder yet. Two positive responses with matching payload lengths are saved as raw discovery leads.")
+            InfoLine("4", "Runs compatible manufacturer-specific read-only checks automatically when the VIN decoder confirms a supported vehicle, then includes the results in this report.")
             Text(
                 "This takes 2–5 minutes depending on how many ECUs respond.",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 color = TextSecondary.copy(alpha = 0.6f),
             )
-        }
-        if (showMazdaTools) {
-        OutlinedButton(
-            onClick = onProbeMazda,
-            enabled = !isProbingMazda,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
-        ) {
-            Text(
-                if (isProbingMazda) "PROBING MAZDA TCM…" else "PROBE 2016 MAZDA CX-5 TCM",
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-            )
-        }
-        OutlinedButton(
-            onClick = onDiscoverMazdaDids,
-            enabled = !isDiscoveringMazdaDids,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonYellow),
-        ) {
-            Text(
-                if (isDiscoveringMazdaDids) "DISCOVERING MAZDA TCM DIDs…" else "DISCOVER MAZDA TCM DATA IDs",
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-            )
-        }
         }
         Button(
             onClick = onStart,
