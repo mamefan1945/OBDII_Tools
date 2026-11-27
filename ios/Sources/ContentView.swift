@@ -269,6 +269,13 @@ private extension String {
 }
 
 private struct LiveDataView: View {
+    private struct PIDRow: Identifiable {
+        let command: String
+        let title: String
+        let unit: String
+        var id: String { command }
+    }
+
     @ObservedObject var bluetooth: BluetoothLEManager
     @State private var values: [String: Double] = [:]
     @State private var isMonitoring = false
@@ -277,29 +284,29 @@ private struct LiveDataView: View {
     @State private var slowPIDIndex = 0
 
     private let fastPIDs = [
-        ("010C", "Engine RPM", "rpm"),
-        ("010D", "Vehicle speed", "km/h"),
-        ("0111", "Throttle position", "%"),
-        ("0105", "Coolant temperature", "°C"),
-        ("0104", "Calculated engine load", "%"),
-        ("0110", "Mass air flow", "g/s")
+        PIDRow(command: "010C", title: "Engine RPM", unit: "rpm"),
+        PIDRow(command: "010D", title: "Vehicle speed", unit: "km/h"),
+        PIDRow(command: "0111", title: "Throttle position", unit: "%"),
+        PIDRow(command: "0105", title: "Coolant temperature", unit: "°C"),
+        PIDRow(command: "0104", title: "Calculated engine load", unit: "%"),
+        PIDRow(command: "0110", title: "Mass air flow", unit: "g/s")
     ]
     private let slowPIDs = [
-        ("010F", "Intake air temperature", "°C"),
-        ("010E", "Timing advance", "°"),
-        ("012F", "Fuel level", "%"),
-        ("0146", "Ambient air temperature", "°C"),
-        ("015C", "Engine oil temperature", "°C"),
-        ("0133", "Barometric pressure", "kPa"),
-        ("010A", "Fuel pressure", "kPa"),
-        ("0106", "Short-term fuel trim B1", "%"),
-        ("0107", "Long-term fuel trim B1", "%"),
-        ("0108", "Short-term fuel trim B2", "%"),
-        ("0109", "Long-term fuel trim B2", "%"),
-        ("0114", "O2 voltage B1S1", "V"),
-        ("0115", "O2 voltage B1S2", "V"),
-        ("0118", "O2 voltage B2S1", "V"),
-        ("0119", "O2 voltage B2S2", "V")
+        PIDRow(command: "010F", title: "Intake air temperature", unit: "°C"),
+        PIDRow(command: "010E", title: "Timing advance", unit: "°"),
+        PIDRow(command: "012F", title: "Fuel level", unit: "%"),
+        PIDRow(command: "0146", title: "Ambient air temperature", unit: "°C"),
+        PIDRow(command: "015C", title: "Engine oil temperature", unit: "°C"),
+        PIDRow(command: "0133", title: "Barometric pressure", unit: "kPa"),
+        PIDRow(command: "010A", title: "Fuel pressure", unit: "kPa"),
+        PIDRow(command: "0106", title: "Short-term fuel trim B1", unit: "%"),
+        PIDRow(command: "0107", title: "Long-term fuel trim B1", unit: "%"),
+        PIDRow(command: "0108", title: "Short-term fuel trim B2", unit: "%"),
+        PIDRow(command: "0109", title: "Long-term fuel trim B2", unit: "%"),
+        PIDRow(command: "0114", title: "O2 voltage B1S1", unit: "V"),
+        PIDRow(command: "0115", title: "O2 voltage B1S2", unit: "V"),
+        PIDRow(command: "0118", title: "O2 voltage B2S1", unit: "V"),
+        PIDRow(command: "0119", title: "O2 voltage B2S2", unit: "V")
     ]
 
     var body: some View {
@@ -326,12 +333,12 @@ private struct LiveDataView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Engine and vehicle") {
-                ForEach(fastPIDs, id: \.0) { pid in
+                ForEach(fastPIDs) { pid in
                     pidRow(pid)
                 }
             }
             Section("Additional parameters") {
-                ForEach(slowPIDs, id: \.0) { pid in
+                ForEach(slowPIDs) { pid in
                     pidRow(pid)
                 }
             }
@@ -341,15 +348,15 @@ private struct LiveDataView: View {
     }
 
     @ViewBuilder
-    private func pidRow(_ pid: (String, String, String)) -> some View {
+    private func pidRow(_ pid: PIDRow) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
-                Text(pid.1)
-                Text(pid.0).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                Text(pid.title)
+                Text(pid.command).font(.caption2.monospaced()).foregroundStyle(.secondary)
             }
             Spacer()
-            if let value = values[pid.0] {
-                Text("\(value.formatted(.number.precision(.fractionLength(0...1)))) \(pid.2)")
+            if let value = values[pid.command] {
+                Text("\(value.formatted(.number.precision(.fractionLength(0...1)))) \(pid.unit)")
                     .font(.body.monospacedDigit())
             } else {
                 Text("—").foregroundStyle(.tertiary)
@@ -364,10 +371,10 @@ private struct LiveDataView: View {
             while !Task.isCancelled {
                 for pid in fastPIDs {
                     if Task.isCancelled { break }
-                    let raw = await bluetooth.query(pid.0, timeout: 1.0)
+                    let raw = await bluetooth.query(pid.command, timeout: 1.0)
                     if Task.isCancelled { break }
-                    if let value = ELM327Protocol.parseResponse(pid.0, rawResponse: raw) {
-                        values[pid.0] = value
+                    if let value = ELM327Protocol.parseResponse(pid.command, rawResponse: raw) {
+                        values[pid.command] = value
                     }
                 }
                 if Task.isCancelled { break }
