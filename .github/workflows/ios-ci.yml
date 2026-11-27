@@ -93,6 +93,35 @@ jobs:
           done
           ditto -c -k --sequesterRsrc --keepParent build/ui-screenshots build/OBDIITools-iOS-UI-Screenshots.zip
 
+      - name: Build unsigned iPhone device app
+        run: |
+          xcodebuild \
+            -project ios/OBDIITools.xcodeproj \
+            -scheme OBDIITools \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios-device-derived \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned iPhone IPA for personal signing
+        run: |
+          APP_PATH=$(find build/ios-device-derived/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/
+          cd build/ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload ../OBDII_Tools-unsigned.ipa
+
+      - name: Upload unsigned iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBDII-Tools-iPhone-Unsigned-\${{ github.run_number }}
+          path: build/OBDII_Tools-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload simulator app
         uses: actions/upload-artifact@v4
         with:
