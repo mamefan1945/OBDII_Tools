@@ -137,6 +137,7 @@ class DeepScanViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ConnectionState.Disconnected)
 
     private var scanJob: Job? = null
+    private var automaticMazdaJob: Job? = null
     private val scanMutex = Mutex()
 
     private val mode01Names: Map<String, String> by lazy {
@@ -144,6 +145,8 @@ class DeepScanViewModel @Inject constructor(
     }
 
     fun startScan() {
+        automaticMazdaJob?.cancel()
+        automaticMazdaJob = null
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             scanMutex.withLock {
@@ -325,7 +328,7 @@ class DeepScanViewModel @Inject constructor(
                     connectedVehicle?.model.orEmpty().contains("CX-5", ignoreCase = true) &&
                     connectedVehicle?.year == "2016"
                 _scanState.value = _scanState.value.copy(
-                    isScanning = false,
+                    isScanning = isConfirmed2016Cx5,
                     phase = if (isConfirmed2016Cx5) {
                         "Standard scan complete — starting compatible 2016 CX-5 TCM diagnostics…"
                     } else {
@@ -336,7 +339,7 @@ class DeepScanViewModel @Inject constructor(
                 // Manufacturer routines are stages of Deep Scan, not separate user actions.
                 // Run them only when the VIN decoder confirms the exact vehicle application.
                 if (isConfirmed2016Cx5) {
-                    viewModelScope.launch {
+                    automaticMazdaJob = viewModelScope.launch {
                         delay(350) // allow the standard scan job to release its scan mutex
                         probeMazdaCx5Transmission()
                         while (scanJob?.isActive == true) delay(100)
@@ -345,8 +348,11 @@ class DeepScanViewModel @Inject constructor(
                         while (scanJob?.isActive == true) delay(100)
                         if (!isActive) return@launch
                         _scanState.value = _scanState.value.copy(
+                            isScanning = false,
+                            progress = null,
                             phase = "Complete — standard diagnostics and 2016 CX-5 TCM checks finished",
                         )
+                        automaticMazdaJob = null
                     }
                 }
                 } catch (cancelled: CancellationException) {
@@ -487,6 +493,8 @@ class DeepScanViewModel @Inject constructor(
     }
 
     fun cancelScan() {
+        automaticMazdaJob?.cancel()
+        automaticMazdaJob = null
         scanJob?.cancel()
         _scanState.value = _scanState.value.copy(isScanning = false, isProbingMazda = false, isDiscoveringMazdaDids = false, progress = null, mazdaDidProgress = null, phase = "Cancelled")
     }
