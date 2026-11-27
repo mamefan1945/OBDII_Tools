@@ -82,6 +82,9 @@ class DeepScanViewModel @Inject constructor(
         val results: List<EcuResult> = emptyList(),
         val vehicleVin: String? = null,
         val vehicleVinSource: String? = null,
+        val vehicleMake: String? = null,
+        val vehicleModel: String? = null,
+        val vehicleYear: String? = null,
         val isProbingMazda: Boolean = false,
         val mazdaProbeStatus: String? = null,
         val mazdaTransmission: MazdaCx5TransmissionData? = null,
@@ -161,10 +164,13 @@ class DeepScanViewModel @Inject constructor(
                     phase = if (!connectedVehicle?.vin.isNullOrBlank()) "VIN reused — discovering ECUs on CAN bus…" else "Discovering ECUs on CAN bus…",
                     vehicleVin = connectedVehicle?.vin,
                     vehicleVinSource = connectedVehicle?.vin?.let { "Shared connection VIN reader (Mode 09 PID 02 / UDS fallback)" },
-                    mazdaProbeStatus = previous.mazdaProbeStatus,
-                    mazdaTransmission = previous.mazdaTransmission,
-                    mazdaProbeCapturedAtMs = previous.mazdaProbeCapturedAtMs,
-                    mazdaDidResults = previous.mazdaDidResults,
+                    vehicleMake = connectedVehicle?.make,
+                    vehicleModel = connectedVehicle?.model,
+                    vehicleYear = connectedVehicle?.year,
+                    mazdaProbeStatus = if (connectedVehicle?.make.equals("Mazda", true) && connectedVehicle?.model.orEmpty().contains("CX-5", true) && connectedVehicle?.year == "2016") previous.mazdaProbeStatus else null,
+                    mazdaTransmission = if (connectedVehicle?.make.equals("Mazda", true) && connectedVehicle?.model.orEmpty().contains("CX-5", true) && connectedVehicle?.year == "2016") previous.mazdaTransmission else null,
+                    mazdaProbeCapturedAtMs = if (connectedVehicle?.make.equals("Mazda", true) && connectedVehicle?.model.orEmpty().contains("CX-5", true) && connectedVehicle?.year == "2016") previous.mazdaProbeCapturedAtMs else null,
+                    mazdaDidResults = if (connectedVehicle?.make.equals("Mazda", true) && connectedVehicle?.model.orEmpty().contains("CX-5", true) && connectedVehicle?.year == "2016") previous.mazdaDidResults else emptyList(),
                 )
                 try {
                     delay(300)
