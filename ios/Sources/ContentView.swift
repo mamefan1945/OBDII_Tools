@@ -24,7 +24,7 @@ struct ContentView: View {
             LiveDataView()
                 .tabItem { Label("Live Data", systemImage: "waveform.path.ecg") }
                 .tag("live-data")
-            DiagnosticsView()
+            DiagnosticsView(bluetooth: bluetooth, vehicleStore: vehicleStore)
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
                 .tag("diagnostics")
             MoreView()
@@ -120,7 +120,7 @@ private struct DashboardView: View {
                 }
                 Section("Quick access") {
                     NavigationLink("Live data", destination: LiveDataView())
-                    NavigationLink("Vehicle diagnostics", destination: DiagnosticsView())
+                    NavigationLink("Vehicle diagnostics", destination: DiagnosticsView(bluetooth: bluetooth, vehicleStore: vehicleStore))
                     NavigationLink("Deep scan", destination: DeepScanView(bluetooth: bluetooth, vehicleStore: vehicleStore))
                 }
                 Section {
@@ -282,6 +282,9 @@ private struct LiveDataView: View {
 }
 
 private struct DiagnosticsView: View {
+    @ObservedObject var bluetooth: BluetoothLEManager
+    @ObservedObject var vehicleStore: VehicleDiscoveryStore
+
     var body: some View {
         NavigationStack {
             List {
