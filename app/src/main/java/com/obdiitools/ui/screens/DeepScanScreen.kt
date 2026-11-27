@@ -70,6 +70,11 @@ fun DeepScanScreen(
     val scanState by viewModel.scanState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
+    // Mazda-only diagnostics are shown only after a valid connected-vehicle VIN
+    // identifies a Mazda. Never infer the vehicle make from adapter or ECU presence.
+    val isMazdaVehicle = scanState.vehicleVin
+        ?.uppercase()
+        ?.take(3) in setOf("JM1", "JM3", "3MZ")
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val report = buildDeepScanReport(scanState)
@@ -162,6 +167,7 @@ fun DeepScanScreen(
                             isProbingMazda = scanState.isProbingMazda,
                             onDiscoverMazdaDids = { viewModel.discoverMazdaTcmDids() },
                             isDiscoveringMazdaDids = scanState.isDiscoveringMazdaDids,
+                            showMazdaTools = isMazdaVehicle,
                         )
                     }
                 }
@@ -236,6 +242,7 @@ fun DeepScanScreen(
                             Text("CANCEL", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         }
                     } else {
+                        if (isMazdaVehicle) {
                         OutlinedButton(
                             onClick = { viewModel.probeMazdaCx5Transmission() },
                             enabled = !scanState.isProbingMazda && !scanState.isDiscoveringMazdaDids,
@@ -251,6 +258,7 @@ fun DeepScanScreen(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonYellow),
                         ) {
                             Text("DID DISCOVERY", fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                        }
                         }
                         Button(
                             onClick = { viewModel.startScan() },
@@ -339,6 +347,7 @@ private fun DeepScanInfoPanel(
     isProbingMazda: Boolean,
     onDiscoverMazdaDids: () -> Unit,
     isDiscoveringMazdaDids: Boolean,
+    showMazdaTools: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -361,6 +370,7 @@ private fun DeepScanInfoPanel(
                 color = TextSecondary.copy(alpha = 0.6f),
             )
         }
+        if (showMazdaTools) {
         OutlinedButton(
             onClick = onProbeMazda,
             enabled = !isProbingMazda,
@@ -386,6 +396,7 @@ private fun DeepScanInfoPanel(
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp,
             )
+        }
         }
         Button(
             onClick = onStart,
