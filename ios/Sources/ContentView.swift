@@ -121,7 +121,7 @@ private struct DashboardView: View {
                 Section("Quick access") {
                     NavigationLink("Live data", destination: LiveDataView())
                     NavigationLink("Vehicle diagnostics", destination: DiagnosticsView())
-                    NavigationLink("Deep scan", destination: PlaceholderDetail(title: "Deep scan"))
+                    NavigationLink("Deep scan", destination: DeepScanView(bluetooth: bluetooth, vehicleStore: vehicleStore))
                 }
                 Section {
                     Text("BLE UART adapters are supported. Bluetooth Classic SPP adapters generally require an Apple-supported accessory/MFi path and cannot be accessed through Core Bluetooth.")
@@ -288,7 +288,7 @@ private struct DiagnosticsView: View {
                 NavigationLink("Trouble codes", destination: PlaceholderDetail(title: "Trouble codes"))
                 NavigationLink("Readiness monitors", destination: PlaceholderDetail(title: "Readiness monitors"))
                 NavigationLink("Freeze frame", destination: PlaceholderDetail(title: "Freeze frame"))
-                NavigationLink("Deep scan", destination: PlaceholderDetail(title: "Deep scan"))
+                NavigationLink("Deep scan", destination: DeepScanView(bluetooth: bluetooth, vehicleStore: vehicleStore))
                 NavigationLink("UDS diagnostics", destination: PlaceholderDetail(title: "UDS diagnostics"))
                 NavigationLink("CAN monitor", destination: PlaceholderDetail(title: "CAN monitor"))
             }
