@@ -15,6 +15,7 @@ struct DeepScanView: View {
     @State private var ecuAddresses: [String] = []
     @State private var findings: [VehicleDiscoveryItem] = []
     @State private var errorMessage: String?
+    @State private var scanTask: Task<Void, Never>?
 
     private let mazdaDIDs: [(String, String)] = [
         ("1E12", "Selected transmission gear"),
@@ -44,12 +45,12 @@ struct DeepScanView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Button("Cancel scan", role: .destructive) {
-                        isScanning = false
-                        phase = "Cancelled"
+                        scanTask?.cancel()
+                        phase = "Cancelling…"
                     }
                 } else {
                     Button("Start Deep Scan") {
-                        Task { await runDeepScan() }
+                        scanTask = Task { await runDeepScan() }
                     }
                     .disabled(!bluetooth.isReadyForELM)
                 }
@@ -106,7 +107,16 @@ struct DeepScanView: View {
         let addresses = (0x700...0x77F).map { String(format: "%03X", $0) }
             + (0x7E0...0x7E7).map { String(format: "%03X", $0) }
         total = addresses.count
-        defer { isScanning = false }
+        defer {
+            isScanning = false
+            scanTask = nil
+        }
+        // Restore the broadcast header even when the user cancels midway through a scan.
+        defer {
+            Task { @MainActor in
+                _ = await bluetooth.query("ATSH 7DF", timeout: 0.8)
+            }
+        }
 
         let vin = bluetooth.vehicleVIN
         guard let vin, vin.count == 17 else {
@@ -117,18 +127,22 @@ struct DeepScanView: View {
 
         phase = "Decoding VIN and discovering ECUs…"
         let decoded = await decodeVIN(vin)
+        guard !Task.isCancelled else { phase = "Cancelled"; return }
         vehicleDescription = [decoded.make, decoded.model, decoded.year].filter { !$0.isEmpty }.joined(separator: " ")
         var found: [String] = []
         var items: [VehicleDiscoveryItem] = []
 
         for (index, address) in addresses.enumerated() {
-            guard isScanning else { phase = "Cancelled"; return }
+            guard !Task.isCancelled else { phase = "Cancelled"; return }
             _ = await bluetooth.query("ATSH \(address)", timeout: 0.7)
+            guard !Task.isCancelled else { phase = "Cancelled"; return }
             let uds = await bluetooth.query("1001", timeout: 0.8)
+            guard !Task.isCancelled else { phase = "Cancelled"; return }
             var response = uds
             let compactUDS = uds.uppercased().filter { $0.isHexDigit }
             if !compactUDS.contains("5001") && !compactUDS.contains("7F10") {
                 response = await bluetooth.query("0100", timeout: 0.8)
+                guard !Task.isCancelled else { phase = "Cancelled"; return }
             }
             let compact = response.uppercased().filter { $0.isHexDigit }
             let responds = compact.contains("5001") || compact.contains("7F10")
@@ -154,6 +168,7 @@ struct DeepScanView: View {
             guard isScanning else { phase = "Cancelled"; return }
             _ = await bluetooth.query("ATSH \(address)", timeout: 0.7)
             let raw = await bluetooth.query("0100", timeout: 1.2)
+            guard !Task.isCancelled else { phase = "Cancelled"; return }
             if !raw.isEmpty {
                 items.append(VehicleDiscoveryItem(
                     key: "\(address):01:00", name: "Supported Mode 01 PID bitmap",
@@ -173,6 +188,7 @@ struct DeepScanView: View {
             for (did, name) in mazdaDIDs {
                 guard isScanning else { phase = "Cancelled"; return }
                 let raw = await bluetooth.queryUDS(ecuAddress: "7E1", did: did)
+                guard !Task.isCancelled else { phase = "Cancelled"; return }
                 let compact = raw.uppercased().filter { $0.isHexDigit }
                 let positive = compact.contains("62" + did)
                 items.append(VehicleDiscoveryItem(
