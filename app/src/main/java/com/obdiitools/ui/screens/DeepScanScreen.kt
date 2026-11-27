@@ -74,7 +74,8 @@ fun DeepScanScreen(
     // identifies a Mazda. Never infer the vehicle make from adapter or ECU presence.
     val isMazdaVehicle = scanState.vehicleVin
         ?.uppercase()
-        ?.take(3) in setOf("JM1", "JM3", "3MZ")
+        ?.take(3)
+        ?.let { it in setOf("JM1", "JM3", "3MZ") } == true
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val report = buildDeepScanReport(scanState, includeMazdaDetails = isMazdaVehicle)
