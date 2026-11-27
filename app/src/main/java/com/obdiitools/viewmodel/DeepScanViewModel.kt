@@ -314,11 +314,35 @@ class DeepScanViewModel @Inject constructor(
                     year = connectedVehicle?.year.orEmpty(),
                 )
                 val total = results.sumOf { it.totalPids }
+                val isConfirmed2016Cx5 =
+                    connectedVehicle?.make.equals("Mazda", ignoreCase = true) &&
+                    connectedVehicle?.model.orEmpty().contains("CX-5", ignoreCase = true) &&
+                    connectedVehicle?.year == "2016"
                 _scanState.value = _scanState.value.copy(
                     isScanning = false,
-                    phase = "Complete — $total PIDs across ${results.size} address${if (results.size != 1) "es" else ""}",
+                    phase = if (isConfirmed2016Cx5) {
+                        "Standard scan complete — starting compatible 2016 CX-5 TCM diagnostics…"
+                    } else {
+                        "Complete — $total PIDs across ${results.size} address${if (results.size != 1) "es" else ""}"
+                    },
                     progress = null,
                 )
+                // Manufacturer routines are stages of Deep Scan, not separate user actions.
+                // Run them only when the VIN decoder confirms the exact vehicle application.
+                if (isConfirmed2016Cx5) {
+                    viewModelScope.launch {
+                        delay(350) // allow the standard scan job to release its scan mutex
+                        probeMazdaCx5Transmission()
+                        while (scanJob?.isActive == true) delay(100)
+                        if (!isActive) return@launch
+                        discoverMazdaTcmDids()
+                        while (scanJob?.isActive == true) delay(100)
+                        if (!isActive) return@launch
+                        _scanState.value = _scanState.value.copy(
+                            phase = "Complete — standard diagnostics and 2016 CX-5 TCM checks finished",
+                        )
+                    }
+                }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
