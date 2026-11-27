@@ -70,12 +70,10 @@ fun DeepScanScreen(
     val scanState by viewModel.scanState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val isConnected = connectionState is ConnectionState.Connected
-    // Mazda-only diagnostics are shown only after a valid connected-vehicle VIN
-    // identifies a Mazda. Never infer the vehicle make from adapter or ECU presence.
-    val isMazdaVehicle = scanState.vehicleVin
-        ?.uppercase()
-        ?.take(3)
-        ?.let { it in setOf("JM1", "JM3", "3MZ") } == true
+    // Show CX-5 TCM results only for the exact VIN-decoded vehicle application.
+    val isMazdaVehicle = scanState.vehicleMake.equals("Mazda", ignoreCase = true) &&
+        scanState.vehicleModel.orEmpty().contains("CX-5", ignoreCase = true) &&
+        scanState.vehicleYear == "2016"
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val report = buildDeepScanReport(scanState, includeMazdaDetails = isMazdaVehicle)
