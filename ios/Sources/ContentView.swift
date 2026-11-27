@@ -379,9 +379,10 @@ private struct LiveDataView: View {
                 }
                 if Task.isCancelled { break }
                 let pid = slowPIDs[slowPIDIndex]
-                let raw = await bluetooth.query(pid.0, timeout: 1.0)
-                if let value = ELM327Protocol.parseResponse(pid.0, rawResponse: raw) {
-                    values[pid.0] = value
+                let raw = await bluetooth.query(pid.command, timeout: 1.0)
+                if Task.isCancelled { break }
+                if let value = ELM327Protocol.parseResponse(pid.command, rawResponse: raw) {
+                    values[pid.command] = value
                 }
                 slowPIDIndex = (slowPIDIndex + 1) % slowPIDs.count
                 lastUpdated = Date()
