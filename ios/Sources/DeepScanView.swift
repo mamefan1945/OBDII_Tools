@@ -107,14 +107,13 @@ struct DeepScanView: View {
         let addresses = (0x700...0x77F).map { String(format: "%03X", $0) }
             + (0x7E0...0x7E7).map { String(format: "%03X", $0) }
         total = addresses.count
-        defer {
-            isScanning = false
-            scanTask = nil
-        }
         // Restore the broadcast header even when the user cancels midway through a scan.
+        // Keep the UI busy until the adapter has completed this cleanup command.
         defer {
             Task { @MainActor in
                 _ = await bluetooth.query("ATSH 7DF", timeout: 0.8)
+                isScanning = false
+                scanTask = nil
             }
         }
 
