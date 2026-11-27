@@ -117,7 +117,7 @@ jobs:
       - name: Upload unsigned iPhone IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OBDII-Tools-iPhone-Unsigned-\${{ github.run_number }}
+          name: OBDII-Tools-iPhone-Unsigned-${{ github.run_number }}
           path: build/OBDII_Tools-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
