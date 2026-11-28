@@ -334,9 +334,6 @@ class OBDRepository @Inject constructor(
                     onProgress("Identifying transmission controller at $address…")
                     query("ATSH $address", 400)
                     query("ATFCSH $address", 300)
-                    query("ATFCSD 300000", 300)
-                    query("ATFCSM1", 300)
-                    query("ATCRA 7E9", 300)
 
                     val session = queryLines("10C0", 1500)
                     trace.add("$address 10C0: ${summarizeDiagnosticResponse(session)}")
@@ -351,9 +348,9 @@ class OBDRepository @Inject constructor(
                     onProgress(trace.takeLast(5).joinToString("\n"))
 
                     val tcmResponded =
-                        com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(session, "50C0") &&
                         com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(statusReply, "6103") &&
-                        com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(liveReply, "6101")
+                        com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(liveReply, "6101") &&
+                        com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(liveReply) != null
                     if (tcmResponded) {
                         val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(liveReply)
                         onProgress("Nissan CVT7 controller confirmed at $address; live response captured.")
@@ -373,8 +370,6 @@ class OBDRepository @Inject constructor(
                     // flow-control settings. Reset all of them before releasing the
                     // serialized transaction so the dashboard poller sees a clean
                     // standard OBD configuration.
-                    runCatching { query("ATCRA", 300) }
-                    runCatching { query("ATFCSM0", 300) }
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
                     runCatching { query("ATCAF1", 300) }
@@ -426,10 +421,6 @@ class OBDRepository @Inject constructor(
                 tx.query("ATSP6", 600)
                 tx.query("ATCAF1", 300)
                 tx.query("ATSH ${ecuAddress.uppercase()}", 400)
-                tx.query("ATFCSH ${ecuAddress.uppercase()}", 300)
-                tx.query("ATFCSD 300000", 300)
-                tx.query("ATFCSM1", 300)
-                tx.query("ATCRA 7E9", 300)
                 val session = tx.queryLines("10C0", 1500)
                 report.append("NISSAN CVT7 RAW CAPTURE — ECU ${ecuAddress.uppercase()}\n")
                 report.append("Session 10C0: ").append(session.joinToString(" | ")).append("\n")
@@ -468,8 +459,6 @@ class OBDRepository @Inject constructor(
                 report.toString()
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
-                    runCatching { tx.query("ATCRA", 300) }
-                    runCatching { tx.query("ATFCSM0", 300) }
                     runCatching { tx.query("ATSH 7DF", 400) }
                     runCatching { tx.query("ATSP0", 600) }
                 }
@@ -497,10 +486,6 @@ class OBDRepository @Inject constructor(
                 query("ATSP6", 600)
                 query("ATCAF1", 300)
                 query("ATSH ${ecuAddress.uppercase()}", 400)
-                query("ATFCSH ${ecuAddress.uppercase()}", 300)
-                query("ATFCSD 300000", 300)
-                query("ATFCSM1", 300)
-                query("ATCRA 7E9", 300)
                 query("ATST32", 300)
 
                 // The controller's manufacturer-specific diagnostic session
@@ -508,21 +493,18 @@ class OBDRepository @Inject constructor(
                 // enters session C0 before reading 2101; re-enter it for each
                 // sample and verify the positive 50C0 response.
                 val sessionResponse = queryLines("10C0", 1500)
-                val sessionOk = com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(
-                    sessionResponse, "50C0"
-                )
-                if (!sessionOk) {
-                    val sessionRaw = sessionResponse.joinToString(" | ").take(300)
-                    return@withTransaction com.obdiitools.obd.NissanCvt7PollResult(
-                        sample = null,
-                        rawResponse = "10C0: ${sessionRaw.ifBlank { "(empty)" }}",
-                        parseStatus = "Diagnostic session C0 was not accepted; skipped 2101 request.",
-                    )
-                }
-
-                response = queryLines("2101", 3000)
+                // CVTz50 waits for the ELM prompt after 10C0 and then sends
+                // 2101; it does not require a visible 50C0 line before reading.
+                // Keep the session reply for diagnostics, but let the complete,
+                // strictly validated 6101 payload determine sample acceptance.
+                response = queryLines("2101", 8000)
                 val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
-                val status = if (sample != null) "Session 50C0 confirmed; decoded OK." else
+                val sessionStatus = if (com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(sessionResponse, "50C0")) {
+                    "50C0 confirmed"
+                } else {
+                    "10C0 response did not include 50C0"
+                }
+                val status = if (sample != null) "2101 decoded OK ($sessionStatus)." else
                     com.obdiitools.obd.NissanCvt7Protocol.diagnoseLiveData(response)
                 com.obdiitools.obd.NissanCvt7PollResult(
                     sample = sample,
@@ -540,8 +522,6 @@ class OBDRepository @Inject constructor(
                 withContext(NonCancellable + Dispatchers.IO) {
                     // Restore standard functional OBD-II adapter state before
                     // the dashboard poller acquires the serialized connection.
-                    runCatching { query("ATCRA", 300) }
-                    runCatching { query("ATFCSM0", 300) }
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
                     runCatching { query("ATCAF1", 300) }
@@ -573,10 +553,6 @@ class OBDRepository @Inject constructor(
                 query("ATSP6", 600)
                 query("ATCAF1", 300)
                 query("ATSH ${ecuAddress.uppercase()}", 400)
-                query("ATFCSH ${ecuAddress.uppercase()}", 300)
-                query("ATFCSD 300000", 300)
-                query("ATFCSM1", 300)
-                query("ATCRA 7E9", 300)
                 val session = queryLines("10C0", 1500)
                 if (!com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(session, "50C0")) {
                     return@withTransaction null
@@ -585,8 +561,6 @@ class OBDRepository @Inject constructor(
                 com.obdiitools.obd.NissanCvt7Protocol.parseCvtDeteriorationResponse(response)
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
-                    runCatching { query("ATCRA", 300) }
-                    runCatching { query("ATFCSM0", 300) }
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
                     runCatching { query("ATCAF1", 300) }
@@ -609,10 +583,6 @@ class OBDRepository @Inject constructor(
                 query("ATCAF1", 300)
                 query("ATSP6", 600)
                 query("ATSH ${ecuAddress.uppercase()}", 400)
-                query("ATFCSH ${ecuAddress.uppercase()}", 300)
-                query("ATFCSD 300000", 300)
-                query("ATFCSM1", 300)
-                query("ATCRA 7E9", 300)
                 query("ATST32", 300)
                 val response = queryLines("19022F", 4000)
                 val codes = com.obdiitools.obd.NissanCvt7Protocol.parseCvtDtcResponse(response)
@@ -625,8 +595,6 @@ class OBDRepository @Inject constructor(
                 }
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
-                    runCatching { query("ATCRA", 300) }
-                    runCatching { query("ATFCSM0", 300) }
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
                 }
