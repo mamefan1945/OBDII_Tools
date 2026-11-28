@@ -488,13 +488,11 @@ class OBDRepository @Inject constructor(
                 query("ATSH ${ecuAddress.uppercase()}", 400)
                 query("ATST32", 300)
 
-                // Re-enter the manufacturer-specific session before each sample.
-                // Retain its response for diagnostics, but do not gate the read-only
-                // 2101 request on a visible 50C0 line; some adapters/TCMs omit it.
-                // CVTz50 waits for the ELM prompt after 10C0 and then sends
-                // 2101; it does not require a visible 50C0 line before reading.
-                // Keep the session reply for diagnostics, but let the complete,
-                // strictly validated 6101 payload determine sample acceptance.
+                // Follow the CVTz50 sequence: enter session, wait for the
+                // adapter prompt, then attempt the read-only 2101 request. The
+                // session response is diagnostic only; the complete 6101 payload
+                // remains the acceptance criterion.
+                val sessionResponse = queryLines("10C0", 1500)
                 response = queryLines("2101", 8000)
                 val sample = com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(response)
                 val sessionStatus = if (com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(sessionResponse, "50C0")) {
