@@ -368,10 +368,8 @@ class OBDRepository @Inject constructor(
                 withContext(NonCancellable + Dispatchers.IO) {
                     // Restore the standard functional OBD-II adapter state.
                     // The CVT transaction temporarily selects ISO 15765-4 CAN 11-bit
-                    // (ATSP6), a physical TCM header, a response filter and manual
-                    // flow-control settings. Reset all of them before releasing the
-                    // serialized transaction so the dashboard poller sees a clean
-                    // standard OBD configuration.
+                    // (ATSP6) and a physical TCM header. Restore the standard protocol
+                    // and functional header before releasing the serialized transaction.
                     runCatching { query("ATSH 7DF", 400) }
                     runCatching { query("ATSP0", 600) }
                     runCatching { query("ATCAF1", 300) }
@@ -490,11 +488,9 @@ class OBDRepository @Inject constructor(
                 query("ATSH ${ecuAddress.uppercase()}", 400)
                 query("ATST32", 300)
 
-                // The controller's manufacturer-specific diagnostic session
-                // can time out while the monitor is open. Discovery explicitly
-                // enters session C0 before reading 2101; re-enter it for each
-                // sample and verify the positive 50C0 response.
-                val sessionResponse = queryLines("10C0", 1500)
+                // Re-enter the manufacturer-specific session before each sample.
+                // Retain its response for diagnostics, but do not gate the read-only
+                // 2101 request on a visible 50C0 line; some adapters/TCMs omit it.
                 // CVTz50 waits for the ELM prompt after 10C0 and then sends
                 // 2101; it does not require a visible 50C0 line before reading.
                 // Keep the session reply for diagnostics, but let the complete,
