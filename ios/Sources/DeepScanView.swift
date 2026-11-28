@@ -198,8 +198,6 @@ struct DeepScanView: View {
                     rawResponse: String(raw.prefix(220))
                 ))
             }
-        }
-
         } else if decoded.make.caseInsensitiveCompare("Nissan") == .orderedSame
                     && decoded.model.localizedCaseInsensitiveContains("Sentra")
                     && decoded.year == "2015" {
@@ -224,6 +222,7 @@ struct DeepScanView: View {
                 known: sample != nil, status: summary,
                 rawResponse: String(result.rawResponse.prefix(1200))
             ))
+        }
         _ = await bluetooth.query("ATSH 7DF", timeout: 0.8)
         guard !Task.isCancelled else { phase = "Cancelled"; return }
         findings = items
