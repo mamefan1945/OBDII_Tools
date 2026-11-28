@@ -182,6 +182,49 @@ final class BluetoothLEManager: NSObject, ObservableObject {
         return response
     }
 
+    /// Read-only CVT7 acquisition using the ELM's automatic ISO-TP handling.
+    /// The session response is diagnostic evidence only: a missing visible 50C0
+    /// line does not suppress the 2101 read. Only a complete 83-byte 6101 payload
+    /// is accepted as telemetry.
+    func queryNissanCvt7LiveData(ecuAddress: String) async -> NissanCvt7PollResult {
+        guard ecuAddress.range(of: #"^[0-9A-Fa-f]{3}$"#, options: .regularExpression) != nil,
+              isReadyForELM else {
+            return NissanCvt7PollResult(
+                sample: nil, sessionResponse: "", rawResponse: "",
+                parseStatus: "Invalid TCM address or adapter is not ready."
+            )
+        }
+
+        _ = await query("ATE0", timeout: 0.5)
+        _ = await query("ATAL", timeout: 0.5)
+        _ = await query("ATST32", timeout: 0.5)
+        _ = await query("ATSW00", timeout: 0.5)
+        _ = await query("ATSP6", timeout: 0.8)
+        _ = await query("ATSH \(ecuAddress.uppercased())", timeout: 0.8)
+
+        let session = await query("10C0", timeout: 1.5)
+        let live = await query("2101", timeout: 8.0)
+
+        // Restore the functional OBD header and automatic protocol before
+        // returning control to the standard live-data poller.
+        _ = await query("ATSH 7DF", timeout: 0.8)
+        _ = await query("ATSP0", timeout: 0.8)
+
+        let sample = NissanCvt7Protocol.parseLiveData(live)
+        let sessionStatus = session.localizedCaseInsensitiveContains("50C0")
+            ? "50C0 confirmed"
+            : "10C0 response did not include 50C0"
+        let status = sample != nil
+            ? "2101 decoded OK (\(sessionStatus))."
+            : NissanCvt7Protocol.diagnoseLiveData(live)
+        return NissanCvt7PollResult(
+            sample: sample,
+            sessionResponse: session,
+            rawResponse: "10C0: \(session)\n2101: \(live)",
+            parseStatus: status
+        )
+    }
+
     func pingECU(address: String) async -> String {
         _ = await query("ATSH \(address)", timeout: 1.0)
         let response = await query("1001", timeout: 1.5)
