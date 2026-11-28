@@ -346,8 +346,11 @@ class OBDRepository @Inject constructor(
                     trace.add("$address 2101: ${summarizeDiagnosticResponse(liveReply)}")
                     onProgress(trace.takeLast(5).joinToString("\n"))
 
+                    // A complete, correctly framed 6101 payload is the
+                    // strongest live-data proof. Do not make detection depend on
+                    // optional 10C0/2103 replies: the reference client proceeds
+                    // with 2101 after the session command reaches the ELM prompt.
                     val tcmResponded =
-                        com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(statusReply, "6103") &&
                         com.obdiitools.obd.NissanCvt7Protocol.hasPositiveResponse(liveReply, "6101") &&
                         com.obdiitools.obd.NissanCvt7Protocol.parseLiveData(liveReply) != null
                     if (tcmResponded) {
