@@ -333,7 +333,6 @@ class OBDRepository @Inject constructor(
                 for (address in NISSAN_CVT7_ECU_CANDIDATES) {
                     onProgress("Identifying transmission controller at $address…")
                     query("ATSH $address", 400)
-                    query("ATFCSH $address", 300)
 
                     val session = queryLines("10C0", 1500)
                     trace.add("$address 10C0: ${summarizeDiagnosticResponse(session)}")
