@@ -343,7 +343,7 @@ class OBDRepository @Inject constructor(
                     trace.add("$address 2103: ${summarizeDiagnosticResponse(statusReply)}")
                     onProgress(trace.takeLast(4).joinToString("\n"))
 
-                    val liveReply = queryLines("2101", 3000)
+                    val liveReply = queryLines("2101", 8000)
                     trace.add("$address 2101: ${summarizeDiagnosticResponse(liveReply)}")
                     onProgress(trace.takeLast(5).joinToString("\n"))
 
@@ -964,7 +964,7 @@ class OBDRepository @Inject constructor(
                 }
                 // Keep transmission sampling useful without monopolizing the
                 // serialized adapter transaction needed by standard OBD PIDs.
-                delay(10_000)
+                delay(1_000)
             }
         }
     }
