@@ -173,6 +173,21 @@ class NissanCvt7ProtocolTest {
         assertNull(NissanCvt7Protocol.parseLiveData(listOf("07A", "0:6101" + "00".repeat(20))))
     }
 
+    @Test
+    fun rejectsObserved62ByteFlowControlTruncation() {
+        // The road-test adapter returned the 07A prefix, a 6-byte first
+        // frame, and eight 7-byte continuation frames (62 bytes total).
+        // This must remain a failed sample, never be padded or decoded.
+        val partial = listOf("07A", "0:610100000000") +
+            List(8) { index -> "${(index + 1).toString(16).uppercase()}:${"00".repeat(7)}" }
+
+        assertNull(NissanCvt7Protocol.parseLiveData(partial))
+        assertEquals(
+            "Short response: 62 bytes; need at least 83.",
+            NissanCvt7Protocol.diagnoseLiveData(partial)
+        )
+    }
+
     private fun capturedResponse(): List<String> = listOf(
         "07A",
         "0:610100000000",
