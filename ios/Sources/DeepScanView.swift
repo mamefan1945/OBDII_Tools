@@ -200,6 +200,30 @@ struct DeepScanView: View {
             }
         }
 
+        } else if decoded.make.caseInsensitiveCompare("Nissan") == .orderedSame
+                    && decoded.model.localizedCaseInsensitiveContains("Sentra")
+                    && decoded.year == "2015" {
+            phase = "2015 Sentra confirmed — reading Nissan CVT7 telemetry…"
+            let result = await bluetooth.queryNissanCvt7LiveData(ecuAddress: "7E1")
+            guard !Task.isCancelled else { phase = "Cancelled"; return }
+            let sample = result.sample
+            let summary: String
+            if let sample {
+                summary = String(
+                    format: "Complete 2101 response — speed %d km/h, engine %d rpm, slip %d rpm, CVT %d °C, ratio %.3f, primary %.3f MPa, secondary %.3f MPa",
+                    sample.vehicleSpeedKph, sample.engineRpm, sample.slipRpm,
+                    sample.fluidTemperatureC, sample.gearRatio,
+                    sample.primaryPressureMpa, sample.secondaryPressureMpa
+                )
+            } else {
+                summary = result.parseStatus
+            }
+            items.append(VehicleDiscoveryItem(
+                key: "7E1:21:01", name: "Nissan CVT7 live telemetry",
+                ecuAddress: "7E1", category: "Nissan Sentra CVT7",
+                known: sample != nil, status: summary,
+                rawResponse: String(result.rawResponse.prefix(1200))
+            ))
         _ = await bluetooth.query("ATSH 7DF", timeout: 0.8)
         guard !Task.isCancelled else { phase = "Cancelled"; return }
         findings = items
@@ -207,9 +231,13 @@ struct DeepScanView: View {
             vin: vin, items: items, ecuCount: found.count,
             make: decoded.make, model: decoded.model, year: decoded.year
         )
+        let isConfirmed2015Sentra = decoded.make.caseInsensitiveCompare("Nissan") == .orderedSame
+            && decoded.model.localizedCaseInsensitiveContains("Sentra") && decoded.year == "2015"
         phase = isConfirmed2016CX5
             ? "Complete — standard scan and 2016 CX-5 TCM checks finished"
-            : "Complete — standard scan finished; no matching manufacturer procedure"
+            : (isConfirmed2015Sentra
+                ? "Complete — standard scan and 2015 Sentra CVT7 read finished"
+                : "Complete — standard scan finished; no matching manufacturer procedure")
     }
 
     private func decodeVIN(_ vin: String) async -> (make: String, model: String, year: String) {
